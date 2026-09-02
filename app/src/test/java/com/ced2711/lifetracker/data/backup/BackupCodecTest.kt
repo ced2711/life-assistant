@@ -88,8 +88,35 @@ class BackupCodecTest {
     }
 
     @Test
+    fun roundTripPreservesAnAttachmentOwnedByANote() {
+        val content = fullBackupAttachmentBytes()
+        val noteAttachment = fullBackupSnapshot().attachments.single().copy(
+            ownerType = com.ced2711.lifetracker.domain.model.AttachmentOwnerType.NOTE,
+            ownerId = 90,
+            originalName = "长期资料.pdf",
+            mimeType = "application/pdf",
+        )
+        val expected = fullBackupSnapshot().copy(attachments = listOf(noteAttachment))
+        val bytes = ByteArrayOutputStream().also {
+            BackupCodec.write(expected, it, fullBackupAttachmentSource(content))
+        }.toByteArray()
+        val parent = Files.createTempDirectory("lifetracker-note-attachment-stage").toFile()
+
+        AttachmentRestoreStage.create(parent).use { stage ->
+            val actual = BackupCodec.read(ByteArrayInputStream(bytes), stage)
+            assertEquals(expected, actual)
+            assertEquals(
+                com.ced2711.lifetracker.domain.model.AttachmentOwnerType.NOTE,
+                stage.attachments.entities(actual).single().ownerType,
+            )
+        }
+    }
+
+    @Test
     fun legacyV1SnapshotRemainsStreamRestorable() {
-        val legacy = fullBackupSnapshot().copy(formatVersion = BackupLimits.LEGACY_SNAPSHOT_VERSION)
+        val legacy = fullBackupSnapshot().withoutNotesForLegacy(
+            BackupLimits.LEGACY_SNAPSHOT_VERSION,
+        )
         val encoded = ByteArrayOutputStream().also {
             BackupCodec.write(legacy, it, fullBackupAttachmentSource())
         }.toByteArray()
@@ -105,7 +132,7 @@ class BackupCodecTest {
 
     @Test
     fun versionTwoSnapshotDefaultsToTheOriginalTealAccent() {
-        val versionTwo = fullBackupSnapshot().copy(formatVersion = 2)
+        val versionTwo = fullBackupSnapshot().withoutNotesForLegacy(2)
         val encoded = ByteArrayOutputStream().also {
             BackupCodec.write(versionTwo, it, fullBackupAttachmentSource())
         }.toByteArray()
@@ -212,6 +239,13 @@ class BackupCodecTest {
         assertTrue(sources.all { it.bytesRead == size.toLong() })
     }
 }
+
+private fun BackupSnapshot.withoutNotesForLegacy(version: Int) = copy(
+    formatVersion = version,
+    noteFolders = emptyList(),
+    notes = emptyList(),
+    attachments = attachments.filter { it.ownerType != com.ced2711.lifetracker.domain.model.AttachmentOwnerType.NOTE },
+)
 
 private class RecordingGeneratedInputStream(private val size: Int) : InputStream() {
     var bytesRead = 0L

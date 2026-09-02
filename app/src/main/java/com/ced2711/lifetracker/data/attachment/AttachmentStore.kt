@@ -249,6 +249,7 @@ class AttachmentStore(
         val exists = when (ownerType) {
             AttachmentOwnerType.TODO -> dao.activeTodoExists(ownerId)
             AttachmentOwnerType.LEDGER -> dao.activeLedgerEntryExists(ownerId)
+            AttachmentOwnerType.NOTE -> dao.activeNoteExists(ownerId)
         }
         require(exists) { "The attachment owner no longer exists." }
     }

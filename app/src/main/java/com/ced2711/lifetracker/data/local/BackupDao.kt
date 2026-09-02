@@ -26,6 +26,8 @@ interface BackupDao {
     @Query("SELECT * FROM ledger_series ORDER BY id") suspend fun backupLedgerSeries(): List<LedgerSeriesEntity>
     @Query("SELECT * FROM ledger_occurrence_exceptions ORDER BY seriesId, occurrenceEpochDay") suspend fun backupLedgerExceptions(): List<LedgerOccurrenceExceptionEntity>
     @Query("SELECT * FROM ledger_entries ORDER BY id") suspend fun backupLedgerEntries(): List<LedgerEntryEntity>
+    @Query("SELECT * FROM note_folders ORDER BY id") suspend fun backupNoteFolders(): List<NoteFolderEntity>
+    @Query("SELECT * FROM notes ORDER BY id") suspend fun backupNotes(): List<NoteEntity>
     @Query("SELECT * FROM attachments ORDER BY id") suspend fun backupAttachments(): List<AttachmentEntity>
     @Query("SELECT id FROM vault_entries ORDER BY id") suspend fun backupVaultIds(): List<String>
     @Query("SELECT * FROM vault_entries ORDER BY id") suspend fun backupVaultRows(): List<VaultEntryEntity>
@@ -51,6 +53,8 @@ interface BackupDao {
         ledgerSeries = backupLedgerSeries(),
         ledgerOccurrenceExceptions = backupLedgerExceptions(),
         ledgerEntries = backupLedgerEntries(),
+        noteFolders = backupNoteFolders(),
+        notes = backupNotes(),
         attachments = backupAttachments(),
         vaultEntries = backupVaultRows(),
     )
@@ -108,6 +112,8 @@ interface BackupDao {
         deleteAllLedgerEntries()
         deleteAllLedgerExceptions()
         deleteAllLedgerSeries()
+        deleteAllNotes()
+        deleteAllNoteFolders()
         deleteAllVaultEntries()
 
         insertCategories(topologicallySortedCategories(snapshot.categories))
@@ -120,6 +126,8 @@ interface BackupDao {
         insertLedgerSeries(snapshot.ledgerSeries)
         insertLedgerExceptions(snapshot.ledgerOccurrenceExceptions)
         insertLedgerEntries(snapshot.ledgerEntries)
+        insertNoteFolders(topologicallySortedNoteFolders(snapshot.noteFolders))
+        insertNotes(snapshot.notes)
         insertAttachments(attachmentRows)
         insertVaultEntries(encryptedVault)
         writeRestoreCommit(RestoreCommitEntity(restoreToken = restoreToken))
@@ -136,6 +144,8 @@ interface BackupDao {
     @Query("DELETE FROM ledger_entries") suspend fun deleteAllLedgerEntries()
     @Query("DELETE FROM ledger_occurrence_exceptions") suspend fun deleteAllLedgerExceptions()
     @Query("DELETE FROM ledger_series") suspend fun deleteAllLedgerSeries()
+    @Query("DELETE FROM notes") suspend fun deleteAllNotes()
+    @Query("DELETE FROM note_folders") suspend fun deleteAllNoteFolders()
     @Query("DELETE FROM vault_entries") suspend fun deleteAllVaultEntries()
 
     @Insert suspend fun insertCategories(values: List<CategoryEntity>)
@@ -148,6 +158,8 @@ interface BackupDao {
     @Insert suspend fun insertLedgerSeries(values: List<LedgerSeriesEntity>)
     @Insert suspend fun insertLedgerExceptions(values: List<LedgerOccurrenceExceptionEntity>)
     @Insert suspend fun insertLedgerEntries(values: List<LedgerEntryEntity>)
+    @Insert suspend fun insertNoteFolders(values: List<NoteFolderEntity>)
+    @Insert suspend fun insertNotes(values: List<NoteEntity>)
     @Insert suspend fun insertAttachments(values: List<AttachmentEntity>)
     @Insert suspend fun insertVaultEntries(values: List<VaultEntryEntity>)
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -167,6 +179,8 @@ data class BackupDatabaseState(
     val ledgerEntries: List<LedgerEntryEntity>,
     val attachments: List<AttachmentEntity>,
     val vaultEntries: List<VaultEntryEntity>,
+    val noteFolders: List<NoteFolderEntity> = emptyList(),
+    val notes: List<NoteEntity> = emptyList(),
 )
 
 private fun topologicallySortedCategories(values: List<CategoryEntity>): List<CategoryEntity> {
@@ -186,6 +200,24 @@ private fun topologicallySortedCategories(values: List<CategoryEntity>): List<Ca
         }
     }
     if (result.size != byId.size) throw InvalidBackupException("Category hierarchy cannot be restored.")
+    return result
+}
+
+private fun topologicallySortedNoteFolders(values: List<NoteFolderEntity>): List<NoteFolderEntity> {
+    val byId = values.associateBy(NoteFolderEntity::id)
+    val children = HashMap<Long, MutableList<NoteFolderEntity>>(values.size)
+    val roots = ArrayDeque<NoteFolderEntity>()
+    values.forEach { folder ->
+        if (folder.parentId == null) roots.addLast(folder)
+        else children.getOrPut(folder.parentId) { ArrayList() }.add(folder)
+    }
+    val result = ArrayList<NoteFolderEntity>(values.size)
+    while (roots.isNotEmpty()) {
+        val folder = roots.removeFirst()
+        result += folder
+        children[folder.id].orEmpty().forEach(roots::addLast)
+    }
+    if (result.size != byId.size) throw InvalidBackupException("Note folder hierarchy cannot be restored.")
     return result
 }
 

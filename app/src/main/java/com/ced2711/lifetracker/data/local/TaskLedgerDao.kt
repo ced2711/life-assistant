@@ -422,6 +422,53 @@ interface TaskLedgerDao {
     )
     fun observeDailyLedgerTotals(startEpochDay: Long, endEpochDay: Long): Flow<List<DailyLedgerTotal>>
 
+    @Query("SELECT * FROM note_folders ORDER BY parentId, sortOrder, name COLLATE NOCASE, id")
+    fun observeNoteFolders(): Flow<List<NoteFolderEntity>>
+
+    @Query("SELECT * FROM note_folders ORDER BY parentId, sortOrder, name COLLATE NOCASE, id")
+    suspend fun getNoteFolders(): List<NoteFolderEntity>
+
+    @Query("SELECT * FROM note_folders WHERE id = :folderId LIMIT 1")
+    suspend fun getNoteFolder(folderId: Long): NoteFolderEntity?
+
+    @Insert
+    suspend fun insertNoteFolder(folder: NoteFolderEntity): Long
+
+    @Update
+    suspend fun updateNoteFolder(folder: NoteFolderEntity)
+
+    @Query("UPDATE note_folders SET parentId = :parentId WHERE parentId = :folderId")
+    suspend fun promoteNoteFolderChildren(folderId: Long, parentId: Long?)
+
+    @Query("UPDATE notes SET folderId = NULL WHERE folderId = :folderId")
+    suspend fun moveNotesToRoot(folderId: Long)
+
+    @Query("DELETE FROM note_folders WHERE id = :folderId")
+    suspend fun deleteNoteFolderById(folderId: Long)
+
+    @Transaction
+    suspend fun deleteNoteFolderAndPromote(folderId: Long) {
+        val folder = getNoteFolder(folderId) ?: return
+        promoteNoteFolderChildren(folderId, folder.parentId)
+        moveNotesToRoot(folderId)
+        deleteNoteFolderById(folderId)
+    }
+
+    @Query("SELECT * FROM notes ORDER BY pinned DESC, updatedAt DESC, id DESC")
+    fun observeNotes(): Flow<List<NoteEntity>>
+
+    @Query("SELECT * FROM notes WHERE id = :noteId LIMIT 1")
+    suspend fun getNote(noteId: Long): NoteEntity?
+
+    @Insert
+    suspend fun insertNote(note: NoteEntity): Long
+
+    @Update
+    suspend fun updateNote(note: NoteEntity)
+
+    @Query("DELETE FROM notes WHERE id = :noteId")
+    suspend fun deleteNoteById(noteId: Long)
+
     @Query("SELECT * FROM attachments WHERE ownerType = :ownerType AND ownerId = :ownerId AND pendingDeleteAt IS NULL ORDER BY createdAt")
     fun observeAttachments(ownerType: String, ownerId: Long): Flow<List<AttachmentEntity>>
 
@@ -463,6 +510,9 @@ interface TaskLedgerDao {
     @Query("SELECT EXISTS(SELECT 1 FROM ledger_entries WHERE id = :ownerId AND deletedAt IS NULL)")
     suspend fun activeLedgerEntryExists(ownerId: Long): Boolean
 
+    @Query("SELECT EXISTS(SELECT 1 FROM notes WHERE id = :ownerId)")
+    suspend fun activeNoteExists(ownerId: Long): Boolean
+
     @Insert
     suspend fun insertAttachment(attachment: AttachmentEntity): Long
 
@@ -496,6 +546,7 @@ interface TaskLedgerDao {
         val ownerIsActive = when (parsedOwnerType) {
             AttachmentOwnerType.TODO -> activeTodoExists(ownerId)
             AttachmentOwnerType.LEDGER -> activeLedgerEntryExists(ownerId)
+            AttachmentOwnerType.NOTE -> activeNoteExists(ownerId)
         }
         require(ownerIsActive) { "The attachment owner no longer exists." }
 
@@ -554,8 +605,11 @@ interface TaskLedgerDao {
             ON attachments.ownerType = 'TODO' AND attachments.ownerId = todos.id
         LEFT JOIN ledger_entries
             ON attachments.ownerType = 'LEDGER' AND attachments.ownerId = ledger_entries.id
+        LEFT JOIN notes
+            ON attachments.ownerType = 'NOTE' AND attachments.ownerId = notes.id
         WHERE (attachments.ownerType = 'TODO' AND todos.id IS NULL)
            OR (attachments.ownerType = 'LEDGER' AND ledger_entries.id IS NULL)
+           OR (attachments.ownerType = 'NOTE' AND notes.id IS NULL)
         """,
     )
     suspend fun getOrphanedAttachments(): List<AttachmentEntity>

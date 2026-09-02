@@ -2,12 +2,10 @@ package com.ced2711.lifetracker.launcher
 
 import com.ced2711.lifetracker.data.local.TodoEntity
 import java.time.LocalDate
-import java.time.ZoneId
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class LauncherIconMoodTest {
-    private val zone = ZoneId.of("UTC")
     private val today = LocalDate.of(2026, 9, 3)
 
     @Test
@@ -16,22 +14,32 @@ class LauncherIconMoodTest {
             LauncherIconMood.QUIET,
             launcherIconMood(
                 activeTodos = listOf(todo(1, today.plusDays(1).toEpochDay())),
-                completedTodos = listOf(completedTodo(2, today.minusDays(1), null)),
+                completedTodos = listOf(completedTodo(2, null)),
                 todayEpochDay = today.toEpochDay(),
-                zoneId = zone,
             ),
         )
     }
 
     @Test
-    fun `momentum icon is used after a completion while work remains`() {
+    fun `white icon stays neutral when something was completed today but was not due today`() {
+        assertEquals(
+            LauncherIconMood.QUIET,
+            launcherIconMood(
+                activeTodos = emptyList(),
+                completedTodos = listOf(completedTodo(2, null)),
+                todayEpochDay = today.toEpochDay(),
+            ),
+        )
+    }
+
+    @Test
+    fun `red icon is used while a todo due today remains incomplete`() {
         assertEquals(
             LauncherIconMood.MOMENTUM,
             launcherIconMood(
                 activeTodos = listOf(todo(1, today.toEpochDay())),
-                completedTodos = listOf(completedTodo(2, today, null)),
+                completedTodos = listOf(completedTodo(2, today.toEpochDay())),
                 todayEpochDay = today.toEpochDay(),
-                zoneId = zone,
             ),
         )
     }
@@ -42,9 +50,8 @@ class LauncherIconMoodTest {
             LauncherIconMood.COMPLETE,
             launcherIconMood(
                 activeTodos = emptyList(),
-                completedTodos = listOf(completedTodo(2, today.minusDays(1), today.toEpochDay())),
+                completedTodos = listOf(completedTodo(2, today.toEpochDay())),
                 todayEpochDay = today.toEpochDay(),
-                zoneId = zone,
             ),
         )
     }
@@ -56,8 +63,8 @@ class LauncherIconMoodTest {
         deadlineEpochDay = deadlineEpochDay,
     )
 
-    private fun completedTodo(id: Long, completedDate: LocalDate, deadlineEpochDay: Long?) =
+    private fun completedTodo(id: Long, deadlineEpochDay: Long?) =
         todo(id, deadlineEpochDay).copy(
-            completedAt = completedDate.atTime(12, 0).atZone(zone).toInstant().toEpochMilli(),
+            completedAt = 1L,
         )
 }

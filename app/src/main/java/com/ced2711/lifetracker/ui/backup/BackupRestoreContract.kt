@@ -18,11 +18,13 @@ data class BackupRestorePreview(
     val attachmentCount: Int,
     val attachmentBytes: Long,
     val totalBytes: Long,
+    val noteCount: Int = 0,
 ) {
     init {
         require(createdAtLabel.isNotBlank())
         require(todoCount >= 0)
         require(ledgerCount >= 0)
+        require(noteCount >= 0)
         require(vaultCount >= 0)
         require(attachmentCount >= 0)
         require(attachmentBytes >= 0L)

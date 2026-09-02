@@ -39,6 +39,7 @@ enum class RecurrenceUnit {
 enum class AttachmentOwnerType {
     TODO,
     LEDGER,
+    NOTE,
 }
 
 enum class ThemeMode {
@@ -87,6 +88,7 @@ enum class TopLevelDestination {
     TODO,
     LEDGER,
     CALENDAR,
+    NOTES,
 }
 
 enum class SeriesEditScope {
@@ -124,6 +126,14 @@ data class LedgerDraft(
     val merchant: String = "",
     val tags: List<String> = emptyList(),
     val recurrence: RecurrenceRule? = null,
+)
+
+data class NoteDraft(
+    val id: Long? = null,
+    val folderId: Long? = null,
+    val title: String = "",
+    val body: String = "",
+    val pinned: Boolean = false,
 )
 
 /**

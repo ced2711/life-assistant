@@ -5,6 +5,8 @@ import com.ced2711.lifetracker.data.local.CategoryEntity
 import com.ced2711.lifetracker.data.local.LedgerEntryEntity
 import com.ced2711.lifetracker.data.local.LedgerOccurrenceExceptionEntity
 import com.ced2711.lifetracker.data.local.LedgerSeriesEntity
+import com.ced2711.lifetracker.data.local.NoteEntity
+import com.ced2711.lifetracker.data.local.NoteFolderEntity
 import com.ced2711.lifetracker.data.local.SubtaskEntity
 import com.ced2711.lifetracker.data.local.TodoEntity
 import com.ced2711.lifetracker.data.local.TodoOccurrenceExceptionEntity
@@ -110,6 +112,8 @@ data class BackupSnapshot(
     val ledgerEntries: List<LedgerEntryEntity>,
     val attachments: List<BackupAttachment>,
     val vaultEntries: List<VaultEntry>,
+    val noteFolders: List<NoteFolderEntity> = emptyList(),
+    val notes: List<NoteEntity> = emptyList(),
 )
 
 sealed class BackupException(message: String, cause: Throwable? = null) : Exception(message, cause)
@@ -122,7 +126,8 @@ class UnsupportedBackupException(message: String) : BackupException(message)
 object BackupLimits {
     const val LEGACY_SNAPSHOT_VERSION = 1
     const val ACCENT_COLOR_SNAPSHOT_VERSION = 3
-    const val SNAPSHOT_VERSION = ACCENT_COLOR_SNAPSHOT_VERSION
+    const val NOTES_SNAPSHOT_VERSION = 4
+    const val SNAPSHOT_VERSION = NOTES_SNAPSHOT_VERSION
     const val MAX_RECORDS_PER_TABLE = 100_000
     const val MAX_TOTAL_RECORDS = 300_000
     const val MAX_TEXT_UTF8_BYTES = 1024 * 1024
@@ -157,11 +162,18 @@ fun BackupSnapshot.validate(): BackupSnapshot {
         ledgerEntries.size,
         attachments.size,
         vaultEntries.size,
+        noteFolders.size,
+        notes.size,
     )
     invalidIf(tables.any { it > BackupLimits.MAX_RECORDS_PER_TABLE }, "A table exceeds the record limit.")
     invalidIf(tables.sumOf(Int::toLong) > BackupLimits.MAX_TOTAL_RECORDS, "Snapshot has too many records.")
 
     settings.validate()
+    invalidIf(
+        formatVersion < BackupLimits.NOTES_SNAPSHOT_VERSION &&
+            (noteFolders.isNotEmpty() || notes.isNotEmpty()),
+        "This snapshot version cannot contain notes.",
+    )
     val categoryIds = categories.uniquePositiveIds("category", CategoryEntity::id)
     categories.forEach { category ->
         text(category.name, "Category name")
@@ -259,6 +271,28 @@ fun BackupSnapshot.validate(): BackupSnapshot {
     uniqueNullableTokens(ledgerEntries.map(LedgerEntryEntity::clientOperationToken), "ledger operation token")
     uniqueNullablePairs(ledgerEntries.map { it.seriesId to it.occurrenceEpochDay }, "ledger occurrence")
 
+    val noteFolderIds = noteFolders.uniquePositiveIds("note folder", NoteFolderEntity::id)
+    noteFolders.forEach { folder ->
+        text(folder.name, "Note folder name")
+        invalidIf(folder.name.isBlank(), "Note folder name is empty.")
+        invalidIf(folder.parentId == folder.id, "A note folder cannot be its own parent.")
+        invalidIf(
+            folder.parentId != null && folder.parentId !in noteFolderIds,
+            "Note folder parent is missing.",
+        )
+        timestamp(folder.createdAt, "Note folder creation time")
+    }
+    validateNoteFolderCycles(noteFolders)
+
+    val noteIds = notes.uniquePositiveIds("note", NoteEntity::id)
+    notes.forEach { note ->
+        invalidIf(note.folderId != null && note.folderId !in noteFolderIds, "Note folder is missing.")
+        text(note.title, "Note title")
+        text(note.body, "Note body")
+        invalidIf(note.title.isBlank(), "Note title is empty.")
+        timestampOrder(note.createdAt, note.updatedAt, "Note")
+    }
+
     attachments.uniquePositiveIds("attachment", BackupAttachment::id)
     val archivePaths = HashSet<String>()
     val attachmentCounts = HashMap<Pair<AttachmentOwnerType, Long>, Int>()
@@ -272,6 +306,7 @@ fun BackupSnapshot.validate(): BackupSnapshot {
         when (attachment.ownerType) {
             AttachmentOwnerType.TODO -> invalidIf(attachment.ownerId !in todoIds, "Attachment todo owner is missing.")
             AttachmentOwnerType.LEDGER -> invalidIf(attachment.ownerId !in ledgerIds, "Attachment ledger owner is missing.")
+            AttachmentOwnerType.NOTE -> invalidIf(attachment.ownerId !in noteIds, "Attachment note owner is missing.")
         }
         val owner = attachment.ownerType to attachment.ownerId
         val ownerCount = (attachmentCounts[owner] ?: 0) + 1
@@ -325,6 +360,23 @@ private fun validateCategoryCycles(categories: List<CategoryEntity>) {
         var cursor: Long? = category.id
         while (cursor != null && state[cursor] != 2.toByte()) {
             invalidIf(state[cursor] == 1.toByte(), "Category hierarchy contains a cycle.")
+            state[cursor] = 1
+            chain += cursor
+            cursor = parents[cursor]
+        }
+        chain.forEach { id -> state[id] = 2 }
+    }
+}
+
+private fun validateNoteFolderCycles(folders: List<NoteFolderEntity>) {
+    val parents = folders.associate { it.id to it.parentId }
+    val state = HashMap<Long, Byte>(folders.size)
+    folders.forEach { folder ->
+        if (state[folder.id] == 2.toByte()) return@forEach
+        val chain = ArrayList<Long>()
+        var cursor: Long? = folder.id
+        while (cursor != null && state[cursor] != 2.toByte()) {
+            invalidIf(state[cursor] == 1.toByte(), "Note folder hierarchy contains a cycle.")
             state[cursor] = 1
             chain += cursor
             cursor = parents[cursor]

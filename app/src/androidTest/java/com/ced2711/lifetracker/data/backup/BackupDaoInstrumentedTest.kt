@@ -5,6 +5,8 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.ced2711.lifetracker.data.local.CategoryEntity
+import com.ced2711.lifetracker.data.local.NoteEntity
+import com.ced2711.lifetracker.data.local.NoteFolderEntity
 import com.ced2711.lifetracker.data.local.RestoreCommitEntity
 import com.ced2711.lifetracker.data.local.TaskLedgerDatabase
 import com.ced2711.lifetracker.data.local.TodoEntity
@@ -65,6 +67,8 @@ class BackupDaoInstrumentedTest {
         val state = dao.backupState()
         assertEquals(snapshot.categories, state.categories)
         assertEquals(snapshot.todos, state.todos)
+        assertEquals(snapshot.noteFolders, state.noteFolders)
+        assertEquals(snapshot.notes, state.notes)
     }
 
     @Test fun roomRollsBackAllDeletesWhenAnInsertFails() = runBlocking {
@@ -183,6 +187,13 @@ class BackupDaoInstrumentedTest {
         ledgerEntries = emptyList(),
         attachments = emptyList(),
         vaultEntries = emptyList(),
+        noteFolders = listOf(
+            NoteFolderEntity(30, "Reference", null, 0, 1),
+            NoteFolderEntity(31, "Accounts", 30, 0, 2),
+        ),
+        notes = listOf(
+            NoteEntity(40, 31, "Long-term note", "Keep this", true, 3, 4),
+        ),
     )
 
     private companion object {

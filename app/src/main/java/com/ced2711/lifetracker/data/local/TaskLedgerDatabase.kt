@@ -21,10 +21,12 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         LedgerOccurrenceExceptionEntity::class,
         LedgerEntryEntity::class,
         AttachmentEntity::class,
+        NoteFolderEntity::class,
+        NoteEntity::class,
         VaultEntryEntity::class,
         RestoreCommitEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -182,13 +184,62 @@ abstract class TaskLedgerDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `note_folders` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `parentId` INTEGER,
+                        `sortOrder` INTEGER NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        FOREIGN KEY(`parentId`) REFERENCES `note_folders`(`id`)
+                            ON UPDATE NO ACTION ON DELETE SET NULL
+                    )
+                    """.trimIndent(),
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_note_folders_parentId` " +
+                        "ON `note_folders` (`parentId`)",
+                )
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `notes` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `folderId` INTEGER,
+                        `title` TEXT NOT NULL,
+                        `body` TEXT NOT NULL,
+                        `pinned` INTEGER NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL,
+                        FOREIGN KEY(`folderId`) REFERENCES `note_folders`(`id`)
+                            ON UPDATE NO ACTION ON DELETE SET NULL
+                    )
+                    """.trimIndent(),
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_notes_folderId` ON `notes` (`folderId`)",
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_notes_updatedAt` ON `notes` (`updatedAt`)",
+                )
+            }
+        }
+
         fun getInstance(context: Context): TaskLedgerDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 TaskLedgerDatabase::class.java,
                 "taskledger.db",
             )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(
+                    MIGRATION_1_2,
+                    MIGRATION_2_3,
+                    MIGRATION_3_4,
+                    MIGRATION_4_5,
+                    MIGRATION_5_6,
+                )
                 .build()
                 .also { instance = it }
         }

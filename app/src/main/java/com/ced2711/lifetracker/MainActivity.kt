@@ -50,6 +50,7 @@ import com.ced2711.lifetracker.ui.backup.BackupRestoreTask
 import com.ced2711.lifetracker.ui.backup.BackupRestoreViewModel
 import com.ced2711.lifetracker.ui.calendar.CalendarScreen
 import com.ced2711.lifetracker.ui.ledger.LedgerScreen
+import com.ced2711.lifetracker.ui.notes.NotesScreen
 import com.ced2711.lifetracker.ui.settings.SettingsScreen
 import com.ced2711.lifetracker.ui.theme.TaskLedgerTheme
 import com.ced2711.lifetracker.ui.theme.isTaskLedgerDarkTheme
@@ -146,6 +147,7 @@ class MainActivity : FragmentActivity() {
                     },
                 )
             }
+            var vaultOpenedFromNotes by rememberSaveable { mutableStateOf(false) }
             val requestedAuxiliary = auxiliaryName
                 ?.let { name -> AuxiliaryScreen.entries.firstOrNull { it.name == name } }
             val auxiliary = requestedAuxiliary.takeIf {
@@ -175,7 +177,12 @@ class MainActivity : FragmentActivity() {
                 auxiliaryName = when (auxiliary) {
                     AuxiliaryScreen.VAULT -> {
                         vaultViewModel.lock()
-                        AuxiliaryScreen.SETTINGS.name
+                        if (vaultOpenedFromNotes) {
+                            vaultOpenedFromNotes = false
+                            null
+                        } else {
+                            AuxiliaryScreen.SETTINGS.name
+                        }
                     }
                     AuxiliaryScreen.BACKUP -> {
                         backupRestoreViewModel.leaveBackupScreen()
@@ -306,7 +313,10 @@ class MainActivity : FragmentActivity() {
                         when (auxiliary) {
                             AuxiliaryScreen.SETTINGS -> SettingsScreen(
                                 viewModel = viewModel,
-                                onOpenVault = { auxiliaryName = AuxiliaryScreen.VAULT.name },
+                                onOpenVault = {
+                                    vaultOpenedFromNotes = false
+                                    auxiliaryName = AuxiliaryScreen.VAULT.name
+                                },
                                 onOpenBackup = { auxiliaryName = AuxiliaryScreen.BACKUP.name },
                                 onDefaultReminderOffsetsChange =
                                     viewModel::setDefaultReminderOffsetsMinutes,
@@ -318,7 +328,12 @@ class MainActivity : FragmentActivity() {
                                 viewModel = vaultViewModel,
                                 onBack = {
                                     vaultViewModel.lock()
-                                    auxiliaryName = AuxiliaryScreen.SETTINGS.name
+                                    auxiliaryName = if (vaultOpenedFromNotes) {
+                                        vaultOpenedFromNotes = false
+                                        null
+                                    } else {
+                                        AuxiliaryScreen.SETTINGS.name
+                                    }
                                 },
                                 isWide = isWide,
                                 modifier = Modifier.fillMaxSize(),
@@ -383,6 +398,15 @@ class MainActivity : FragmentActivity() {
                                             selectedOverride = TopLevelDestination.TODO.name
                                             auxiliaryName = null
                                             viewModel.setLastDestination(TopLevelDestination.TODO)
+                                        },
+                                        modifier = Modifier.fillMaxSize(),
+                                        isWide = isWide,
+                                    )
+                                    TopLevelDestination.NOTES -> NotesScreen(
+                                        viewModel = viewModel,
+                                        onOpenVault = {
+                                            vaultOpenedFromNotes = true
+                                            auxiliaryName = AuxiliaryScreen.VAULT.name
                                         },
                                         modifier = Modifier.fillMaxSize(),
                                         isWide = isWide,
@@ -461,8 +485,8 @@ class MainActivity : FragmentActivity() {
         private const val STATE_PENDING_TODO_ID = "pending_reminder_todo_id"
         private const val STATE_PENDING_WIDGET_ACTION = "pending_widget_quick_add_action"
         private const val STATE_PENDING_WIDGET_TOKEN = "pending_widget_quick_add_token"
-        private val DARK_SYSTEM_BAR_COLOR = 0xFF0D1514.toInt()
-        private val LIGHT_SYSTEM_BAR_COLOR = 0xFFF5FBF8.toInt()
+        private val DARK_SYSTEM_BAR_COLOR = 0xFF121313.toInt()
+        private val LIGHT_SYSTEM_BAR_COLOR = 0xFFFAFAFA.toInt()
 
         internal fun todoReminderIntent(context: Context, todoId: Long): Intent =
             Intent(context, MainActivity::class.java).apply {

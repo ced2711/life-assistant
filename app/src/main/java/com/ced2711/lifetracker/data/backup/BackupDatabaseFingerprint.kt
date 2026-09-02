@@ -37,6 +37,8 @@ internal fun expectedDatabaseFingerprint(
         ledgerSeries = snapshot.ledgerSeries,
         ledgerExceptions = snapshot.ledgerOccurrenceExceptions,
         ledgerEntries = snapshot.ledgerEntries,
+        noteFolders = snapshot.noteFolders,
+        notes = snapshot.notes,
         attachments = attachments,
         vaultMarkers = snapshot.vaultEntries.map { VaultMarker(it.id, it.createdAt, it.updatedAt) },
     ),
@@ -58,6 +60,8 @@ internal fun expectedFullDatabaseFingerprint(
         ledgerSeries = snapshot.ledgerSeries,
         ledgerOccurrenceExceptions = snapshot.ledgerOccurrenceExceptions,
         ledgerEntries = snapshot.ledgerEntries,
+        noteFolders = snapshot.noteFolders,
+        notes = snapshot.notes,
         attachments = attachments,
         vaultEntries = encryptedVault,
     ),
@@ -74,6 +78,8 @@ private fun rows(state: BackupDatabaseState) = FingerprintRows(
     ledgerSeries = state.ledgerSeries,
     ledgerExceptions = state.ledgerOccurrenceExceptions,
     ledgerEntries = state.ledgerEntries,
+    noteFolders = state.noteFolders,
+    notes = state.notes,
     attachments = state.attachments,
     vaultMarkers = state.vaultEntries.map { VaultMarker(it.id, it.createdAt, it.updatedAt) },
 )
@@ -91,6 +97,8 @@ private data class FingerprintRows(
     val ledgerSeries: List<com.ced2711.lifetracker.data.local.LedgerSeriesEntity>,
     val ledgerExceptions: List<com.ced2711.lifetracker.data.local.LedgerOccurrenceExceptionEntity>,
     val ledgerEntries: List<com.ced2711.lifetracker.data.local.LedgerEntryEntity>,
+    val noteFolders: List<com.ced2711.lifetracker.data.local.NoteFolderEntity>,
+    val notes: List<com.ced2711.lifetracker.data.local.NoteEntity>,
     val attachments: List<AttachmentEntity>,
     val vaultMarkers: List<VaultMarker>,
 )
@@ -143,6 +151,15 @@ private fun fingerprint(rows: FingerprintRows): String {
         writer.string(it.type.name); writer.long(it.amountCents); writer.long(it.epochDay); writer.int(it.minuteOfDay)
         writer.string(it.note); writer.string(it.merchant); writer.string(it.tagsCsv); writer.long(it.createdAt)
         writer.long(it.updatedAt); writer.longOrNull(it.deletedAt); writer.stringOrNull(it.clientOperationToken)
+    }
+    rows.noteFolders.sortedBy { it.id }.forEach {
+        writer.tag("noteFolder"); writer.long(it.id); writer.string(it.name)
+        writer.longOrNull(it.parentId); writer.long(it.sortOrder); writer.long(it.createdAt)
+    }
+    rows.notes.sortedBy { it.id }.forEach {
+        writer.tag("note"); writer.long(it.id); writer.longOrNull(it.folderId)
+        writer.string(it.title); writer.string(it.body); writer.bool(it.pinned)
+        writer.long(it.createdAt); writer.long(it.updatedAt)
     }
     rows.attachments.sortedBy { it.id }.forEach {
         writer.tag("attachment"); writer.long(it.id); writer.string(it.ownerType.name); writer.long(it.ownerId)

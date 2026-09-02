@@ -4,6 +4,8 @@ import com.ced2711.lifetracker.data.local.CategoryEntity
 import com.ced2711.lifetracker.data.local.LedgerEntryEntity
 import com.ced2711.lifetracker.data.local.LedgerOccurrenceExceptionEntity
 import com.ced2711.lifetracker.data.local.LedgerSeriesEntity
+import com.ced2711.lifetracker.data.local.NoteEntity
+import com.ced2711.lifetracker.data.local.NoteFolderEntity
 import com.ced2711.lifetracker.data.local.SubtaskEntity
 import com.ced2711.lifetracker.data.local.TodoEntity
 import com.ced2711.lifetracker.data.local.TodoOccurrenceExceptionEntity
@@ -88,6 +90,17 @@ object BackupCodec {
                 vaultString(e.id, budget); vaultString(e.label, budget); vaultString(e.account, budget)
                 vaultString(e.password, budget); vaultString(e.website, budget); vaultString(e.notes, budget)
                 writeLong(e.createdAt); writeLong(e.updatedAt)
+            }
+            if (snapshot.formatVersion >= BackupLimits.NOTES_SNAPSHOT_VERSION) {
+                out.list(snapshot.noteFolders) { e ->
+                    writeLong(e.id); string(e.name, budget); nullableLong(e.parentId)
+                    writeLong(e.sortOrder); writeLong(e.createdAt)
+                }
+                out.list(snapshot.notes) { e ->
+                    writeLong(e.id); nullableLong(e.folderId); string(e.title, budget)
+                    string(e.body, budget); writeBoolean(e.pinned); writeLong(e.createdAt)
+                    writeLong(e.updatedAt)
+                }
             }
             out.flush()
         }
@@ -177,6 +190,34 @@ object BackupCodec {
                             vaultString(budget), vaultString(budget), vaultString(budget),
                             readLong(), readLong(),
                         )
+                    },
+                    noteFolders = if (version >= BackupLimits.NOTES_SNAPSHOT_VERSION) {
+                        input.list(budget) {
+                            NoteFolderEntity(
+                                id = readLong(),
+                                name = string(budget),
+                                parentId = nullableLong(),
+                                sortOrder = readLong(),
+                                createdAt = readLong(),
+                            )
+                        }
+                    } else {
+                        emptyList()
+                    },
+                    notes = if (version >= BackupLimits.NOTES_SNAPSHOT_VERSION) {
+                        input.list(budget) {
+                            NoteEntity(
+                                id = readLong(),
+                                folderId = nullableLong(),
+                                title = string(budget),
+                                body = string(budget),
+                                pinned = readBoolean(),
+                                createdAt = readLong(),
+                                updatedAt = readLong(),
+                            )
+                        }
+                    } else {
+                        emptyList()
                     },
                 )
                 if (input.read() != -1) throw InvalidBackupException("Unexpected trailing snapshot data.")

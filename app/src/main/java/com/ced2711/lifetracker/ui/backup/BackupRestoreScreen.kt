@@ -328,7 +328,7 @@ private fun OfflineEncryptionCard() {
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    text = "Your todos, ledger, settings, attachments, and Vault are encrypted " +
+                    text = "Your todos, ledger, notes, settings, attachments, and Vault are encrypted " +
                         "into one local .tlb file. Nothing is uploaded.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -627,6 +627,7 @@ private fun RestorePreviewDialog(
                 PreviewValue("Created", preview.createdAtLabel)
                 PreviewValue("Todos", preview.todoCount.toString())
                 PreviewValue("Ledger entries", preview.ledgerCount.toString())
+                PreviewValue("Notes", preview.noteCount.toString())
                 PreviewValue("Vault entries", preview.vaultCount.toString())
                 PreviewValue(
                     "Attachments",
@@ -684,7 +685,7 @@ private fun RestoreReplacementConfirmationDialog(
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
                     "This is a complete replacement, not a merge. It permanently replaces your " +
-                        "current todos, ledger, settings, attachments, and Vault with the backup.",
+                        "current todos, ledger, notes, settings, attachments, and Vault with the backup.",
                     color = MaterialTheme.colorScheme.error,
                     fontWeight = FontWeight.SemiBold,
                 )

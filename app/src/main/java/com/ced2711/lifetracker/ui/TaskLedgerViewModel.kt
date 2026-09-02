@@ -13,6 +13,7 @@ import com.ced2711.lifetracker.domain.model.AccentColor
 import com.ced2711.lifetracker.domain.model.AttachmentOwnerType
 import com.ced2711.lifetracker.domain.model.LedgerDraft
 import com.ced2711.lifetracker.domain.model.LedgerSaveResult
+import com.ced2711.lifetracker.domain.model.NoteDraft
 import com.ced2711.lifetracker.domain.model.RecurrenceRule
 import com.ced2711.lifetracker.domain.model.RecurringDeleteResult
 import com.ced2711.lifetracker.domain.model.SeriesEditScope
@@ -81,6 +82,16 @@ class TaskLedgerViewModel(private val container: AppContainer) : ViewModel() {
         emptyList(),
     )
     val ledgerSeries = repository.ledgerSeries.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        emptyList(),
+    )
+    val noteFolders = repository.noteFolders.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        emptyList(),
+    )
+    val notes = repository.notes.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
         emptyList(),
@@ -282,6 +293,41 @@ class TaskLedgerViewModel(private val container: AppContainer) : ViewModel() {
     }
     fun stopTodoSeries(id: Long) = launchAction { repository.deactivateTodoSeries(id) }
     fun stopLedgerSeries(id: Long) = launchAction { repository.deactivateLedgerSeries(id) }
+
+    fun addNoteFolder(
+        name: String,
+        parentId: Long? = null,
+        onSaved: (Long) -> Unit = {},
+        onFailure: (String) -> Unit = {},
+    ) = launchAction(onFailure) { onSaved(repository.addNoteFolder(name, parentId)) }
+
+    fun renameNoteFolder(
+        folderId: Long,
+        name: String,
+        onSaved: () -> Unit = {},
+        onFailure: (String) -> Unit = {},
+    ) = launchAction(onFailure) {
+        repository.renameNoteFolder(folderId, name)
+        onSaved()
+    }
+
+    fun deleteNoteFolder(folderId: Long, onFailure: (String) -> Unit = {}) =
+        launchAction(onFailure) { repository.deleteNoteFolder(folderId) }
+
+    fun saveNote(
+        draft: NoteDraft,
+        onSaved: (Long) -> Unit = {},
+        onFailure: (String) -> Unit = {},
+    ) = launchAction(onFailure) { onSaved(repository.saveNote(draft)) }
+
+    fun deleteNote(
+        noteId: Long,
+        onDeleted: () -> Unit = {},
+        onFailure: (String) -> Unit = {},
+    ) = launchAction(onFailure) {
+        repository.deleteNote(noteId)
+        onDeleted()
+    }
 
     fun materializeCalendarTodoOccurrencesThrough(throughEpochDay: Long) = launchAction {
         val materialization = repository.materializeTodoOccurrencesThrough(throughEpochDay)

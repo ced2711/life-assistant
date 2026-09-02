@@ -263,6 +263,48 @@ data class AttachmentEntity(
     val pendingDeleteAt: Long? = null,
 )
 
+@Entity(
+    tableName = "note_folders",
+    foreignKeys = [
+        ForeignKey(
+            entity = NoteFolderEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["parentId"],
+            onDelete = ForeignKey.SET_NULL,
+        ),
+    ],
+    indices = [Index("parentId")],
+)
+data class NoteFolderEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val parentId: Long? = null,
+    val sortOrder: Long = 0,
+    val createdAt: Long = System.currentTimeMillis(),
+)
+
+@Entity(
+    tableName = "notes",
+    foreignKeys = [
+        ForeignKey(
+            entity = NoteFolderEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["folderId"],
+            onDelete = ForeignKey.SET_NULL,
+        ),
+    ],
+    indices = [Index("folderId"), Index("updatedAt")],
+)
+data class NoteEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val folderId: Long? = null,
+    val title: String,
+    val body: String = "",
+    val pinned: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = createdAt,
+)
+
 data class DailyLedgerTotal(
     val epochDay: Long,
     val incomeCents: Long,

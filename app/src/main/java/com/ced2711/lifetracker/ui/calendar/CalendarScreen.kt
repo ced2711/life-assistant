@@ -550,28 +550,41 @@ private fun MonthDayCell(
             .padding(horizontal = 3.dp, vertical = 5.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(
-            text = date.dayOfMonth.toString(),
-            color = dayColor,
-            style = MaterialTheme.typography.labelLarge,
-        )
-        if (hasEntries) {
-            Spacer(Modifier.height(3.dp))
+        Box(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            contentAlignment = Alignment.Center,
+        ) {
             Text(
-                text = formatAmount(netCents),
-                color = amountColor(netCents),
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                text = date.dayOfMonth.toString(),
+                color = dayColor,
+                style = MaterialTheme.typography.labelLarge,
             )
         }
-        if (completedTodoCount > 0 || incompleteTodoCount > 0) {
-            Spacer(Modifier.height(3.dp))
-            TodoStatusCounts(
-                completedCount = completedTodoCount,
-                incompleteCount = incompleteTodoCount,
-            )
+        Box(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (hasEntries) {
+                Text(
+                    text = formatAmount(netCents),
+                    color = amountColor(netCents),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        Box(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (completedTodoCount > 0 || incompleteTodoCount > 0) {
+                TodoStatusCounts(
+                    completedCount = completedTodoCount,
+                    incompleteCount = incompleteTodoCount,
+                )
+            }
         }
     }
 }

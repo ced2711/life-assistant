@@ -8,6 +8,8 @@ import com.ced2711.lifetracker.data.local.CategoryEntity
 import com.ced2711.lifetracker.data.local.LedgerEntryEntity
 import com.ced2711.lifetracker.data.local.LedgerOccurrenceExceptionEntity
 import com.ced2711.lifetracker.data.local.LedgerSeriesEntity
+import com.ced2711.lifetracker.data.local.NoteEntity
+import com.ced2711.lifetracker.data.local.NoteFolderEntity
 import com.ced2711.lifetracker.data.local.SubtaskEntity
 import com.ced2711.lifetracker.data.local.TaskLedgerDatabase
 import com.ced2711.lifetracker.data.local.TodoEntity
@@ -18,6 +20,7 @@ import com.ced2711.lifetracker.data.local.TodoSeriesSubtaskEntity
 import com.ced2711.lifetracker.domain.model.AttachmentOwnerType
 import com.ced2711.lifetracker.domain.model.LedgerDraft
 import com.ced2711.lifetracker.domain.model.LedgerSaveResult
+import com.ced2711.lifetracker.domain.model.NoteDraft
 import com.ced2711.lifetracker.domain.model.RecurrenceRule
 import com.ced2711.lifetracker.domain.model.RecurringDeleteResult
 import com.ced2711.lifetracker.domain.model.SeriesEditScope
@@ -84,6 +87,8 @@ class TaskLedgerRepository(
     val ledgerEntries = dao.observeLedgerEntries()
     val todoSeries = dao.observeTodoSeries()
     val ledgerSeries = dao.observeLedgerSeries()
+    val noteFolders = dao.observeNoteFolders()
+    val notes = dao.observeNotes()
 
     fun activeTodosForDeadlineDay(epochDay: Long) =
         dao.observeActiveTodosForDeadlineDay(epochDay)
@@ -109,7 +114,115 @@ class TaskLedgerRepository(
         when (ownerType) {
             AttachmentOwnerType.TODO -> dao.activeTodoExists(ownerId)
             AttachmentOwnerType.LEDGER -> dao.activeLedgerEntryExists(ownerId)
+            AttachmentOwnerType.NOTE -> dao.activeNoteExists(ownerId)
         }
+
+    suspend fun addNoteFolder(name: String, parentId: Long? = null): Long =
+        database.withTransaction {
+            val normalizedName = name.trim()
+            require(normalizedName.isNotEmpty()) { "Folder name is required" }
+            require(normalizedName.length <= 120) { "Folder name is too long" }
+            val folders = dao.getNoteFolders()
+            require(parentId == null || folders.any { it.id == parentId }) {
+                "The parent folder no longer exists"
+            }
+            require(
+                folders.none {
+                    it.parentId == parentId && it.name.equals(normalizedName, ignoreCase = true)
+                },
+            ) { "A folder with this name already exists here" }
+            val nextOrder = folders.filter { it.parentId == parentId }
+                .maxOfOrNull(NoteFolderEntity::sortOrder)
+                ?.plus(1L)
+                ?: 0L
+            dao.insertNoteFolder(
+                NoteFolderEntity(
+                    name = normalizedName,
+                    parentId = parentId,
+                    sortOrder = nextOrder,
+                    createdAt = monotonicMutationTimestamp(wallClockMillis()),
+                ),
+            )
+        }
+
+    suspend fun renameNoteFolder(folderId: Long, name: String) = database.withTransaction {
+        val folder = requireNotNull(dao.getNoteFolder(folderId)) { "Folder no longer exists" }
+        val normalizedName = name.trim()
+        require(normalizedName.isNotEmpty()) { "Folder name is required" }
+        require(normalizedName.length <= 120) { "Folder name is too long" }
+        require(
+            dao.getNoteFolders().none {
+                it.id != folderId &&
+                    it.parentId == folder.parentId &&
+                    it.name.equals(normalizedName, ignoreCase = true)
+            },
+        ) { "A folder with this name already exists here" }
+        dao.updateNoteFolder(folder.copy(name = normalizedName))
+    }
+
+    suspend fun deleteNoteFolder(folderId: Long) =
+        database.withTransaction { dao.deleteNoteFolderAndPromote(folderId) }
+
+    suspend fun getNote(noteId: Long): NoteEntity? = dao.getNote(noteId)
+
+    suspend fun saveNote(draft: NoteDraft): Long = database.withTransaction {
+        require(draft.title.length <= 500) { "Note title is too long" }
+        require(draft.body.length <= 1_000_000) { "Note is too long" }
+        require(draft.folderId == null || dao.getNoteFolder(draft.folderId) != null) {
+            "The selected folder no longer exists"
+        }
+        val title = draft.title.trim().ifEmpty {
+            draft.body.lineSequence().map(String::trim).firstOrNull(String::isNotEmpty)
+                ?.let { firstLine ->
+                    if (firstLine.length <= 60) firstLine else firstLine.take(59).trimEnd() + "…"
+                }
+                ?: "Untitled note"
+        }
+        if (draft.id == null) {
+            val now = monotonicMutationTimestamp(wallClockMillis())
+            dao.insertNote(
+                NoteEntity(
+                    folderId = draft.folderId,
+                    title = title,
+                    body = draft.body,
+                    pinned = draft.pinned,
+                    createdAt = now,
+                    updatedAt = now,
+                ),
+            )
+        } else {
+            val existing = requireNotNull(dao.getNote(draft.id)) { "Note no longer exists" }
+            val updatedAt = monotonicMutationTimestamp(
+                wallClockMillis(),
+                existing.createdAt,
+                existing.updatedAt,
+            )
+            dao.updateNote(
+                existing.copy(
+                    folderId = draft.folderId,
+                    title = title,
+                    body = draft.body,
+                    pinned = draft.pinned,
+                    updatedAt = updatedAt,
+                ),
+            )
+            existing.id
+        }
+    }
+
+    suspend fun deleteNote(noteId: Long) = database.withTransaction {
+        requireNotNull(dao.getNote(noteId)) { "Note no longer exists" }
+        dao.markActiveOwnerAttachmentsForDeletion(
+            AttachmentOwnerType.NOTE.name,
+            noteId,
+            persistedDeadlineTimestamp(
+                wallClockMillis(),
+                DEFAULT_UNDO_WINDOW,
+                dao.getMaxAttachmentCreatedAt(AttachmentOwnerType.NOTE.name, listOf(noteId)),
+            ),
+        )
+        dao.deleteNoteById(noteId)
+    }
 
     suspend fun saveTodo(
         draft: TodoDraft,

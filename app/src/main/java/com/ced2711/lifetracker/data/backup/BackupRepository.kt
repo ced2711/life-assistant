@@ -30,6 +30,7 @@ data class BackupPreview(
     val attachmentCount: Int,
     val attachmentBytes: Long,
     val totalBytes: Long = 0,
+    val noteCount: Int = 0,
 )
 
 data class BackupExportResult(
@@ -480,6 +481,7 @@ internal fun buildBackupPreview(snapshot: BackupSnapshot): BackupPreview = Backu
     vaultCount = snapshot.vaultEntries.size,
     attachmentCount = snapshot.attachments.size,
     attachmentBytes = snapshot.attachments.sumOf(BackupAttachment::sizeBytes),
+    noteCount = snapshot.notes.size,
 )
 
 internal fun AppSettings.toBackupSettings() = BackupSettings(
@@ -550,6 +552,8 @@ internal fun BackupDatabaseState.toBackupSnapshot(
         ledgerEntries = ledgerEntries,
         attachments = portableAttachments,
         vaultEntries = vaultEntries,
+        noteFolders = noteFolders,
+        notes = notes,
     ).validate()
 }
 

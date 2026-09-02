@@ -27,6 +27,8 @@ class BackupDatabaseFingerprintTest {
             vaultEntries = listOf(
                 VaultEntryEntity(vault.id, 1, ByteArray(12) { 1 }, ByteArray(20) { 2 }, vault.createdAt, vault.updatedAt),
             ),
+            noteFolders = snapshot.noteFolders,
+            notes = snapshot.notes,
         )
 
         assertEquals(expectedDatabaseFingerprint(snapshot, attachmentRows), semanticDatabaseFingerprint(state))

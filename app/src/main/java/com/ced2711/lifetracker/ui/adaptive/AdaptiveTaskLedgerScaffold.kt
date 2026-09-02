@@ -27,6 +27,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -637,6 +638,7 @@ private val TopLevelDestination.label: String
         TopLevelDestination.TODO -> "Todo"
         TopLevelDestination.LEDGER -> "Ledger"
         TopLevelDestination.CALENDAR -> "Calendar"
+        TopLevelDestination.NOTES -> "Notes"
     }
 
 private val TopLevelDestination.icon: ImageVector
@@ -644,4 +646,5 @@ private val TopLevelDestination.icon: ImageVector
         TopLevelDestination.TODO -> Icons.Outlined.CheckCircle
         TopLevelDestination.LEDGER -> Icons.Outlined.AccountBalanceWallet
         TopLevelDestination.CALENDAR -> Icons.Outlined.CalendarMonth
+        TopLevelDestination.NOTES -> Icons.Outlined.Description
     }

@@ -6,9 +6,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import com.ced2711.lifetracker.data.local.TodoEntity
 import com.ced2711.lifetracker.data.repository.TaskLedgerRepository
-import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.combine
@@ -26,18 +24,14 @@ internal fun launcherIconMood(
     activeTodos: List<TodoEntity>,
     completedTodos: List<TodoEntity>,
     todayEpochDay: Long,
-    zoneId: ZoneId = ZoneId.systemDefault(),
 ): LauncherIconMood {
     val activeDueToday = activeTodos.count { it.deadlineEpochDay == todayEpochDay }
     val completedDueToday = completedTodos.count { it.deadlineEpochDay == todayEpochDay }
-    if (activeDueToday == 0 && completedDueToday > 0) return LauncherIconMood.COMPLETE
-
-    val completedToday = completedTodos.any { todo ->
-        todo.completedAt?.let { timestamp ->
-            Instant.ofEpochMilli(timestamp).atZone(zoneId).toLocalDate().toEpochDay() == todayEpochDay
-        } == true
+    return when {
+        activeDueToday > 0 -> LauncherIconMood.MOMENTUM
+        completedDueToday > 0 -> LauncherIconMood.COMPLETE
+        else -> LauncherIconMood.QUIET
     }
-    return if (completedToday) LauncherIconMood.MOMENTUM else LauncherIconMood.QUIET
 }
 
 class LauncherIconMoodCoordinator(

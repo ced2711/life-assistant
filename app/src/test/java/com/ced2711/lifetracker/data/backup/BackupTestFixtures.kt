@@ -4,6 +4,8 @@ import com.ced2711.lifetracker.data.local.CategoryEntity
 import com.ced2711.lifetracker.data.local.LedgerEntryEntity
 import com.ced2711.lifetracker.data.local.LedgerOccurrenceExceptionEntity
 import com.ced2711.lifetracker.data.local.LedgerSeriesEntity
+import com.ced2711.lifetracker.data.local.NoteEntity
+import com.ced2711.lifetracker.data.local.NoteFolderEntity
 import com.ced2711.lifetracker.data.local.SubtaskEntity
 import com.ced2711.lifetracker.data.local.TodoEntity
 import com.ced2711.lifetracker.data.local.TodoOccurrenceExceptionEntity
@@ -92,6 +94,21 @@ internal fun fullBackupSnapshot(): BackupSnapshot {
                 id = "123e4567-e89b-12d3-a456-426614174000", label = "邮箱",
                 account = "用户@example.com", password = "密碼\uD83D\uDD11", website = "https://例子.test",
                 notes = "仅供测试", createdAt = 113, updatedAt = 114,
+            ),
+        ),
+        noteFolders = listOf(
+            NoteFolderEntity(80, "Reference", null, 0, 115),
+            NoteFolderEntity(81, "Accounts", 80, 0, 116),
+        ),
+        notes = listOf(
+            NoteEntity(
+                id = 90,
+                folderId = 81,
+                title = "长期记录",
+                body = "任意 Unicode notes ✓",
+                pinned = true,
+                createdAt = 117,
+                updatedAt = 118,
             ),
         ),
     )

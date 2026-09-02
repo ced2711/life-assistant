@@ -35,6 +35,7 @@ class BackupRepositoryTest {
                 attachmentCount = 1,
                 attachmentBytes = snapshot.attachments.single().sizeBytes,
                 totalBytes = 0,
+                noteCount = 1,
             ),
             buildBackupPreview(snapshot),
         )

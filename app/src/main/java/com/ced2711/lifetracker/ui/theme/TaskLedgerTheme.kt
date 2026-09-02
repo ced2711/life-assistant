@@ -7,6 +7,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import com.ced2711.lifetracker.domain.model.AccentColor
 import com.ced2711.lifetracker.domain.model.ThemeMode
 
@@ -89,84 +90,82 @@ fun TaskLedgerTheme(
     )
 }
 
+private data class AccentRoles(
+    val primary: Color,
+    val onPrimary: Color,
+    val primaryContainer: Color,
+    val onPrimaryContainer: Color,
+)
+
 private fun taskLedgerColorScheme(accentColor: AccentColor, dark: Boolean) =
     (if (dark) TaskLedgerDarkColors else TaskLedgerLightColors).let { base ->
-        when (accentColor) {
-            AccentColor.TEAL -> base
-            AccentColor.BLUE -> if (dark) {
-                base.copy(
-                    primary = Color(0xFFAAC7FF),
-                    onPrimary = Color(0xFF002F65),
-                    primaryContainer = Color(0xFF17477C),
-                    onPrimaryContainer = Color(0xFFD6E3FF),
-                )
+        val accent = when (accentColor) {
+            AccentColor.TEAL -> if (dark) {
+                AccentRoles(Color(0xFF63DCCB), Color(0xFF003731), Color(0xFF005048), Color(0xFF84F8E7))
             } else {
-                base.copy(
-                    primary = Color(0xFF315F93),
-                    onPrimary = Color.White,
-                    primaryContainer = Color(0xFFD6E3FF),
-                    onPrimaryContainer = Color(0xFF001B3D),
-                )
+                AccentRoles(Color(0xFF006B60), Color.White, Color(0xFF7AF8E4), Color(0xFF00201C))
+            }
+            AccentColor.BLUE -> if (dark) {
+                AccentRoles(Color(0xFFAAC7FF), Color(0xFF002F65), Color(0xFF17477C), Color(0xFFD6E3FF))
+            } else {
+                AccentRoles(Color(0xFF315F93), Color.White, Color(0xFFD6E3FF), Color(0xFF001B3D))
             }
             AccentColor.VIOLET -> if (dark) {
-                base.copy(
-                    primary = Color(0xFFD0BCFF),
-                    onPrimary = Color(0xFF381E72),
-                    primaryContainer = Color(0xFF4F378B),
-                    onPrimaryContainer = Color(0xFFEADDFF),
-                )
+                AccentRoles(Color(0xFFD0BCFF), Color(0xFF381E72), Color(0xFF4F378B), Color(0xFFEADDFF))
             } else {
-                base.copy(
-                    primary = Color(0xFF6750A4),
-                    onPrimary = Color.White,
-                    primaryContainer = Color(0xFFEADDFF),
-                    onPrimaryContainer = Color(0xFF21005D),
-                )
+                AccentRoles(Color(0xFF6750A4), Color.White, Color(0xFFEADDFF), Color(0xFF21005D))
             }
             AccentColor.ROSE -> if (dark) {
-                base.copy(
-                    primary = Color(0xFFFFB1C8),
-                    onPrimary = Color(0xFF5E1131),
-                    primaryContainer = Color(0xFF7A2948),
-                    onPrimaryContainer = Color(0xFFFFD9E3),
-                )
+                AccentRoles(Color(0xFFFFB1C8), Color(0xFF5E1131), Color(0xFF7A2948), Color(0xFFFFD9E3))
             } else {
-                base.copy(
-                    primary = Color(0xFF984061),
-                    onPrimary = Color.White,
-                    primaryContainer = Color(0xFFFFD9E3),
-                    onPrimaryContainer = Color(0xFF3E001D),
-                )
+                AccentRoles(Color(0xFF984061), Color.White, Color(0xFFFFD9E3), Color(0xFF3E001D))
             }
             AccentColor.ORANGE -> if (dark) {
-                base.copy(
-                    primary = Color(0xFFFFB86C),
-                    onPrimary = Color(0xFF4A2800),
-                    primaryContainer = Color(0xFF663B00),
-                    onPrimaryContainer = Color(0xFFFFDCB5),
-                )
+                AccentRoles(Color(0xFFFFB86C), Color(0xFF4A2800), Color(0xFF663B00), Color(0xFFFFDCB5))
             } else {
-                base.copy(
-                    primary = Color(0xFF8B5000),
-                    onPrimary = Color.White,
-                    primaryContainer = Color(0xFFFFDCB5),
-                    onPrimaryContainer = Color(0xFF2C1600),
-                )
+                AccentRoles(Color(0xFF8B5000), Color.White, Color(0xFFFFDCB5), Color(0xFF2C1600))
             }
             AccentColor.GREEN -> if (dark) {
-                base.copy(
-                    primary = Color(0xFF75DC8B),
-                    onPrimary = Color(0xFF003916),
-                    primaryContainer = Color(0xFF005225),
-                    onPrimaryContainer = Color(0xFF91F9A5),
-                )
+                AccentRoles(Color(0xFF75DC8B), Color(0xFF003916), Color(0xFF005225), Color(0xFF91F9A5))
             } else {
-                base.copy(
-                    primary = Color(0xFF176D35),
-                    onPrimary = Color.White,
-                    primaryContainer = Color(0xFFA8F5B7),
-                    onPrimaryContainer = Color(0xFF002109),
-                )
+                AccentRoles(Color(0xFF176D35), Color.White, Color(0xFFA8F5B7), Color(0xFF002109))
             }
         }
+
+        val neutralSurface = if (dark) Color(0xFF121313) else Color(0xFFFAFAFA)
+        val neutralVariant = if (dark) Color(0xFF343636) else Color(0xFFE5E7E7)
+        val secondary = lerp(
+            accent.primary,
+            if (dark) Color(0xFFD7DADA) else Color(0xFF414343),
+            0.34f,
+        )
+        val tintedVariant = lerp(neutralVariant, accent.primary, if (dark) 0.12f else 0.08f)
+        base.copy(
+            primary = accent.primary,
+            onPrimary = accent.onPrimary,
+            primaryContainer = accent.primaryContainer,
+            onPrimaryContainer = accent.onPrimaryContainer,
+            inversePrimary = accent.primaryContainer,
+            secondary = secondary,
+            onSecondary = accent.onPrimary,
+            secondaryContainer = lerp(tintedVariant, accent.primaryContainer, 0.42f),
+            onSecondaryContainer = accent.onPrimaryContainer,
+            tertiary = lerp(accent.primary, if (dark) Color.White else Color.Black, 0.16f),
+            onTertiary = accent.onPrimary,
+            tertiaryContainer = lerp(tintedVariant, accent.primaryContainer, 0.62f),
+            onTertiaryContainer = accent.onPrimaryContainer,
+            background = neutralSurface,
+            onBackground = if (dark) Color(0xFFE4E7E6) else Color(0xFF1A1C1C),
+            surface = neutralSurface,
+            onSurface = if (dark) Color(0xFFE4E7E6) else Color(0xFF1A1C1C),
+            surfaceVariant = tintedVariant,
+            onSurfaceVariant = if (dark) Color(0xFFC5C9C8) else Color(0xFF444847),
+            outlineVariant = lerp(tintedVariant, accent.primary, 0.16f),
+            surfaceTint = accent.primary,
+            surfaceContainerLowest = if (dark) Color(0xFF0C0D0D) else Color.White,
+            surfaceContainerLow = lerp(neutralSurface, accent.primary, 0.025f),
+            surfaceContainer = lerp(neutralSurface, accent.primary, 0.045f),
+            surfaceContainerHigh = lerp(neutralSurface, accent.primary, 0.07f),
+            surfaceContainerHighest = lerp(neutralSurface, accent.primary, 0.10f),
+        )
     }
