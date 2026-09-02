@@ -1,0 +1,31 @@
+# Android Studio and local machine state
+.idea/
+*.iml
+local.properties
+*.hprof
+*.log
+
+# Gradle and Kotlin build state
+.gradle/
+.kotlin/
+**/build/
+
+# Binary distributions
+*.apk
+*.aab
+*.apks
+*.idsig
+
+# Signing material and credentials must never enter source control
+*.jks
+*.keystore
+*.p12
+*Signing Credentials*.txt
+
+# Encrypted user backups and the one-off personal migration asset are private
+*.tlb
+app/src/personal/assets/personal-backup.*
+
+# Local emulator/device captures
+device-test-artifacts/
+invalidationresult.xml

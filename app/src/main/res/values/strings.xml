@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Life Tracker</string>
+    <string name="today_todo_widget_name">Today’s todos</string>
+    <string name="today_todo_widget_description">Active todos due today, with quick Todo and Ledger shortcuts</string>
+</resources>
