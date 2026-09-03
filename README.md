@@ -7,7 +7,7 @@ Life Tracker is a private, offline-first Android app that combines Todo, Ledger,
 - Nested Todo categories, subtasks, priorities, tags, search, reminders, attachments, recurring tasks, and completion momentum.
 - Manual Income/Expense ledger entries, recurring entries, attachments, summaries, and close-fit trend charts.
 - Month, week, day, and agenda calendar views with daily net amounts and completed/incomplete Todo counts.
-- Long-term Notes with search, pinned notes, nested folders, and multiple private file/image attachments.
+- Long-term Notes with collapsible search and nested-folder controls, pinned notes, and multiple private file/image attachments.
 - Encrypted local Vault for credentials and private notes, protected by Android system authentication.
 - Password-encrypted `.tlb` backup and full-replacement restore with validation and preview.
 - Responsive Today Todo widget, including wide horizontal layouts.
@@ -34,14 +34,14 @@ Use JDK 17 and the included Gradle wrapper.
 
 There are two distribution flavors:
 
-- `standard`: normal install/update build; version code 7 for the 1.4.0 release.
+- `standard`: normal install/update build; version code 8 for the 1.4.1 release.
 - `personal`: one-off migration build; version code 5 so the standard APK can update it afterward.
 
 The personal flavor intentionally requires a local `app/src/personal/assets/personal-backup.tlb`. That encrypted user backup, its password, APK outputs, release keystore, and signing credentials are excluded from Git and must never be committed, even to a private repository.
 
 ## Verification baseline
 
-- 320 standard debug JVM tests pass.
+- 327 standard release JVM tests pass.
 - Standard Release Lint: 0 errors.
 - 103 Android instrumentation tests pass on an API 36 Pixel 9 Pro Fold emulator, including the Room 5→6 migration.
 - Signed personal-to-standard `adb install -r` verification preserved every app-data file hash and the original install timestamp.

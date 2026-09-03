@@ -56,6 +56,36 @@ class LauncherIconMoodTest {
         )
     }
 
+    @Test
+    fun `foreground icon changes wait until the app moves to background`() {
+        val deferral = LauncherIconMoodDeferral()
+
+        assertEquals(null, deferral.submit(LauncherIconMood.MOMENTUM, appIsForeground = true))
+        assertEquals(LauncherIconMood.MOMENTUM, deferral.consumePending())
+        assertEquals(null, deferral.consumePending())
+    }
+
+    @Test
+    fun `only the latest foreground icon is applied after closing`() {
+        val deferral = LauncherIconMoodDeferral()
+
+        deferral.submit(LauncherIconMood.MOMENTUM, appIsForeground = true)
+        deferral.submit(LauncherIconMood.COMPLETE, appIsForeground = true)
+
+        assertEquals(LauncherIconMood.COMPLETE, deferral.consumePending())
+    }
+
+    @Test
+    fun `background icon changes can be applied immediately`() {
+        val deferral = LauncherIconMoodDeferral()
+
+        assertEquals(
+            LauncherIconMood.QUIET,
+            deferral.submit(LauncherIconMood.QUIET, appIsForeground = false),
+        )
+        assertEquals(null, deferral.consumePending())
+    }
+
     private fun todo(id: Long, deadlineEpochDay: Long?) = TodoEntity(
         id = id,
         title = "Task $id",

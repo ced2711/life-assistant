@@ -158,6 +158,8 @@ private enum class TodoSort(val label: String) {
 }
 
 private const val MAX_ATTACHMENTS = 10
+internal const val ALL_CATEGORIES_FILTER_KEY = Long.MIN_VALUE
+internal const val UNCATEGORIZED_FILTER_KEY = Long.MIN_VALUE + 1
 
 private val stringListSaver = listSaver<List<String>, String>(
     save = { it },
@@ -168,6 +170,31 @@ private val longListSaver = listSaver<List<Long>, Long>(
     save = { it },
     restore = { it.toList() },
 )
+
+private val longSetSaver = listSaver<Set<Long>, Long>(
+    save = { it.toList() },
+    restore = { it.toSet() },
+)
+
+internal fun toggleTodoCategoryFilter(current: Set<Long>, key: Long): Set<Long> {
+    if (key == ALL_CATEGORIES_FILTER_KEY) return setOf(ALL_CATEGORIES_FILTER_KEY)
+    val specific = current - ALL_CATEGORIES_FILTER_KEY
+    return if (key in specific) {
+        (specific - key).ifEmpty { setOf(ALL_CATEGORIES_FILTER_KEY) }
+    } else {
+        specific + key
+    }
+}
+
+internal fun sanitizeTodoCategoryFilters(
+    current: Set<Long>,
+    validCategoryIds: Set<Long>,
+): Set<Long> {
+    if (ALL_CATEGORIES_FILTER_KEY in current) return setOf(ALL_CATEGORIES_FILTER_KEY)
+    return current
+        .filterTo(linkedSetOf()) { it == UNCATEGORIZED_FILTER_KEY || it in validCategoryIds }
+        .ifEmpty { setOf(ALL_CATEGORIES_FILTER_KEY) }
+}
 
 internal data class PendingTodoDelete(
     val title: String,
@@ -591,8 +618,10 @@ fun TodoScreen(
     var search by rememberSaveable { mutableStateOf("") }
     var selectedPriority by rememberSaveable { mutableStateOf<TodoPriority?>(null) }
     var selectedTag by rememberSaveable { mutableStateOf<String?>(null) }
-    var selectedCategoryId by rememberSaveable { mutableStateOf<Long?>(null) }
-    var categoryFilterEnabled by rememberSaveable { mutableStateOf(false) }
+    var selectedCategoryFilters by rememberSaveable(stateSaver = longSetSaver) {
+        mutableStateOf(setOf(ALL_CATEGORIES_FILTER_KEY))
+    }
+    var observedCategoryIds by remember { mutableStateOf<Set<Long>?>(null) }
     var sort by rememberSaveable { mutableStateOf(TodoSort.DEADLINE) }
     var filtersExpanded by rememberSaveable { mutableStateOf(false) }
     var completedExpanded by rememberSaveable { mutableStateOf(false) }
@@ -682,8 +711,28 @@ fun TodoScreen(
             category.id to (categoryPathLabel(category.id, namesById, categoryParentIds) ?: category.name)
         }
     }
-    val categoryFilterIds = remember(selectedCategoryId, categoryParentIds) {
-        categoryIdsIncludedByTodoFilter(selectedCategoryId, categoryParentIds)
+    val currentCategoryIds = remember(categories) { categories.mapTo(hashSetOf(), CategoryEntity::id) }
+    LaunchedEffect(currentCategoryIds) {
+        val previousCategoryIds = observedCategoryIds
+        if (previousCategoryIds != null && previousCategoryIds != currentCategoryIds) {
+            selectedCategoryFilters = sanitizeTodoCategoryFilters(
+                current = selectedCategoryFilters,
+                validCategoryIds = currentCategoryIds,
+            )
+        }
+        observedCategoryIds = currentCategoryIds
+    }
+    val allCategoriesSelected = ALL_CATEGORIES_FILTER_KEY in selectedCategoryFilters
+    val categoryFilterIds = remember(selectedCategoryFilters, categoryParentIds) {
+        buildSet<Long?> {
+            if (UNCATEGORIZED_FILTER_KEY in selectedCategoryFilters) add(null)
+            selectedCategoryFilters
+                .asSequence()
+                .filter { it != ALL_CATEGORIES_FILTER_KEY && it != UNCATEGORIZED_FILTER_KEY }
+                .forEach { categoryId ->
+                    addAll(categoryIdsIncludedByTodoFilter(categoryId, categoryParentIds))
+                }
+        }
     }
     val availableTags = remember(activeTodos, completedTodos, todoSeries) {
         collectDistinctTodoTags(
@@ -696,7 +745,7 @@ fun TodoScreen(
         selectedPriority,
         selectedTag,
         categoryFilterIds,
-        categoryFilterEnabled,
+        allCategoriesSelected,
         sort,
     ) {
         activeTodos
@@ -709,7 +758,7 @@ fun TodoScreen(
             .filter { todo ->
                 selectedTag == null || todo.tagsCsv.split(',').any { it.equals(selectedTag, ignoreCase = true) }
             }
-            .filter { !categoryFilterEnabled || it.categoryId in categoryFilterIds }
+            .filter { allCategoriesSelected || it.categoryId in categoryFilterIds }
             .sortedWith(
                 when (sort) {
                     TodoSort.DEADLINE -> compareBy<TodoEntity> { it.deadlineEpochDay == null }
@@ -730,7 +779,7 @@ fun TodoScreen(
         selectedPriority,
         selectedTag,
         categoryFilterIds,
-        categoryFilterEnabled,
+        allCategoriesSelected,
         sort,
     ) {
         completedTodos
@@ -743,7 +792,7 @@ fun TodoScreen(
             .filter { todo ->
                 selectedTag == null || todo.tagsCsv.split(',').any { it.equals(selectedTag, ignoreCase = true) }
             }
-            .filter { !categoryFilterEnabled || it.categoryId in categoryFilterIds }
+            .filter { allCategoriesSelected || it.categoryId in categoryFilterIds }
             .sortedWith(
                 when (sort) {
                     TodoSort.DEADLINE -> compareBy<TodoEntity> { it.deadlineEpochDay == null }
@@ -849,11 +898,9 @@ fun TodoScreen(
             selectedTag = selectedTag,
             availableTags = availableTags,
             onTagChange = { selectedTag = it },
-            selectedCategoryId = selectedCategoryId,
-            categoryFilterEnabled = categoryFilterEnabled,
-            onCategoryFilterChange = { enabled, id ->
-                categoryFilterEnabled = enabled
-                selectedCategoryId = id
+            selectedCategoryFilters = selectedCategoryFilters,
+            onCategoryFilterToggle = { key ->
+                selectedCategoryFilters = toggleTodoCategoryFilter(selectedCategoryFilters, key)
             },
             categories = categories,
             categoryNames = categoryNames,
@@ -986,7 +1033,17 @@ fun TodoScreen(
             categories = categories,
             onDismiss = { showCategoryManager = false },
             onAdd = viewModel::addCategory,
-            onDelete = viewModel::deleteCategory,
+            onDelete = { categoryId ->
+                selectedCategoryFilters = sanitizeTodoCategoryFilters(
+                    current = selectedCategoryFilters,
+                    validCategoryIds = categories
+                        .asSequence()
+                        .map(CategoryEntity::id)
+                        .filterNot { it == categoryId }
+                        .toSet(),
+                )
+                viewModel.deleteCategory(categoryId)
+            },
         )
     }
 
@@ -1039,6 +1096,7 @@ fun TodoScreen(
 
     editorDraft?.let { draft ->
         val sessionKey = editorSessionKey ?: return@let
+        val todoCompleted = draft.id?.let { id -> completedTodos.any { it.id == id } }
         TodoEditorDialog(
             viewModel = viewModel,
             uiOperations = uiOperations,
@@ -1052,6 +1110,13 @@ fun TodoScreen(
             operationFailureMessage = editorFailureMessage,
             isSaving = uiOperations.savingEditorKey == sessionKey,
             recordSavedAwaitingAttachments = uiOperations.hasSavedOwner(sessionKey),
+            todoCompleted = todoCompleted,
+            onCompletionChange = { completed ->
+                draft.id?.let { id ->
+                    if (completed) viewModel.completeTodo(id, completeSubtasks = false)
+                    else viewModel.restoreTodo(id)
+                }
+            },
             onDismiss = ::closeEditor,
             onSave = { savedDraft, editScope, attachmentUris ->
                 val saveAttempt = uiOperations.beginSave(sessionKey) ?: return@TodoEditorDialog
@@ -1163,9 +1228,8 @@ private fun TodoControls(
     availableTags: List<String>,
     onTagChange: (String?) -> Unit,
     onManageTags: () -> Unit,
-    selectedCategoryId: Long?,
-    categoryFilterEnabled: Boolean,
-    onCategoryFilterChange: (Boolean, Long?) -> Unit,
+    selectedCategoryFilters: Set<Long>,
+    onCategoryFilterToggle: (Long) -> Unit,
     categories: List<CategoryEntity>,
     categoryNames: Map<Long, String>,
     sort: TodoSort,
@@ -1175,10 +1239,15 @@ private fun TodoControls(
     onNewTask: () -> Unit,
     onManageCategories: () -> Unit,
 ) {
-    val categoryLabel = if (!categoryFilterEnabled) {
-        "All categories"
-    } else {
-        selectedCategoryId?.let(categoryNames::get) ?: "Uncategorized"
+    val allCategoriesSelected = ALL_CATEGORIES_FILTER_KEY in selectedCategoryFilters
+    val categoryLabel = when {
+        allCategoriesSelected -> "All categories"
+        selectedCategoryFilters.size == 1 -> {
+            val key = selectedCategoryFilters.single()
+            if (key == UNCATEGORIZED_FILTER_KEY) "Uncategorized"
+            else categoryNames[key] ?: "1 category selected"
+        }
+        else -> "${selectedCategoryFilters.size} categories selected"
     }
     val activeFilterSummaries = buildList {
         search.trim().takeIf(String::isNotEmpty)?.let { query ->
@@ -1186,7 +1255,7 @@ private fun TodoControls(
         }
         priority?.let { add("Priority: ${it.displayName()}") }
         selectedTag?.let { add("Tag: #$it") }
-        if (categoryFilterEnabled) add("Category: $categoryLabel")
+        if (!allCategoriesSelected) add("Category: $categoryLabel")
         if (sort != TodoSort.DEADLINE) add("Sort: ${sort.label}")
     }
     val filterSummary = if (activeFilterSummaries.isEmpty()) {
@@ -1314,7 +1383,7 @@ private fun TodoControls(
                                     onSearchChange("")
                                     onPriorityChange(null)
                                     onTagChange(null)
-                                    onCategoryFilterChange(false, null)
+                                    onCategoryFilterToggle(ALL_CATEGORIES_FILTER_KEY)
                                     onSortChange(TodoSort.DEADLINE)
                                 },
                             ) { Text("Clear filters") }
@@ -1388,16 +1457,34 @@ private fun TodoControls(
                             ChoiceMenu(label = categoryLabel, modifier = menuModifier) { close ->
                                 DropdownMenuItem(
                                     text = { Text("All categories") },
-                                    onClick = { onCategoryFilterChange(false, null); close() },
+                                    onClick = {
+                                        onCategoryFilterToggle(ALL_CATEGORIES_FILTER_KEY)
+                                        close()
+                                    },
+                                    leadingIcon = {
+                                        Checkbox(checked = allCategoriesSelected, onCheckedChange = null)
+                                    },
                                 )
                                 DropdownMenuItem(
                                     text = { Text("Uncategorized") },
-                                    onClick = { onCategoryFilterChange(true, null); close() },
+                                    onClick = { onCategoryFilterToggle(UNCATEGORIZED_FILTER_KEY) },
+                                    leadingIcon = {
+                                        Checkbox(
+                                            checked = UNCATEGORIZED_FILTER_KEY in selectedCategoryFilters,
+                                            onCheckedChange = null,
+                                        )
+                                    },
                                 )
                                 categories.forEach { category ->
                                     DropdownMenuItem(
                                         text = { Text(categoryNames[category.id] ?: category.name) },
-                                        onClick = { onCategoryFilterChange(true, category.id); close() },
+                                        onClick = { onCategoryFilterToggle(category.id) },
+                                        leadingIcon = {
+                                            Checkbox(
+                                                checked = category.id in selectedCategoryFilters,
+                                                onCheckedChange = null,
+                                            )
+                                        },
                                     )
                                 }
                             }
@@ -2068,6 +2155,8 @@ private fun TodoEditorDialog(
     operationFailureMessage: String?,
     isSaving: Boolean,
     recordSavedAwaitingAttachments: Boolean,
+    todoCompleted: Boolean?,
+    onCompletionChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
     onSave: (TodoDraft, SeriesEditScope, List<Uri>) -> Unit,
 ) {
@@ -2388,6 +2477,20 @@ private fun TodoEditorDialog(
             if (initialDraft.id == null) "New task" else "Edit task",
             style = MaterialTheme.typography.headlineSmall,
         )
+        todoCompleted?.let { completed ->
+            OutlinedButton(
+                onClick = { onCompletionChange(!completed) },
+                enabled = !isSaving,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(
+                    imageVector = if (completed) Icons.Default.Restore else Icons.Default.CheckCircle,
+                    contentDescription = null,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(if (completed) "Mark as not done" else "Mark as done")
+            }
+        }
         OutlinedTextField(
             value = description,
             onValueChange = { description = it },

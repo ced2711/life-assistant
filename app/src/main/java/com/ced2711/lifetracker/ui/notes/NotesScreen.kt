@@ -3,6 +3,7 @@ package com.ced2711.lifetracker.ui.notes
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -23,9 +25,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AttachFile
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Lock
@@ -253,7 +258,14 @@ private fun NotesBrowser(
     val scope = rememberCoroutineScope()
     var folderDialogMode by remember { mutableStateOf<FolderDialogMode?>(null) }
     var confirmDeleteFolder by remember { mutableStateOf(false) }
+    var searchExpanded by rememberSaveable { mutableStateOf(false) }
+    var foldersExpanded by rememberSaveable { mutableStateOf(false) }
     val selectedFolder = folders.firstOrNull { it.id.toString() == folderSelection }
+    val selectedFolderLabel = when (folderSelection) {
+        ALL_FOLDERS -> "All notes"
+        ROOT_FOLDER -> "Unfiled"
+        else -> selectedFolder?.name ?: "All notes"
+    }
 
     Column(modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -272,42 +284,71 @@ private fun NotesBrowser(
                 Icon(Icons.Outlined.CreateNewFolder, contentDescription = "New folder")
             }
         }
-        OutlinedTextField(
-            value = query,
-            onValueChange = onQueryChanged,
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            leadingIcon = { Icon(Icons.Outlined.Search, null) },
-            placeholder = { Text("Search notes") },
+        NotesBrowserSectionHeader(
+            label = if (query.isBlank()) "Search" else "Search · $query",
+            icon = Icons.Outlined.Search,
+            expanded = searchExpanded,
+            onClick = { searchExpanded = !searchExpanded },
         )
-        Text("Folders", style = MaterialTheme.typography.titleSmall)
-        Column(Modifier.fillMaxWidth().height(190.dp).verticalScroll(rememberScrollState())) {
-            FolderRow("All notes", Icons.Outlined.FolderOpen, folderSelection == ALL_FOLDERS) {
-                onFolderSelected(ALL_FOLDERS)
-            }
-            FolderRow("Unfiled", Icons.Outlined.Folder, folderSelection == ROOT_FOLDER) {
-                onFolderSelected(ROOT_FOLDER)
-            }
-            flattenNoteFolders(folders).forEach { row ->
-                FolderRow(
-                    label = row.folder.name,
-                    icon = Icons.Outlined.Folder,
-                    selected = folderSelection == row.folder.id.toString(),
-                    depth = row.depth,
-                ) { onFolderSelected(row.folder.id.toString()) }
-            }
+        AnimatedVisibility(visible = searchExpanded) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = onQueryChanged,
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                leadingIcon = { Icon(Icons.Outlined.Search, null) },
+                trailingIcon = if (query.isNotEmpty()) {
+                    {
+                        IconButton(onClick = { onQueryChanged("") }) {
+                            Icon(Icons.Outlined.Close, contentDescription = "Clear search")
+                        }
+                    }
+                } else null,
+                placeholder = { Text("Search notes") },
+            )
         }
-        if (selectedFolder != null) {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = { folderDialogMode = FolderDialogMode.Rename }) {
-                    Icon(Icons.Outlined.Edit, null)
-                    Spacer(Modifier.width(4.dp))
-                    Text("Rename")
+        NotesBrowserSectionHeader(
+            label = "Folders · $selectedFolderLabel",
+            icon = if (foldersExpanded) Icons.Outlined.FolderOpen else Icons.Outlined.Folder,
+            expanded = foldersExpanded,
+            onClick = { foldersExpanded = !foldersExpanded },
+        )
+        AnimatedVisibility(visible = foldersExpanded) {
+            Column {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 190.dp)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    FolderRow("All notes", Icons.Outlined.FolderOpen, folderSelection == ALL_FOLDERS) {
+                        onFolderSelected(ALL_FOLDERS)
+                    }
+                    FolderRow("Unfiled", Icons.Outlined.Folder, folderSelection == ROOT_FOLDER) {
+                        onFolderSelected(ROOT_FOLDER)
+                    }
+                    flattenNoteFolders(folders).forEach { row ->
+                        FolderRow(
+                            label = row.folder.name,
+                            icon = Icons.Outlined.Folder,
+                            selected = folderSelection == row.folder.id.toString(),
+                            depth = row.depth,
+                        ) { onFolderSelected(row.folder.id.toString()) }
+                    }
                 }
-                TextButton(onClick = { confirmDeleteFolder = true }) {
-                    Icon(Icons.Outlined.Delete, null)
-                    Spacer(Modifier.width(4.dp))
-                    Text("Delete folder")
+                if (selectedFolder != null) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TextButton(onClick = { folderDialogMode = FolderDialogMode.Rename }) {
+                            Icon(Icons.Outlined.Edit, null)
+                            Spacer(Modifier.width(4.dp))
+                            Text("Rename")
+                        }
+                        TextButton(onClick = { confirmDeleteFolder = true }) {
+                            Icon(Icons.Outlined.Delete, null)
+                            Spacer(Modifier.width(4.dp))
+                            Text("Delete folder")
+                        }
+                    }
                 }
             }
         }
@@ -376,6 +417,39 @@ private fun NotesBrowser(
             },
             dismissButton = { TextButton(onClick = { confirmDeleteFolder = false }) { Text("Cancel") } },
         )
+    }
+}
+
+@Composable
+private fun NotesBrowserSectionHeader(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    expanded: Boolean,
+    onClick: () -> Unit,
+) {
+    Card(
+        onClick = onClick,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(icon, null)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                label,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                contentDescription = if (expanded) "Collapse" else "Expand",
+            )
+        }
     }
 }
 
