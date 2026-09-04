@@ -70,6 +70,8 @@ private val RailWidth = 80.dp
 private val CompactRailWidth = 64.dp
 private val MinimumSplitRailWidth = 48.dp
 private val MinimumHorizontalChromeHeight = 96.dp
+private val StatusBarVisualOverlap = 12.dp
+private val MinimumStatusBarClearance = 24.dp
 
 /**
  * Responsive root scaffold for TaskLedger.
@@ -361,6 +363,19 @@ private fun PaneHost(
     includeIme: Boolean,
     content: @Composable () -> Unit,
 ) {
+    val density = LocalDensity.current
+    val layoutDirection = LocalLayoutDirection.current
+    val safeDrawing = WindowInsets.safeDrawing
+    val compactTopSafeDrawing = WindowInsets(
+        left = safeDrawing.getLeft(density, layoutDirection),
+        top = reducedStatusBarTopInset(
+            safeTopPx = safeDrawing.getTop(density),
+            desiredOverlapPx = with(density) { StatusBarVisualOverlap.roundToPx() },
+            minimumClearancePx = with(density) { MinimumStatusBarClearance.roundToPx() },
+        ),
+        right = safeDrawing.getRight(density, layoutDirection),
+        bottom = safeDrawing.getBottom(density),
+    )
     Box(
         modifier = Modifier
             .offset(x = pane.left, y = pane.top)
@@ -369,14 +384,24 @@ private fun PaneHost(
             .clipToBounds()
             .windowInsetsPadding(
                 if (includeIme) {
-                    WindowInsets.safeDrawing.union(WindowInsets.ime)
+                    compactTopSafeDrawing.union(WindowInsets.ime)
                 } else {
-                    WindowInsets.safeDrawing
+                    compactTopSafeDrawing
                 },
             ),
     ) {
         content()
     }
+}
+
+internal fun reducedStatusBarTopInset(
+    safeTopPx: Int,
+    desiredOverlapPx: Int,
+    minimumClearancePx: Int,
+): Int {
+    val safeTop = safeTopPx.coerceAtLeast(0)
+    val minimumClearance = minimumClearancePx.coerceIn(0, safeTop)
+    return (safeTop - desiredOverlapPx.coerceAtLeast(0)).coerceAtLeast(minimumClearance)
 }
 
 @Composable
