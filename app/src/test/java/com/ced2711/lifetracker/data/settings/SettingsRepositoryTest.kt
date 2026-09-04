@@ -1,6 +1,9 @@
 package com.ced2711.lifetracker.data.settings
 
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
@@ -10,6 +13,7 @@ import com.ced2711.lifetracker.domain.model.ThemeMode
 import com.ced2711.lifetracker.domain.model.TimeFormatOption
 import com.ced2711.lifetracker.domain.model.TopLevelDestination
 import com.ced2711.lifetracker.domain.model.TodoQuickAddField
+import com.ced2711.lifetracker.domain.model.UiLanguage
 import com.ced2711.lifetracker.domain.model.WeekStart
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
@@ -17,7 +21,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -39,6 +47,7 @@ class SettingsRepositoryTest {
             val settings = repository.settings.first()
             assertEquals(ThemeMode.DARK, settings.themeMode)
             assertEquals(AccentColor.TEAL, settings.accentColor)
+            assertEquals(UiLanguage.ENGLISH, settings.uiLanguage)
             assertEquals(WeekStart.SUNDAY, settings.weekStart)
             assertEquals(TimeFormatOption.HOUR_12, settings.timeFormat)
             assertEquals(DateFormatOption.MONTH_DAY_YEAR, settings.dateFormat)
@@ -62,6 +71,10 @@ class SettingsRepositoryTest {
             name = "accent-color",
             expected = AppSettings(accentColor = AccentColor.VIOLET),
         ) { setAccentColor(AccentColor.VIOLET) }
+        assertSettingSurvivesReopening(
+            name = "ui-language",
+            expected = AppSettings(uiLanguage = UiLanguage.SIMPLIFIED_CHINESE),
+        ) { setUiLanguage(UiLanguage.SIMPLIFIED_CHINESE) }
         assertSettingSurvivesReopening(
             name = "week-start",
             expected = AppSettings(weekStart = WeekStart.MONDAY),
@@ -237,10 +250,45 @@ class SettingsRepositoryTest {
         }
     }
 
+    @Test
+    fun `backup replacement preserves the device UI language`() = runBlocking {
+        val repository = SettingsRepository(InMemoryPreferencesDataStore())
+        repository.setUiLanguage(UiLanguage.SIMPLIFIED_CHINESE)
+
+        repository.replace(
+            AppSettings(
+                themeMode = ThemeMode.LIGHT,
+                uiLanguage = UiLanguage.ENGLISH,
+                notificationsEnabled = true,
+            ),
+        )
+
+        assertEquals(
+            AppSettings(
+                themeMode = ThemeMode.LIGHT,
+                uiLanguage = UiLanguage.SIMPLIFIED_CHINESE,
+                notificationsEnabled = true,
+            ),
+            repository.snapshot(),
+        )
+    }
+
     private fun repository(file: File, scope: CoroutineScope) = SettingsRepository(
         PreferenceDataStoreFactory.create(
             scope = scope,
             produceFile = { file },
         ),
     )
+}
+
+private class InMemoryPreferencesDataStore : DataStore<Preferences> {
+    private val state = MutableStateFlow<Preferences>(emptyPreferences())
+    private val updateMutex = Mutex()
+
+    override val data: Flow<Preferences> = state
+
+    override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences =
+        updateMutex.withLock {
+            transform(state.value).also { state.value = it }
+        }
 }

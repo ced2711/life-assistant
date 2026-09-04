@@ -65,6 +65,7 @@ class ReminderWorker(
                     offsetMinutes = offsetMinutes,
                     triggerAtMillis = window.triggerAtMillis,
                 ),
+                uiLanguage = settings.uiLanguage,
             )
             when (deliveryResult) {
                 NotificationDeliveryResult.DELIVERED,

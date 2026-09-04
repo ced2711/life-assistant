@@ -15,6 +15,9 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
+import com.ced2711.lifetracker.ui.localization.localizedText
+import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
+import com.ced2711.lifetracker.ui.localization.translateUiText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -64,20 +67,21 @@ fun LedgerScreen(
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val uiLanguage = LocalUiLanguage.current
     var pageName by rememberSaveable { mutableStateOf(LedgerPage.ENTRIES.name) }
     val page = LedgerPage.entries.firstOrNull { it.name == pageName } ?: LedgerPage.ENTRIES
     val formatting = rememberLedgerDisplayFormatting(settings)
     val openAttachment = rememberAttachmentOpener { message ->
-        scope.launch { snackbarHostState.showSnackbar(message) }
+        scope.launch { snackbarHostState.showSnackbar(translateUiText(message, uiLanguage)) }
     }
 
     LaunchedEffect(quickAddRequestToken) {
         if (quickAddRequestToken != null) pageName = LedgerPage.ENTRIES.name
     }
 
-    LaunchedEffect(viewModel) {
+    LaunchedEffect(viewModel, uiLanguage) {
         viewModel.errors.collect { message ->
-            snackbarHostState.showSnackbar(message)
+            snackbarHostState.showSnackbar(translateUiText(message, uiLanguage))
         }
     }
 
@@ -85,8 +89,8 @@ fun LedgerScreen(
     LaunchedEffect(pendingDelete) {
         val item = pendingDelete ?: return@LaunchedEffect
         val result = snackbarHostState.showSnackbar(
-            message = "Deleted ${item.title}",
-            actionLabel = "Undo",
+            message = translateUiText("Deleted ${item.title}", uiLanguage),
+            actionLabel = translateUiText("Undo", uiLanguage),
             withDismissAction = true,
             duration = SnackbarDuration.Indefinite,
         )
@@ -129,7 +133,7 @@ fun LedgerScreen(
                     FilterChip(
                         selected = page == destination,
                         onClick = { pageName = destination.name },
-                        label = { Text(destination.label) },
+                        label = { Text(localizedText(destination.label)) },
                         modifier = Modifier.padding(end = 8.dp),
                     )
                 }

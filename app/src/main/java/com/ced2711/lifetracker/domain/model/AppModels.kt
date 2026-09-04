@@ -48,6 +48,11 @@ enum class ThemeMode {
     DARK,
 }
 
+enum class UiLanguage {
+    ENGLISH,
+    SIMPLIFIED_CHINESE,
+}
+
 enum class AccentColor {
     TEAL,
     BLUE,

@@ -37,6 +37,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import com.ced2711.lifetracker.ui.localization.localizedText
+import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
+import com.ced2711.lifetracker.ui.localization.uiLocale
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -145,7 +148,7 @@ private fun CalendarContent(
     var viewName by rememberSaveable { mutableStateOf(CalendarView.MONTH.name) }
     val selectedDate = LocalDate.ofEpochDay(selectedEpochDay)
     val view = CalendarView.entries.firstOrNull { it.name == viewName } ?: CalendarView.MONTH
-    val locale = Locale.getDefault()
+    val locale = uiLocale(settings.uiLanguage)
     val systemUses24Hour = DateFormat.is24HourFormat(LocalContext.current)
     val firstDayOfWeek = UserFormatting.firstDayOfWeek(settings.weekStart, locale)
     val use24HourTime = UserFormatting.uses24HourClock(settings.timeFormat, systemUses24Hour)
@@ -332,15 +335,20 @@ private fun CalendarHeader(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onPrevious) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Previous")
+                Icon(
+                    Icons.AutoMirrored.Rounded.ArrowBack,
+                    contentDescription = localizedText("Previous"),
+                )
             }
             Text(
-                text = calendarHeaderLabel(
-                    date = selectedDate,
-                    view = view,
-                    firstDayOfWeek = firstDayOfWeek,
-                    dateFormatter = dateFormatter,
-                    locale = locale,
+                text = localizedText(
+                    calendarHeaderLabel(
+                        date = selectedDate,
+                        view = view,
+                        firstDayOfWeek = firstDayOfWeek,
+                        dateFormatter = dateFormatter,
+                        locale = locale,
+                    ),
                 ),
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.titleLarge,
@@ -350,7 +358,10 @@ private fun CalendarHeader(
                 overflow = TextOverflow.Ellipsis,
             )
             IconButton(onClick = onNext) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowForward, contentDescription = "Next")
+                Icon(
+                    Icons.AutoMirrored.Rounded.ArrowForward,
+                    contentDescription = localizedText("Next"),
+                )
             }
         }
         Row(
@@ -361,13 +372,13 @@ private fun CalendarHeader(
             TextButton(onClick = onToday) {
                 Icon(Icons.Rounded.Today, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Today")
+                Text(localizedText("Today"))
             }
             CalendarView.entries.forEach { option ->
                 FilterChip(
                     selected = option == view,
                     onClick = { onViewChanged(option) },
-                    label = { Text(option.label) },
+                    label = { Text(localizedText(option.label)) },
                 )
             }
         }
@@ -455,7 +466,10 @@ private fun MonthView(
                     Row(Modifier.fillMaxWidth()) {
                         daysOfWeek.forEach { day ->
                             Text(
-                                text = UserFormatting.formatWeekday(day, Locale.ENGLISH),
+                                text = UserFormatting.formatWeekday(
+                                    day,
+                                    uiLocale(LocalUiLanguage.current),
+                                ),
                                 modifier = Modifier.weight(1f).padding(vertical = 4.dp),
                                 style = MaterialTheme.typography.labelMedium,
                                 textAlign = TextAlign.Center,
@@ -751,8 +765,10 @@ private fun DaySummaryCard(
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    text = "${todos.size} ${countLabel(todos.size, "todo")}  |  " +
-                        "${entries.size} ${countLabel(entries.size, "ledger entry")}",
+                    text = localizedText(
+                        "${todos.size} ${countLabel(todos.size, "todo")}  |  " +
+                            "${entries.size} ${countLabel(entries.size, "ledger entry")}",
+                    ),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall,
                 )
@@ -826,7 +842,7 @@ private fun DayDetails(
                 Text(
                     text = UserFormatting.formatWeekday(
                         date.dayOfWeek,
-                        Locale.ENGLISH,
+                        uiLocale(LocalUiLanguage.current),
                         TextStyle.FULL,
                     ),
                     style = MaterialTheme.typography.titleMedium,
@@ -879,10 +895,10 @@ private fun DetailSection(
     content: @Composable () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        Text(localizedText(title), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
         if (isEmpty) {
             Text(
-                text = emptyText,
+                text = localizedText(emptyText),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(vertical = 4.dp),
@@ -945,7 +961,7 @@ private fun TodoRow(
             }
             if (completed) {
                 Text(
-                    text = "Completed",
+                    text = localizedText("Completed"),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.62f),
                 )
@@ -969,7 +985,11 @@ private fun LedgerRow(entry: LedgerEntryEntity, use24HourTime: Boolean) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
-            text = entry.merchant.ifBlank { entry.note.ifBlank { entry.type.displayName() } },
+            text = when {
+                entry.merchant.isNotBlank() -> entry.merchant
+                entry.note.isNotBlank() -> entry.note
+                else -> localizedText(entry.type.displayName())
+            },
             modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.bodyMedium,
             maxLines = 2,
@@ -989,7 +1009,7 @@ private fun EmptyMessage(message: String) {
         modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(localizedText(message), color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -1060,12 +1080,13 @@ internal fun formatLedgerDetailAmount(cents: Long): String {
     }
 }
 
+@Composable
 private fun formatTime(minuteOfDay: Int, use24HourTime: Boolean): String =
     UserFormatting.formatMinuteOfDay(
         minuteOfDay = minuteOfDay,
         option = if (use24HourTime) TimeFormatOption.HOUR_24 else TimeFormatOption.HOUR_12,
         systemUses24Hour = use24HourTime,
-        locale = Locale.ENGLISH,
+        locale = uiLocale(LocalUiLanguage.current),
     )
 
 private fun LedgerType.displayName(): String = when (this) {

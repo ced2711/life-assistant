@@ -12,6 +12,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import com.ced2711.lifetracker.ui.localization.localizedText
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -56,7 +57,7 @@ internal fun CustomReminderOffsetInput(
             enabled = enabled,
             modifier = modifier,
         ) {
-            Text("+ Custom reminder")
+            Text(localizedText("+ Custom reminder"))
         }
         return
     }
@@ -69,15 +70,15 @@ internal fun CustomReminderOffsetInput(
             value = valueText,
             onValueChange = { candidate -> valueText = candidate.filter(Char::isDigit).take(6) },
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("Reminder value") },
+            label = { Text(localizedText("Reminder value")) },
             supportingText = {
                 val maxValue = MAX_REMINDER_OFFSET_MINUTES / unit.minutes
                 Text(
-                    when {
+                    localizedText(when {
                         isDuplicate -> "This reminder is already selected."
                         isInvalid -> "Enter a whole number from 1 to $maxValue ${unit.label.lowercase()}."
                         else -> "Maximum: $maxValue ${unit.label.lowercase()} before the deadline."
-                    },
+                    }),
                 )
             },
             isError = isInvalid || isDuplicate,
@@ -94,7 +95,7 @@ internal fun CustomReminderOffsetInput(
                 FilterChip(
                     selected = option == unit,
                     onClick = { unitName = option.name },
-                    label = { Text(option.label) },
+                    label = { Text(localizedText(option.label)) },
                 )
             }
         }
@@ -109,7 +110,7 @@ internal fun CustomReminderOffsetInput(
                     expanded = false
                     valueText = ""
                 },
-            ) { Text("Cancel") }
+            ) { Text(localizedText("Cancel")) }
             Button(
                 enabled = enabled && offset != null && !isDuplicate,
                 onClick = {
@@ -117,7 +118,7 @@ internal fun CustomReminderOffsetInput(
                     valueText = ""
                     expanded = false
                 },
-            ) { Text("Add") }
+            ) { Text(localizedText("Add")) }
         }
     }
 }

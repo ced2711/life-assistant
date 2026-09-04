@@ -72,6 +72,10 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import com.ced2711.lifetracker.ui.localization.localizedText
+import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
+import com.ced2711.lifetracker.ui.localization.translateUiText
+import com.ced2711.lifetracker.ui.localization.uiLocale
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -594,7 +598,7 @@ fun TodoScreen(
     val categories by viewModel.categories.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val locale = Locale.getDefault()
+    val locale = uiLocale(settings.uiLanguage)
     val dateFormatter = remember(settings.dateFormat, locale) {
         UserFormatting.dateFormatter(settings.dateFormat, locale)
     }
@@ -604,6 +608,7 @@ fun TodoScreen(
     )
     val snackbarHostState = remember { SnackbarHostState() }
     val screenScope = rememberCoroutineScope()
+    val uiLanguage = LocalUiLanguage.current
     val todoControlsListState = rememberLazyListState()
     val quickDescriptionFocusRequester = remember { FocusRequester() }
     val softwareKeyboardController = LocalSoftwareKeyboardController.current
@@ -664,26 +669,26 @@ fun TodoScreen(
         onQuickAddRequestHandled(requestToken)
     }
 
-    LaunchedEffect(viewModel, editorDraft != null) {
+    LaunchedEffect(viewModel, editorDraft != null, uiLanguage) {
         viewModel.errors.collect { message ->
             if (editorDraft != null) {
                 editorFailureMessage = message
                 editorFailureVersion += 1
             } else {
-                snackbarHostState.showSnackbar(message)
+                snackbarHostState.showSnackbar(translateUiText(message, uiLanguage))
             }
         }
     }
     val pendingDelete = uiOperations.pendingDeletes.firstOrNull()
-    LaunchedEffect(pendingDelete) {
+    LaunchedEffect(pendingDelete, uiLanguage) {
         val item = pendingDelete ?: return@LaunchedEffect
         val result = snackbarHostState.showSnackbar(
-            message = if (item.includedFuture) {
+            message = translateUiText(if (item.includedFuture) {
                 "Deleted ${item.title} and future occurrences"
             } else {
                 "Deleted ${item.title}"
-            },
-            actionLabel = "Undo",
+            }, uiLanguage),
+            actionLabel = translateUiText("Undo", uiLanguage),
             withDismissAction = true,
             duration = SnackbarDuration.Indefinite,
         )
@@ -824,7 +829,9 @@ fun TodoScreen(
         val completedCount = dailyMomentum.completedToday + 1
         viewModel.completeTodo(todoId, completeSubtasks) {
             screenScope.launch {
-                snackbarHostState.showSnackbar(completionCelebrationMessage(completedCount))
+                snackbarHostState.showSnackbar(
+                    translateUiText(completionCelebrationMessage(completedCount), uiLanguage),
+                )
             }
         }
     }
@@ -1241,27 +1248,27 @@ private fun TodoControls(
 ) {
     val allCategoriesSelected = ALL_CATEGORIES_FILTER_KEY in selectedCategoryFilters
     val categoryLabel = when {
-        allCategoriesSelected -> "All categories"
+        allCategoriesSelected -> localizedText("All categories")
         selectedCategoryFilters.size == 1 -> {
             val key = selectedCategoryFilters.single()
-            if (key == UNCATEGORIZED_FILTER_KEY) "Uncategorized"
-            else categoryNames[key] ?: "1 category selected"
+            if (key == UNCATEGORIZED_FILTER_KEY) localizedText("Uncategorized")
+            else categoryNames[key] ?: localizedText("1 category selected")
         }
-        else -> "${selectedCategoryFilters.size} categories selected"
+        else -> localizedText("${selectedCategoryFilters.size} categories selected")
     }
     val activeFilterSummaries = buildList {
         search.trim().takeIf(String::isNotEmpty)?.let { query ->
-            add("Search: ${query.take(24)}")
+            add("${localizedText("Search")}: ${query.take(24)}")
         }
-        priority?.let { add("Priority: ${it.displayName()}") }
-        selectedTag?.let { add("Tag: #$it") }
-        if (!allCategoriesSelected) add("Category: $categoryLabel")
-        if (sort != TodoSort.DEADLINE) add("Sort: ${sort.label}")
+        priority?.let { add("${localizedText("Priority")}: ${localizedText(it.displayName())}") }
+        selectedTag?.let { add("${localizedText("Tag")}: #$it") }
+        if (!allCategoriesSelected) add("${localizedText("Category")}: $categoryLabel")
+        if (sort != TodoSort.DEADLINE) add("${localizedText("Sort")}: ${localizedText(sort.label)}")
     }
     val filterSummary = if (activeFilterSummaries.isEmpty()) {
         "No active filters"
     } else {
-        "${activeFilterSummaries.size} active • ${activeFilterSummaries.joinToString(" • ")}"
+        "${localizedText("${activeFilterSummaries.size} active")} • ${activeFilterSummaries.joinToString(" • ")}"
     }
 
     Column(
@@ -1275,12 +1282,12 @@ private fun TodoControls(
             modifier = Modifier
                 .fillMaxWidth()
                 .focusRequester(quickDescriptionFocusRequester),
-            label = { Text("Quick add description") },
-            placeholder = { Text("What needs to be done?") },
+            label = { Text(localizedText("Quick add description")) },
+            placeholder = { Text(localizedText("What needs to be done?")) },
             enabled = !quickAddInFlight,
             isError = quickValidationError == "Description is required",
             supportingText = if (quickValidationError == "Description is required") {
-                { Text("Description is required") }
+                { Text(localizedText("Description is required")) }
             } else null,
             singleLine = true,
             trailingIcon = {
@@ -1288,7 +1295,7 @@ private fun TodoControls(
                     onClick = onQuickAdd,
                     enabled = quickDescription.isNotBlank() && !quickAddInFlight,
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add todo")
+                    Icon(Icons.Default.Add, contentDescription = localizedText("Add todo"))
                 }
             },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -1315,12 +1322,12 @@ private fun TodoControls(
                     Button(onClick = onNewTask, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Default.Add, null)
                         Spacer(Modifier.width(8.dp))
-                        Text("New task")
+                        Text(localizedText("New task"))
                     }
                     OutlinedButton(onClick = onManageCategories, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Default.Category, null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Categories", maxLines = 1)
+                        Text(localizedText("Categories"), maxLines = 1)
                     }
                 }
             } else {
@@ -1328,12 +1335,12 @@ private fun TodoControls(
                     Button(onClick = onNewTask, modifier = Modifier.weight(1f)) {
                         Icon(Icons.Default.Add, null)
                         Spacer(Modifier.width(8.dp))
-                        Text("New task")
+                        Text(localizedText("New task"))
                     }
                     OutlinedButton(onClick = onManageCategories, modifier = Modifier.weight(1f)) {
                         Icon(Icons.Default.Category, null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Categories", maxLines = 1)
+                        Text(localizedText("Categories"), maxLines = 1)
                     }
                 }
             }
@@ -1349,7 +1356,7 @@ private fun TodoControls(
             ) {
                 Icon(Icons.Default.FilterList, contentDescription = null)
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Filters", style = MaterialTheme.typography.titleMedium)
+                    Text(localizedText("Filters"), style = MaterialTheme.typography.titleMedium)
                     Text(
                         text = filterSummary,
                         color = if (activeFilterSummaries.isEmpty()) {
@@ -1386,14 +1393,14 @@ private fun TodoControls(
                                     onCategoryFilterToggle(ALL_CATEGORIES_FILTER_KEY)
                                     onSortChange(TodoSort.DEADLINE)
                                 },
-                            ) { Text("Clear filters") }
+                            ) { Text(localizedText("Clear filters")) }
                         }
                     }
                     OutlinedTextField(
                         value = search,
                         onValueChange = onSearchChange,
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Search") },
+                        label = { Text(localizedText("Search")) },
                         singleLine = true,
                         leadingIcon = { Icon(Icons.Default.Search, null) },
                         trailingIcon = if (search.isNotEmpty()) {
@@ -1404,20 +1411,20 @@ private fun TodoControls(
                             }
                         } else null,
                     )
-                    Text("Priority", style = MaterialTheme.typography.labelLarge)
+                    Text(localizedText("Priority"), style = MaterialTheme.typography.labelLarge)
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         item {
                             FilterChip(
                                 selected = priority == null,
                                 onClick = { onPriorityChange(null) },
-                                label = { Text("All") },
+                                label = { Text(localizedText("All")) },
                             )
                         }
                         items(TodoPriority.entries) { option ->
                             FilterChip(
                                 selected = priority == option,
                                 onClick = { onPriorityChange(option) },
-                                label = { Text(option.displayName()) },
+                                label = { Text(localizedText(option.displayName())) },
                             )
                         }
                     }
@@ -1435,28 +1442,29 @@ private fun TodoControls(
                             maxItemsInEachRow = if (narrow) 1 else 3,
                         ) {
                             ChoiceMenu(
-                                label = selectedTag?.let { "Tag: #$it" } ?: "All tags",
+                                label = selectedTag?.let { "${localizedText("Tag")}: #$it" }
+                                    ?: localizedText("All tags"),
                                 modifier = menuModifier,
                             ) { close ->
                                 DropdownMenuItem(
-                                    text = { Text("All tags") },
+                                    text = { Text(localizedText("All tags")) },
                                     onClick = { onTagChange(null); close() },
                                 )
                                 availableTags.forEach { tag ->
                                     DropdownMenuItem(
-                                        text = { Text("#$tag") },
+                                        text = { Text(localizedText("#$tag")) },
                                         onClick = { onTagChange(tag); close() },
                                     )
                                 }
                                 HorizontalDivider()
                                 DropdownMenuItem(
-                                    text = { Text("Manage tags...") },
+                                    text = { Text(localizedText("Manage tags...")) },
                                     onClick = { close(); onManageTags() },
                                 )
                             }
                             ChoiceMenu(label = categoryLabel, modifier = menuModifier) { close ->
                                 DropdownMenuItem(
-                                    text = { Text("All categories") },
+                                    text = { Text(localizedText("All categories")) },
                                     onClick = {
                                         onCategoryFilterToggle(ALL_CATEGORIES_FILTER_KEY)
                                         close()
@@ -1466,7 +1474,7 @@ private fun TodoControls(
                                     },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Uncategorized") },
+                                    text = { Text(localizedText("Uncategorized")) },
                                     onClick = { onCategoryFilterToggle(UNCATEGORIZED_FILTER_KEY) },
                                     leadingIcon = {
                                         Checkbox(
@@ -1489,12 +1497,12 @@ private fun TodoControls(
                                 }
                             }
                             ChoiceMenu(
-                                label = "Sort: ${sort.label}",
+                                label = "${localizedText("Sort")}: ${localizedText(sort.label)}",
                                 modifier = menuModifier,
                             ) { close ->
                                 TodoSort.entries.forEach { option ->
                                     DropdownMenuItem(
-                                        text = { Text(option.label) },
+                                        text = { Text(localizedText(option.label)) },
                                         onClick = { onSortChange(option); close() },
                                     )
                                 }
@@ -1528,12 +1536,12 @@ private fun DailyMomentumCard(momentum: DailyTodoMomentum) {
                 Icon(Icons.Default.CheckCircle, contentDescription = null)
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Daily momentum",
+                        text = localizedText("Daily momentum"),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
-                        text = momentum.summary,
+                        text = localizedText(momentum.summary),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
@@ -1586,24 +1594,24 @@ private fun QuickAddOptionalFields(
                     onValueChange = onDeadlineChange,
                     modifier = fieldModifier,
                     enabled = enabled,
-                    label = { Text("Deadline") },
-                    placeholder = { Text("Day, MM/DD, or MM/DD/YYYY") },
+                    label = { Text(localizedText("Deadline")) },
+                    placeholder = { Text(localizedText("Day, MM/DD, or MM/DD/YYYY")) },
                     isError = deadlineIsError,
                     supportingText = if (deadlineIsError) {
-                        { Text("Enter a valid deadline") }
+                        { Text(localizedText("Enter a valid deadline")) }
                     } else null,
                     singleLine = true,
                 )
             }
             if (TodoQuickAddField.PRIORITY in fields) {
                 ChoiceMenu(
-                    label = "Priority: ${priority.displayName()}",
+                    label = "${localizedText("Priority")}: ${localizedText(priority.displayName())}",
                     modifier = fieldModifier,
                     enabled = enabled,
                 ) { close ->
                     TodoPriority.entries.forEach { option ->
                         DropdownMenuItem(
-                            text = { Text(option.displayName()) },
+                            text = { Text(localizedText(option.displayName())) },
                             onClick = { onPriorityChange(option); close() },
                         )
                     }
@@ -1611,12 +1619,12 @@ private fun QuickAddOptionalFields(
             }
             if (TodoQuickAddField.CATEGORY in fields) {
                 ChoiceMenu(
-                    label = categoryId?.let(categoryNames::get) ?: "Uncategorized",
+                    label = categoryId?.let(categoryNames::get) ?: localizedText("Uncategorized"),
                     modifier = fieldModifier,
                     enabled = enabled,
                 ) { close ->
                     DropdownMenuItem(
-                        text = { Text("Uncategorized") },
+                        text = { Text(localizedText("Uncategorized")) },
                         onClick = { onCategoryChange(null); close() },
                     )
                     categories.forEach { category ->
@@ -1633,8 +1641,8 @@ private fun QuickAddOptionalFields(
                     onValueChange = onTagsChange,
                     modifier = fieldModifier,
                     enabled = enabled,
-                    label = { Text("Tags") },
-                    placeholder = { Text("Comma-separated") },
+                    label = { Text(localizedText("Tags")) },
+                    placeholder = { Text(localizedText("Comma-separated")) },
                     singleLine = true,
                 )
             }
@@ -1660,7 +1668,7 @@ private fun LazyListScope.todoListItems(
 ) {
     item(key = "active-header", contentType = "section-header") {
         Text(
-            text = "Active (${activeTodos.size})",
+            text = localizedText("Active (${activeTodos.size})"),
             modifier = Modifier.semantics { heading() },
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.SemiBold,
@@ -1669,7 +1677,7 @@ private fun LazyListScope.todoListItems(
     if (customOrderingEnabled) {
         item(key = "custom-order-help", contentType = "supporting-text") {
             Text(
-                "Moves follow the visible filtered list; hidden tasks keep their relative order.",
+                localizedText("Moves follow the visible filtered list; hidden tasks keep their relative order."),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1715,7 +1723,7 @@ private fun LazyListScope.todoListItems(
         ) {
             Icon(if (completedExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null)
             Spacer(Modifier.width(8.dp))
-            Text("Completed (${completedTodos.size})")
+            Text(localizedText("Completed (${completedTodos.size})"))
         }
     }
     if (completedExpanded) {
@@ -1817,8 +1825,8 @@ private fun TodoCard(
                         add(formatDeadline(it, todo.deadlineMinute, dateFormatter, use24HourTime))
                     }
                     categoryName?.let(::add)
-                    if (todo.priority != TodoPriority.NONE) add(todo.priority.displayName())
-                    if (todo.seriesId != null) add("Repeating")
+                    if (todo.priority != TodoPriority.NONE) add(localizedText(todo.priority.displayName()))
+                    if (todo.seriesId != null) add(localizedText("Repeating"))
                 }
                 if (metadata.isNotEmpty()) {
                     Text(
@@ -1839,6 +1847,9 @@ private fun TodoCard(
                 if (subtasks.isNotEmpty()) {
                     Spacer(Modifier.height(6.dp))
                     subtasks.forEach { subtask ->
+                        val subtaskContentDescription = localizedText(
+                            "Subtask: ${subtask.description}",
+                        )
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
@@ -1850,7 +1861,7 @@ private fun TodoCard(
                                 },
                                 enabled = !completed,
                                 modifier = Modifier.semantics {
-                                    contentDescription = "Subtask: ${subtask.description}"
+                                    contentDescription = subtaskContentDescription
                                 },
                             )
                             Text(
@@ -1875,13 +1886,13 @@ private fun TodoCard(
                             onDismissRequest = { reorderMenuExpanded = false },
                         ) {
                             DropdownMenuItem(
-                                text = { Text("Move up") },
+                                text = { Text(localizedText("Move up")) },
                                 leadingIcon = { Icon(Icons.Default.ArrowUpward, null) },
                                 enabled = canMoveUp,
                                 onClick = { reorderMenuExpanded = false; onMoveUp() },
                             )
                             DropdownMenuItem(
-                                text = { Text("Move down") },
+                                text = { Text(localizedText("Move down")) },
                                 leadingIcon = { Icon(Icons.Default.ArrowDownward, null) },
                                 enabled = canMoveDown,
                                 onClick = { reorderMenuExpanded = false; onMoveDown() },
@@ -1909,7 +1920,7 @@ private fun TodoCard(
 private fun EmptyCard(message: String) {
     OutlinedCard(modifier = Modifier.fillMaxWidth()) {
         Text(
-            message,
+            localizedText(message),
             modifier = Modifier.padding(20.dp),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -1929,9 +1940,9 @@ private fun CategoryManagerDialog(
     val categoryToDelete = categories.firstOrNull { it.id == categoryToDeleteId }
 
     AppDialog(onDismiss = onDismiss) {
-        Text("Manage categories", style = MaterialTheme.typography.headlineSmall)
+        Text(localizedText("Manage categories"), style = MaterialTheme.typography.headlineSmall)
         Text(
-            "Deleting a category keeps its tasks in Uncategorized and moves child categories up one level.",
+            localizedText("Deleting a category keeps its tasks in Uncategorized and moves child categories up one level."),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -1939,15 +1950,15 @@ private fun CategoryManagerDialog(
             value = name,
             onValueChange = { name = it },
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("Category name") },
+            label = { Text(localizedText("Category name")) },
             singleLine = true,
         )
         ChoiceMenu(
             label = parentId?.let { id -> categories.firstOrNull { it.id == id }?.displayName(categories) }
-                ?: "No parent",
+                ?: localizedText("No parent"),
             modifier = Modifier.fillMaxWidth(),
         ) { close ->
-            DropdownMenuItem(text = { Text("No parent") }, onClick = { parentId = null; close() })
+            DropdownMenuItem(text = { Text(localizedText("No parent")) }, onClick = { parentId = null; close() })
             categories.forEach { category ->
                 DropdownMenuItem(
                     text = { Text(category.displayName(categories)) },
@@ -1962,11 +1973,11 @@ private fun CategoryManagerDialog(
         ) {
             Icon(Icons.Default.Add, null)
             Spacer(Modifier.width(8.dp))
-            Text("Add category")
+            Text(localizedText("Add category"))
         }
         HorizontalDivider()
         if (categories.isEmpty()) {
-            Text("No categories yet.")
+            Text(localizedText("No categories yet."))
         } else {
             categories.sortedBy { it.displayName(categories) }.forEach { category ->
                 Row(
@@ -1980,21 +1991,21 @@ private fun CategoryManagerDialog(
                 }
             }
         }
-        TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) { Text("Done") }
+        TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) { Text(localizedText("Done")) }
     }
 
     categoryToDelete?.let { category ->
         HingeSafeAlertDialog(
             onDismissRequest = { categoryToDeleteId = null },
-            title = { Text("Delete ${category.name}?") },
+            title = { Text(localizedText("Delete ${category.name}?")) },
             text = {
-                Text("Tasks will become Uncategorized. Child categories will move to this category's parent.")
+                Text(localizedText("Tasks will become Uncategorized. Child categories will move to this category's parent."))
             },
             confirmButton = {
-                Button(onClick = { onDelete(category.id); categoryToDeleteId = null }) { Text("Delete") }
+                Button(onClick = { onDelete(category.id); categoryToDeleteId = null }) { Text(localizedText("Delete")) }
             },
             dismissButton = {
-                TextButton(onClick = { categoryToDeleteId = null }) { Text("Cancel") }
+                TextButton(onClick = { categoryToDeleteId = null }) { Text(localizedText("Cancel")) }
             },
         )
     }
@@ -2013,21 +2024,21 @@ private fun TagManagerDialog(
     val renameIsValid = renameText.trim().isNotEmpty() && ',' !in renameText
 
     AppDialog(onDismiss = onDismiss) {
-        Text("Manage tags", style = MaterialTheme.typography.headlineSmall)
+        Text(localizedText("Manage tags"), style = MaterialTheme.typography.headlineSmall)
         Text(
-            "Changes apply to existing tasks and repeating rules, including future occurrences.",
+            localizedText("Changes apply to existing tasks and repeating rules, including future occurrences."),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (tags.isEmpty()) {
-            Text("No tags yet.")
+            Text(localizedText("No tags yet."))
         } else {
             tags.forEach { tag ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("#$tag", modifier = Modifier.weight(1f))
+                    Text(localizedText("#$tag"), modifier = Modifier.weight(1f))
                     IconButton(
                         onClick = { tagToRename = tag; renameText = tag },
                     ) {
@@ -2039,21 +2050,21 @@ private fun TagManagerDialog(
                 }
             }
         }
-        TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) { Text("Done") }
+        TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) { Text(localizedText("Done")) }
     }
 
     tagToRename?.let { sourceTag ->
         HingeSafeAlertDialog(
             onDismissRequest = { tagToRename = null },
-            title = { Text("Rename #$sourceTag") },
+            title = { Text(localizedText("Rename #$sourceTag")) },
             text = {
                 OutlinedTextField(
                     value = renameText,
                     onValueChange = { renameText = it },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Tag name") },
+                    label = { Text(localizedText("Tag name")) },
                     supportingText = if (',' in renameText) {
-                        { Text("A tag name cannot contain commas.") }
+                        { Text(localizedText("A tag name cannot contain commas.")) }
                     } else null,
                     isError = ',' in renameText,
                     singleLine = true,
@@ -2066,10 +2077,10 @@ private fun TagManagerDialog(
                         onRename(sourceTag, renameText)
                         tagToRename = null
                     },
-                ) { Text("Rename") }
+                ) { Text(localizedText("Rename")) }
             },
             dismissButton = {
-                TextButton(onClick = { tagToRename = null }) { Text("Cancel") }
+                TextButton(onClick = { tagToRename = null }) { Text(localizedText("Cancel")) }
             },
         )
     }
@@ -2077,13 +2088,13 @@ private fun TagManagerDialog(
     tagToDelete?.let { tag ->
         HingeSafeAlertDialog(
             onDismissRequest = { tagToDelete = null },
-            title = { Text("Delete #$tag?") },
-            text = { Text("This removes the tag from all tasks and repeating rules.") },
+            title = { Text(localizedText("Delete #$tag?")) },
+            text = { Text(localizedText("This removes the tag from all tasks and repeating rules.")) },
             confirmButton = {
-                Button(onClick = { onDelete(tag); tagToDelete = null }) { Text("Delete") }
+                Button(onClick = { onDelete(tag); tagToDelete = null }) { Text(localizedText("Delete")) }
             },
             dismissButton = {
-                TextButton(onClick = { tagToDelete = null }) { Text("Cancel") }
+                TextButton(onClick = { tagToDelete = null }) { Text(localizedText("Cancel")) }
             },
         )
     }
@@ -2098,13 +2109,13 @@ private fun CompletionDialog(
 ) {
     HingeSafeAlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Complete task?") },
-        text = { Text("Choose whether to also complete any unfinished subtasks in “$title”.") },
-        confirmButton = { Button(onClick = onCompleteWithSubtasks) { Text("Task + subtasks") } },
+        title = { Text(localizedText("Complete task?")) },
+        text = { Text(localizedText("Choose whether to also complete any unfinished subtasks in “$title”.")) },
+        confirmButton = { Button(onClick = onCompleteWithSubtasks) { Text(localizedText("Task + subtasks")) } },
         dismissButton = {
             Row {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
-                TextButton(onClick = onCompleteTaskOnly) { Text("Task only") }
+                TextButton(onClick = onDismiss) { Text(localizedText("Cancel")) }
+                TextButton(onClick = onCompleteTaskOnly) { Text(localizedText("Task only")) }
             }
         },
     )
@@ -2118,25 +2129,25 @@ private fun RecurringDeleteDialog(
     onThisAndFutureOccurrences: () -> Unit,
 ) {
     AppDialog(onDismiss = onDismiss) {
-        Text("Delete repeating task?", style = MaterialTheme.typography.headlineSmall)
+        Text(localizedText("Delete repeating task?"), style = MaterialTheme.typography.headlineSmall)
         Text(
-            "Choose how much of “$title” to delete. Past occurrences are not changed.",
+            localizedText("Choose how much of “$title” to delete. Past occurrences are not changed."),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         OutlinedButton(
             onClick = onOnlyThisOccurrence,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Only this occurrence")
+            Text(localizedText("Only this occurrence"))
         }
         Button(
             onClick = onThisAndFutureOccurrences,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("This and future occurrences")
+            Text(localizedText("This and future occurrences"))
         }
         TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) {
-            Text("Cancel")
+            Text(localizedText("Cancel"))
         }
     }
 }
@@ -2164,8 +2175,11 @@ private fun TodoEditorDialog(
     val platformDialogLauncher = rememberHingeSafePlatformDialogLauncher()
     val editorSnackbarHostState = remember { SnackbarHostState() }
     val editorScope = rememberCoroutineScope()
+    val uiLanguage = LocalUiLanguage.current
     val openAttachment = rememberAttachmentOpener { message ->
-        editorScope.launch { editorSnackbarHostState.showSnackbar(message) }
+        editorScope.launch {
+            editorSnackbarHostState.showSnackbar(translateUiText(message, uiLanguage))
+        }
     }
     var title by rememberSaveable(initialDraft.id) { mutableStateOf(initialDraft.title) }
     var description by rememberSaveable(initialDraft.id) { mutableStateOf(initialDraft.description) }
@@ -2214,17 +2228,19 @@ private fun TodoEditorDialog(
     val existingAttachments by attachmentFlow.collectAsStateWithLifecycle(initialValue = emptyList())
     val pendingAttachmentDelete = uiOperations.pendingAttachmentDeletes.firstOrNull()
 
-    LaunchedEffect(operationFailureVersion) {
+    LaunchedEffect(operationFailureVersion, uiLanguage) {
         if (operationFailureVersion > 0) {
-            operationFailureMessage?.let { editorSnackbarHostState.showSnackbar(it) }
+            operationFailureMessage?.let {
+                editorSnackbarHostState.showSnackbar(translateUiText(it, uiLanguage))
+            }
         }
     }
 
-    LaunchedEffect(pendingAttachmentDelete) {
+    LaunchedEffect(pendingAttachmentDelete, uiLanguage) {
         val item = pendingAttachmentDelete ?: return@LaunchedEffect
         val result = editorSnackbarHostState.showSnackbar(
-            message = "Removed ${item.originalName}",
-            actionLabel = "Undo",
+            message = translateUiText("Removed ${item.originalName}", uiLanguage),
+            actionLabel = translateUiText("Undo", uiLanguage),
             withDismissAction = true,
             duration = SnackbarDuration.Indefinite,
         )
@@ -2394,19 +2410,19 @@ private fun TodoEditorDialog(
             onDismiss = { if (!isSaving) onDismiss() },
             snackbarHostState = editorSnackbarHostState,
         ) {
-            Text("Task saved", style = MaterialTheme.typography.headlineSmall)
+            Text(localizedText("Task saved"), style = MaterialTheme.typography.headlineSmall)
             Text(
-                text = if (isSaving) {
+                text = localizedText(if (isSaving) {
                     "The task details are saved. Files are being copied now."
                 } else {
                     "The task details are already saved, but one or more files were not copied. " +
                         "Details are locked so later edits cannot be silently skipped. Remove any " +
                         "unavailable file, then retry."
-                },
+                }),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (pendingUriStrings.isEmpty()) {
-                Text("No files remain to copy.")
+                Text(localizedText("No files remain to copy."))
             } else {
                 pendingUriStrings.forEachIndexed { index, uriString ->
                     val uri = uriString.toUri()
@@ -2435,14 +2451,14 @@ private fun TodoEditorDialog(
             ) {
                 Icon(Icons.Default.AttachFile, null)
                 Spacer(Modifier.width(8.dp))
-                Text("Add files (${existingAttachments.size + pendingUriStrings.size}/$MAX_ATTACHMENTS)")
+                Text(localizedText("Add files (${existingAttachments.size + pendingUriStrings.size}/$MAX_ATTACHMENTS)"))
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                TextButton(onClick = onDismiss, enabled = !isSaving) { Text("Done") }
+                TextButton(onClick = onDismiss, enabled = !isSaving) { Text(localizedText("Done")) }
                 Spacer(Modifier.width(8.dp))
                 Button(
                     enabled = !isSaving,
@@ -2457,11 +2473,11 @@ private fun TodoEditorDialog(
                     },
                 ) {
                     Text(
-                        when {
+                        localizedText(when {
                             isSaving -> "Copying…"
                             pendingUriStrings.isEmpty() -> "Finish"
                             else -> "Retry files"
-                        },
+                        }),
                     )
                 }
             }
@@ -2474,7 +2490,7 @@ private fun TodoEditorDialog(
         snackbarHostState = editorSnackbarHostState,
     ) {
         Text(
-            if (initialDraft.id == null) "New task" else "Edit task",
+            localizedText(if (initialDraft.id == null) "New task" else "Edit task"),
             style = MaterialTheme.typography.headlineSmall,
         )
         todoCompleted?.let { completed ->
@@ -2488,14 +2504,14 @@ private fun TodoEditorDialog(
                     contentDescription = null,
                 )
                 Spacer(Modifier.width(8.dp))
-                Text(if (completed) "Mark as not done" else "Mark as done")
+                Text(localizedText(if (completed) "Mark as not done" else "Mark as done"))
             }
         }
         OutlinedTextField(
             value = description,
             onValueChange = { description = it },
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("Description *") },
+            label = { Text(localizedText("Description *")) },
             minLines = 2,
             maxLines = 5,
         )
@@ -2503,17 +2519,17 @@ private fun TodoEditorDialog(
             value = title,
             onValueChange = { title = it },
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("Title (optional)") },
-            supportingText = { Text("If blank, it is derived from the description.") },
+            label = { Text(localizedText("Title (optional)")) },
+            supportingText = { Text(localizedText("If blank, it is derived from the description.")) },
             singleLine = true,
         )
         ChoiceMenu(
             label = categoryId?.let { id -> categories.firstOrNull { it.id == id }?.displayName(categories) }
-                ?: "Uncategorized",
+                ?: localizedText("Uncategorized"),
             modifier = Modifier.fillMaxWidth(),
         ) { close ->
             DropdownMenuItem(
-                text = { Text("Uncategorized") },
+                text = { Text(localizedText("Uncategorized")) },
                 onClick = { categoryId = null; close() },
             )
             categories.forEach { category ->
@@ -2527,12 +2543,12 @@ private fun TodoEditorDialog(
             value = deadlineText,
             onValueChange = ::updateDeadline,
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("Deadline (US date)") },
-            placeholder = { Text("15, 8/15, or 8/15/2026") },
-            supportingText = { Text("A passed day or month/day rolls forward automatically.") },
+            label = { Text(localizedText("Deadline (US date)")) },
+            placeholder = { Text(localizedText("15, 8/15, or 8/15/2026")) },
+            supportingText = { Text(localizedText("A passed day or month/day rolls forward automatically.")) },
             trailingIcon = {
                 IconButton(onClick = { showDatePicker(deadlineText, ::updateDeadline) }) {
-                    Icon(Icons.Default.CalendarMonth, "Choose deadline date")
+                    Icon(Icons.Default.CalendarMonth, localizedText("Choose deadline date"))
                 }
             },
             singleLine = true,
@@ -2542,24 +2558,24 @@ private fun TodoEditorDialog(
             item {
                 AssistChip(
                     onClick = { updateDeadline(formatUsDate(LocalDate.now().toEpochDay())) },
-                    label = { Text("Today") },
+                    label = { Text(localizedText("Today")) },
                 )
             }
             item {
                 AssistChip(
                     onClick = { updateDeadline(formatUsDate(LocalDate.now().plusDays(1).toEpochDay())) },
-                    label = { Text("Tomorrow") },
+                    label = { Text(localizedText("Tomorrow")) },
                 )
             }
             item {
                 AssistChip(
                     onClick = { updateDeadline(formatUsDate(LocalDate.now().plusWeeks(1).toEpochDay())) },
-                    label = { Text("Next week") },
+                    label = { Text(localizedText("Next week")) },
                 )
             }
             if (deadlineText.isNotBlank()) {
                 item {
-                    AssistChip(onClick = { updateDeadline("") }, label = { Text("Clear") })
+                    AssistChip(onClick = { updateDeadline("") }, label = { Text(localizedText("Clear")) })
                 }
             }
         }
@@ -2570,25 +2586,25 @@ private fun TodoEditorDialog(
                 if (hasTime && timeText.isBlank()) timeText = formatTime(0, use24HourTime)
             },
             enabled = canEnableTodoDeadlineTime(deadlineText),
-            label = { Text(if (hasTime) "Deadline has a time" else "Add deadline time") },
+            label = { Text(localizedText(if (hasTime) "Deadline has a time" else "Add deadline time")) },
         )
         if (hasTime) {
             OutlinedTextField(
                 value = timeText,
                 onValueChange = { timeText = it },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Time") },
-                placeholder = { Text("9:30 AM or 21:30") },
+                label = { Text(localizedText("Time")) },
+                placeholder = { Text(localizedText("9:30 AM or 21:30")) },
                 singleLine = true,
             )
         }
-        Text("Priority", style = MaterialTheme.typography.labelLarge)
+        Text(localizedText("Priority"), style = MaterialTheme.typography.labelLarge)
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(TodoPriority.entries) { option ->
                 FilterChip(
                     selected = priority == option,
                     onClick = { priority = option },
-                    label = { Text(option.displayName()) },
+                    label = { Text(localizedText(option.displayName())) },
                 )
             }
         }
@@ -2596,24 +2612,25 @@ private fun TodoEditorDialog(
             value = tagsText,
             onValueChange = { tagsText = it },
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("Tags") },
-            placeholder = { Text("work, errands") },
-            supportingText = { Text("Separate tags with commas. Type to find existing tags.") },
+            label = { Text(localizedText("Tags")) },
+            placeholder = { Text(localizedText("work, errands")) },
+            supportingText = { Text(localizedText("Separate tags with commas. Type to find existing tags.")) },
         )
         if (tagSuggestions.isNotEmpty()) {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(tagSuggestions, key = { it }) { tag ->
+                    val addTagContentDescription = localizedText("Add $tag tag")
                     AssistChip(
                         onClick = { tagsText = acceptTodoTagSuggestion(tagsText, tag) },
-                        label = { Text("#$tag") },
+                        label = { Text(localizedText("#$tag")) },
                         modifier = Modifier.semantics {
-                            contentDescription = "Add $tag tag"
+                            contentDescription = addTagContentDescription
                         },
                     )
                 }
             }
         }
-        Text("Reminders", style = MaterialTheme.typography.labelLarge)
+        Text(localizedText("Reminders"), style = MaterialTheme.typography.labelLarge)
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(reminderPresets) { preset ->
                 FilterChip(
@@ -2627,7 +2644,7 @@ private fun TodoEditorDialog(
                         }
                     },
                     enabled = deadlineText.isNotBlank(),
-                    label = { Text(preset.label) },
+                    label = { Text(localizedText(preset.label)) },
                 )
             }
             items(
@@ -2643,7 +2660,7 @@ private fun TodoEditorDialog(
                         reminderOffsets = reminderOffsets - offset
                     },
                     enabled = deadlineText.isNotBlank(),
-                    label = { Text(formatReminderOffset(offset)) },
+                    label = { Text(localizedText(formatReminderOffset(offset))) },
                 )
             }
         }
@@ -2655,17 +2672,17 @@ private fun TodoEditorDialog(
                 reminderOffsets = (reminderOffsets + offset).distinct().sorted()
             },
         )
-        Text("Subtasks", style = MaterialTheme.typography.labelLarge)
+        Text(localizedText("Subtasks"), style = MaterialTheme.typography.labelLarge)
         OutlinedTextField(
             value = subtasksText,
             onValueChange = { subtasksText = it },
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("One subtask per line") },
+            label = { Text(localizedText("One subtask per line")) },
             minLines = 2,
             maxLines = 6,
         )
         if (editingSeriesOccurrence) {
-            Text("Apply changes to", style = MaterialTheme.typography.labelLarge)
+            Text(localizedText("Apply changes to"), style = MaterialTheme.typography.labelLarge)
             ScopeChoice(
                 selected = editScope == SeriesEditScope.ONLY_THIS_OCCURRENCE,
                 label = "Only this occurrence",
@@ -2680,8 +2697,10 @@ private fun TodoEditorDialog(
         val recurrenceRuleEditable = canEditTodoRecurrenceRule(editingSeriesOccurrence, editScope)
         if (!recurrenceRuleEditable) {
             Text(
-                "Choose This and future occurrences to change the repeat rule. " +
-                    "Other task fields still apply only to this occurrence.",
+                localizedText(
+                    "Choose This and future occurrences to change the repeat rule. " +
+                        "Other task fields still apply only to this occurrence.",
+                ),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -2690,7 +2709,7 @@ private fun TodoEditorDialog(
             selected = recurrenceEnabled,
             onClick = { recurrenceEnabled = !recurrenceEnabled },
             enabled = canEnableTodoRecurrence(deadlineText, editingSeriesOccurrence, editScope),
-            label = { Text(if (recurrenceEnabled) "Repeats" else "Add recurrence") },
+            label = { Text(localizedText(if (recurrenceEnabled) "Repeats" else "Add recurrence")) },
         )
         if (recurrenceEnabled) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -2698,19 +2717,19 @@ private fun TodoEditorDialog(
                     value = recurrenceInterval,
                     onValueChange = { recurrenceInterval = it.filter(Char::isDigit) },
                     modifier = Modifier.weight(0.7f),
-                    label = { Text("Every") },
+                    label = { Text(localizedText("Every")) },
                     enabled = recurrenceRuleEditable,
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 )
                 ChoiceMenu(
-                    label = recurrenceUnit.displayName(recurrenceInterval.toIntOrNull() ?: 1),
+                    label = localizedText(recurrenceUnit.displayName(recurrenceInterval.toIntOrNull() ?: 1)),
                     modifier = Modifier.weight(1.3f),
                     enabled = recurrenceRuleEditable,
                 ) { close ->
                     RecurrenceUnit.entries.forEach { unit ->
                         DropdownMenuItem(
-                            text = { Text(unit.displayName(recurrenceInterval.toIntOrNull() ?: 1)) },
+                            text = { Text(localizedText(unit.displayName(recurrenceInterval.toIntOrNull() ?: 1))) },
                             onClick = { recurrenceUnit = unit; close() },
                         )
                     }
@@ -2720,9 +2739,9 @@ private fun TodoEditorDialog(
                 value = recurrenceEndText,
                 onValueChange = { recurrenceEndText = it },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Repeat end date (optional)") },
+                label = { Text(localizedText("Repeat end date (optional)")) },
                 enabled = recurrenceRuleEditable,
-                placeholder = { Text("M/d/yyyy") },
+                placeholder = { Text(localizedText("M/d/yyyy")) },
                 trailingIcon = {
                     IconButton(
                         enabled = recurrenceRuleEditable,
@@ -2730,14 +2749,14 @@ private fun TodoEditorDialog(
                             showDatePicker(recurrenceEndText) { selected -> recurrenceEndText = selected }
                         },
                     ) {
-                        Icon(Icons.Default.CalendarMonth, "Choose repeat end date")
+                        Icon(Icons.Default.CalendarMonth, localizedText("Choose repeat end date"))
                     }
                 },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
             )
         }
-        Text("Attachments", style = MaterialTheme.typography.labelLarge)
+        Text(localizedText("Attachments"), style = MaterialTheme.typography.labelLarge)
         if (existingAttachments.isNotEmpty()) {
             existingAttachments.forEach { attachment ->
                 Row(
@@ -2797,22 +2816,22 @@ private fun TodoEditorDialog(
         ) {
             Icon(Icons.Default.AttachFile, null)
             Spacer(Modifier.width(8.dp))
-            Text("Add files (${existingAttachments.size + pendingUriStrings.size}/$MAX_ATTACHMENTS)")
+            Text(localizedText("Add files (${existingAttachments.size + pendingUriStrings.size}/$MAX_ATTACHMENTS)"))
         }
         Text(
-            "Up to 10 files per task, 25 MB each, and 128 MB total. New files are copied after the task is saved.",
+            localizedText("Up to 10 files per task, 25 MB each, and 128 MB total. New files are copied after the task is saved."),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         validationError?.let {
-            Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+            Text(localizedText(it), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(onClick = onDismiss, enabled = !isSaving) { Text("Cancel") }
+            TextButton(onClick = onDismiss, enabled = !isSaving) { Text(localizedText("Cancel")) }
             Spacer(Modifier.width(8.dp))
             Button(
                 enabled = !isSaving,
@@ -2826,7 +2845,7 @@ private fun TodoEditorDialog(
                     }
                 },
             ) {
-                Text(if (isSaving) "Saving…" else "Save")
+                Text(localizedText(if (isSaving) "Saving…" else "Save"))
             }
         }
     }
@@ -2843,7 +2862,7 @@ private fun ScopeChoice(selected: Boolean, label: String, onClick: () -> Unit) {
     ) {
         RadioButton(selected = selected, onClick = null)
         Spacer(Modifier.width(8.dp))
-        Text(label)
+        Text(localizedText(label))
     }
 }
 

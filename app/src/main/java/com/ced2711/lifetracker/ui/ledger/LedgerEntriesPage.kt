@@ -39,6 +39,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import com.ced2711.lifetracker.ui.localization.localizedText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -332,7 +333,7 @@ internal fun LedgerEntriesPage(
                 }
                 item {
                     Text(
-                        text = "Recent entries",
+                        text = localizedText("Recent entries"),
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.padding(top = 8.dp),
                     )
@@ -368,7 +369,7 @@ private fun EntryList(
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        item { Text("Recent entries", style = MaterialTheme.typography.titleMedium) }
+        item { Text(localizedText("Recent entries"), style = MaterialTheme.typography.titleMedium) }
         if (entries.isEmpty()) {
             item { EmptyEntries() }
         } else {
@@ -425,7 +426,7 @@ private fun QuickEntryCard(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("Quick entry", style = MaterialTheme.typography.titleMedium)
+            Text(localizedText("Quick entry"), style = MaterialTheme.typography.titleMedium)
             LedgerTypeChooser(type = type, onTypeChanged = { typeName = it.name })
             OutlinedTextField(
                 value = amount,
@@ -435,15 +436,15 @@ private fun QuickEntryCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .focusRequester(amountFocusRequester),
-                label = { Text("Amount") },
-                prefix = { Text("$") },
+                label = { Text(localizedText("Amount")) },
+                prefix = { Text(localizedText("$")) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Decimal,
                     imeAction = ImeAction.Done,
                 ),
                 supportingText = {
-                    Text(failureMessage ?: "Up to $999,999,999.99 · max 2 decimal places")
+                    Text(localizedText(failureMessage ?: "Up to $999,999,999.99 · max 2 decimal places"))
                 },
                 isError = (amount.isNotEmpty() && amountCents == null) || failureMessage != null,
             )
@@ -465,7 +466,7 @@ private fun QuickEntryCard(
                 ) {
                     Icon(Icons.Outlined.Add, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
-                    Text("Details")
+                    Text(localizedText("Details"))
                 }
                 Button(
                     enabled = amountCents != null && !isSaving,
@@ -474,7 +475,7 @@ private fun QuickEntryCard(
                         onSave(newLedgerDraft().copy(type = type, amountCents = cents))
                     },
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Save") }
+                ) { Text(localizedText("Save")) }
             }
         }
     }
@@ -544,7 +545,7 @@ private fun LedgerTypeOption(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             RadioButton(selected = selected, onClick = null)
-            Text(option.displayName(), maxLines = 1)
+            Text(localizedText(option.displayName()), maxLines = 1)
         }
     }
 }
@@ -653,14 +654,16 @@ private fun EntrySummary(
 ) {
     Column(modifier = modifier) {
         Text(
-            text = entry.merchant.ifBlank {
-                entry.note.ifBlank { entry.type.displayName() }
+            text = when {
+                entry.merchant.isNotBlank() -> entry.merchant
+                entry.note.isNotBlank() -> entry.note
+                else -> localizedText(entry.type.displayName())
             },
             style = MaterialTheme.typography.titleSmall,
             maxLines = 2,
         )
         Text(
-            text = "${formatting.date(entry.epochDay)} · ${formatting.time(entry.minuteOfDay)}",
+            text = localizedText("${formatting.date(entry.epochDay)} · ${formatting.time(entry.minuteOfDay)}"),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -684,7 +687,7 @@ private fun EmptyEntries() {
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            text = "No entries yet",
+            text = localizedText("No entries yet"),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }

@@ -22,6 +22,7 @@ import com.ced2711.lifetracker.domain.model.TimeFormatOption
 import com.ced2711.lifetracker.domain.model.TodoDraft
 import com.ced2711.lifetracker.domain.model.TodoQuickAddField
 import com.ced2711.lifetracker.domain.model.TopLevelDestination
+import com.ced2711.lifetracker.domain.model.UiLanguage
 import com.ced2711.lifetracker.domain.model.WeekStart
 import com.ced2711.lifetracker.domain.model.parseTags
 import com.ced2711.lifetracker.worker.WorkScheduler
@@ -343,6 +344,7 @@ class TaskLedgerViewModel(private val container: AppContainer) : ViewModel() {
 
     fun setTheme(value: ThemeMode) = launchAction { settingsRepository.setTheme(value) }
     fun setAccentColor(value: AccentColor) = launchAction { settingsRepository.setAccentColor(value) }
+    fun setUiLanguage(value: UiLanguage) = launchAction { settingsRepository.setUiLanguage(value) }
     fun setWeekStart(value: WeekStart) = launchAction { settingsRepository.setWeekStart(value) }
     fun setTimeFormat(value: TimeFormatOption) = launchAction { settingsRepository.setTimeFormat(value) }
     fun setDateFormat(value: DateFormatOption) = launchAction { settingsRepository.setDateFormat(value) }

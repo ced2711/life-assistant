@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,9 +17,11 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clipToBounds
@@ -39,6 +42,7 @@ import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import com.ced2711.lifetracker.ui.localization.localizedText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -185,6 +189,7 @@ private fun FoldAwareScaffold(
         else -> PaneHost(
             pane = safePaneLayout.primaryPane,
             includeIme = true,
+            includeTopSafeInset = false,
         ) {
             StandardAdaptiveScaffold(
                 selected = selected,
@@ -285,6 +290,7 @@ private fun VerticalFoldScaffold(
                     onSettings = onSettings,
                     isSettings = isSettings,
                     compact = compactChrome,
+                    includeStatusBarInset = false,
                 )
             },
             content = content,
@@ -329,6 +335,7 @@ private fun HorizontalFoldScaffold(
                     onSettings = onSettings,
                     isSettings = isSettings,
                     compact = compactChrome,
+                    includeStatusBarInset = false,
                 )
                 if (chromeIsAboveContent) {
                     TaskLedgerNavigationBar(
@@ -358,8 +365,14 @@ private fun HorizontalFoldScaffold(
 private fun PaneHost(
     pane: SafePaneBounds,
     includeIme: Boolean,
+    includeTopSafeInset: Boolean = true,
     content: @Composable () -> Unit,
 ) {
+    val safeInsets = if (includeTopSafeInset) {
+        WindowInsets.safeDrawing
+    } else {
+        WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)
+    }
     Box(
         modifier = Modifier
             .offset(x = pane.left, y = pane.top)
@@ -368,9 +381,9 @@ private fun PaneHost(
             .clipToBounds()
             .windowInsetsPadding(
                 if (includeIme) {
-                    WindowInsets.safeDrawing.union(WindowInsets.ime)
+                    safeInsets.union(WindowInsets.ime)
                 } else {
-                    WindowInsets.safeDrawing
+                    safeInsets
                 },
             ),
     ) {
@@ -424,6 +437,7 @@ private fun ExpandedScaffold(
             onSelected = onSelected,
             isSettings = isSettings,
             compact = compactChrome,
+            includeTopInset = true,
             modifier = Modifier
                 .width(if (compactChrome) CompactRailWidth else RailWidth)
                 .fillMaxHeight(),
@@ -457,11 +471,12 @@ private fun TaskLedgerNavigationBar(
         windowInsets = NoInsets,
     ) {
         TopLevelDestinations.forEach { destination ->
+            val localizedLabel = localizedText(destination.label)
             NavigationBarItem(
                 selected = !isSettings && selected == destination,
                 onClick = { onSelected(destination) },
                 modifier = Modifier.semantics {
-                    contentDescription = destination.label
+                    contentDescription = localizedLabel
                 },
                 icon = {
                     DestinationIcon(
@@ -470,7 +485,7 @@ private fun TaskLedgerNavigationBar(
                     )
                 },
                 label = if (compact) null else {
-                    { Text(destination.label, maxLines = 1) }
+                    { Text(localizedLabel, maxLines = 1) }
                 },
                 alwaysShowLabel = !compact,
             )
@@ -484,11 +499,16 @@ private fun TaskLedgerNavigationRail(
     onSelected: (TopLevelDestination) -> Unit,
     isSettings: Boolean,
     compact: Boolean,
+    includeTopInset: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     NavigationRail(
         modifier = modifier,
-        windowInsets = NoInsets,
+        windowInsets = if (includeTopInset) {
+            WindowInsets.statusBars.only(WindowInsetsSides.Top)
+        } else {
+            NoInsets
+        },
     ) {
         Column(
             modifier = Modifier
@@ -497,11 +517,12 @@ private fun TaskLedgerNavigationRail(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             TopLevelDestinations.forEach { destination ->
-            NavigationRailItem(
+                val localizedLabel = localizedText(destination.label)
+                NavigationRailItem(
                 selected = !isSettings && selected == destination,
                 onClick = { onSelected(destination) },
                 modifier = (if (compact) Modifier.height(48.dp) else Modifier).semantics {
-                    contentDescription = destination.label
+                    contentDescription = localizedLabel
                 },
                 icon = {
                     DestinationIcon(
@@ -510,7 +531,7 @@ private fun TaskLedgerNavigationRail(
                     )
                 },
                     label = if (compact) null else {
-                        { Text(destination.label, maxLines = 1) }
+                        { Text(localizedLabel, maxLines = 1) }
                     },
                     alwaysShowLabel = !compact,
                 )
@@ -525,6 +546,7 @@ private fun TaskLedgerTopBar(
     onSettings: () -> Unit,
     isSettings: Boolean,
     compact: Boolean,
+    includeStatusBarInset: Boolean = true,
 ) {
     val auxiliaryTitle = LocalAuxiliaryTitle.current
     Surface(
@@ -534,12 +556,21 @@ private fun TaskLedgerTopBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .then(
+                    if (includeStatusBarInset) {
+                        Modifier.windowInsetsPadding(
+                            WindowInsets.statusBars.only(WindowInsetsSides.Top),
+                        )
+                    } else {
+                        Modifier
+                    },
+                )
                 .height(if (compact) 48.dp else 56.dp)
                 .padding(start = 16.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = auxiliaryTitle ?: if (isSettings) "Settings" else selected.label,
+                text = localizedText(auxiliaryTitle ?: if (isSettings) "Settings" else selected.label),
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.titleLarge,
                 maxLines = 1,
@@ -552,7 +583,7 @@ private fun TaskLedgerTopBar(
                     } else {
                         Icons.Outlined.Settings
                     },
-                    contentDescription = if (isSettings) "Back" else "Settings",
+                    contentDescription = localizedText(if (isSettings) "Back" else "Settings"),
                     tint = if (isSettings) {
                         MaterialTheme.colorScheme.primary
                     } else {

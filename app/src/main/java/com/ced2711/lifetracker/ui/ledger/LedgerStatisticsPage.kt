@@ -28,6 +28,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import com.ced2711.lifetracker.ui.localization.localizedText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -180,7 +181,7 @@ internal fun LedgerStatisticsPage(
                         FilterChip(
                             selected = period == option,
                             onClick = { periodName = option.name },
-                            label = { Text(option.label) },
+                            label = { Text(localizedText(option.label)) },
                         )
                     }
                 }
@@ -269,7 +270,7 @@ internal fun LedgerStatisticsPage(
                     }
                 } else {
                     Text(
-                        text = "${formatting.date(range.first.toEpochDay())} – ${formatting.date(range.second.toEpochDay())}",
+                        text = localizedText("${formatting.date(range.first.toEpochDay())} – ${formatting.date(range.second.toEpochDay())}"),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -304,7 +305,7 @@ internal fun LedgerStatisticsPage(
                 TrendCard(points = trend.points)
                 trend.notice?.let { notice ->
                     Text(
-                        text = notice,
+                        text = localizedText(notice),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -320,13 +321,14 @@ internal fun LedgerStatisticsPage(
                                 title = "Largest expense",
                                 value = largestExpense?.let { formatMoney(it.amountCents) } ?: "$0.00",
                                 detail = largestExpense?.merchant?.ifBlank { largestExpense.note }
-                                    ?.ifBlank { "No description" } ?: "No expenses",
+                                    ?.ifBlank { localizedText("No description") }
+                                    ?: localizedText("No expenses"),
                                 modifier = Modifier.weight(1f),
                             )
                             DetailMetric(
                                 title = "Average daily spending",
                                 value = formatMoney(expense / days),
-                                detail = "Across $days day${if (days == 1L) "" else "s"}",
+                                detail = localizedText("Across $days day${if (days == 1L) "" else "s"}"),
                                 modifier = Modifier.weight(1f),
                             )
                         }
@@ -336,12 +338,13 @@ internal fun LedgerStatisticsPage(
                                 title = "Largest expense",
                                 value = largestExpense?.let { formatMoney(it.amountCents) } ?: "$0.00",
                                 detail = largestExpense?.merchant?.ifBlank { largestExpense.note }
-                                    ?.ifBlank { "No description" } ?: "No expenses",
+                                    ?.ifBlank { localizedText("No description") }
+                                    ?: localizedText("No expenses"),
                             )
                             DetailMetric(
                                 title = "Average daily spending",
                                 value = formatMoney(expense / days),
-                                detail = "Across $days day${if (days == 1L) "" else "s"}",
+                                detail = localizedText("Across $days day${if (days == 1L) "" else "s"}"),
                             )
                         }
                     }
@@ -365,19 +368,21 @@ private fun StatisticsDateField(
         value = value,
         onValueChange = onValueChange,
         modifier = modifier,
-        label = { Text(label) },
-        placeholder = { Text("15, 8/15, or 8/15/2026") },
+        label = { Text(localizedText(label)) },
+        placeholder = { Text(localizedText("15, 8/15, or 8/15/2026")) },
         singleLine = true,
         isError = selectedDate == null,
         trailingIcon = {
             IconButton(onClick = onOpenPicker) {
-                Icon(Icons.Outlined.Event, contentDescription = "Choose $label")
+                Icon(Icons.Outlined.Event, contentDescription = localizedText("Choose $label"))
             }
         },
         supportingText = {
             Text(
-                selectedDate?.let { "Selected: ${formatting.date(it.toEpochDay())}" }
-                    ?: "Enter a valid day, month/day, or month/day/year",
+                localizedText(
+                    selectedDate?.let { "Selected: ${formatting.date(it.toEpochDay())}" }
+                        ?: "Enter a valid day, month/day, or month/day/year",
+                ),
             )
         },
     )
@@ -392,7 +397,7 @@ private fun SummaryCard(
 ) {
     Card(modifier = modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(label, style = MaterialTheme.typography.labelLarge)
+            Text(localizedText(label), style = MaterialTheme.typography.labelLarge)
             Text(
                 value,
                 color = color,
@@ -412,15 +417,25 @@ private fun TrendCard(points: List<TrendPoint>) {
     val selectionColor = MaterialTheme.colorScheme.primary
     var selectedIndex by remember(points) { mutableStateOf<Int?>(null) }
     val selectedSummary = selectedIndex?.let { trendSelectionSummary(points, it) }
+    val chartContentDescription = localizedText("Ledger income and expense trend")
+    val noSelectionDescription = localizedText(
+        "No period selected. Use the previous or next period action to inspect values.",
+    )
+    val previousPeriodDescription = localizedText("Previous period")
+    val nextPeriodDescription = localizedText("Next period")
+    val selectedAccessibilityDescription = selectedSummary?.let { summary ->
+        "${summary.label}. ${localizedText(summary.incomeText)}. " +
+            "${localizedText(summary.expensesText)}."
+    }
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("Trend", style = MaterialTheme.typography.titleSmall)
+            Text(localizedText("Trend"), style = MaterialTheme.typography.titleSmall)
             if (points.all { it.incomeCents == 0L && it.expenseCents == 0L }) {
                 Text(
-                    "No activity in this period",
+                    localizedText("No activity in this period"),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = 48.dp),
                 )
@@ -430,11 +445,10 @@ private fun TrendCard(points: List<TrendPoint>) {
                         .fillMaxWidth()
                         .height(168.dp)
                         .semantics {
-                            contentDescription = "Ledger income and expense trend"
-                            stateDescription = selectedSummary?.accessibilityDescription
-                                ?: "No period selected. Use the previous or next period action to inspect values."
+                            contentDescription = chartContentDescription
+                            stateDescription = selectedAccessibilityDescription ?: noSelectionDescription
                             customActions = listOf(
-                                CustomAccessibilityAction("Previous period") {
+                                CustomAccessibilityAction(previousPeriodDescription) {
                                     val previous = when (val current = selectedIndex) {
                                         null -> points.lastIndex
                                         0 -> return@CustomAccessibilityAction false
@@ -443,7 +457,7 @@ private fun TrendCard(points: List<TrendPoint>) {
                                     selectedIndex = previous
                                     true
                                 },
-                                CustomAccessibilityAction("Next period") {
+                                CustomAccessibilityAction(nextPeriodDescription) {
                                     val next = when (val current = selectedIndex) {
                                         null -> 0
                                         points.lastIndex -> return@CustomAccessibilityAction false
@@ -572,8 +586,8 @@ private fun TrendCard(points: List<TrendPoint>) {
                         if (maxWidth < 360.dp) {
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 Text(summary.label, fontWeight = FontWeight.SemiBold)
-                                Text(summary.incomeText, color = incomeColor)
-                                Text(summary.expensesText, color = expenseColor)
+                                Text(localizedText(summary.incomeText), color = incomeColor)
+                                Text(localizedText(summary.expensesText), color = expenseColor)
                             }
                         } else {
                             Row(
@@ -581,8 +595,8 @@ private fun TrendCard(points: List<TrendPoint>) {
                                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                             ) {
                                 Text(summary.label, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                                Text(summary.incomeText, color = incomeColor)
-                                Text(summary.expensesText, color = expenseColor)
+                                Text(localizedText(summary.incomeText), color = incomeColor)
+                                Text(localizedText(summary.expensesText), color = expenseColor)
                             }
                         }
                     }
@@ -602,7 +616,7 @@ private fun LegendDot(color: Color, label: String) {
         Canvas(modifier = Modifier.padding(top = 5.dp).width(8.dp).height(8.dp)) {
             drawCircle(color = color, style = Stroke(width = size.minDimension / 2))
         }
-        Text(label, style = MaterialTheme.typography.bodySmall)
+        Text(localizedText(label), style = MaterialTheme.typography.bodySmall)
     }
 }
 
@@ -617,8 +631,8 @@ private fun IncomeExpenseRatio(income: Long, expense: Long) {
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(modifier = Modifier.fillMaxWidth()) {
-                Text("Income / expense", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                Text("${(incomeRatio * 100).toInt()}% / ${(expenseRatio * 100).toInt()}%")
+                Text(localizedText("Income / expense"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                Text(localizedText("${(incomeRatio * 100).toInt()}% / ${(expenseRatio * 100).toInt()}%"))
             }
             LinearProgressIndicator(
                 progress = { expenseRatio },
@@ -639,7 +653,7 @@ private fun DetailMetric(
 ) {
     Card(modifier = modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(title, style = MaterialTheme.typography.labelLarge)
+            Text(localizedText(title), style = MaterialTheme.typography.labelLarge)
             Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
             Text(
                 detail,

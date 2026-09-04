@@ -41,6 +41,9 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import com.ced2711.lifetracker.ui.localization.localizedText
+import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
+import com.ced2711.lifetracker.ui.localization.translateUiText
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -136,6 +139,7 @@ internal fun LedgerEditorDialog(
     }
     val existingAttachments by existingAttachmentFlow.collectAsStateWithLifecycle(initialValue = emptyList())
     val snackbarHostState = remember { SnackbarHostState() }
+    val uiLanguage = LocalUiLanguage.current
     val attachmentLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenMultipleDocuments(),
     ) { selected ->
@@ -160,11 +164,11 @@ internal fun LedgerEditorDialog(
         !futureRecurrenceConversionBlocked &&
         (!futureRecurringWithoutEntry || attachments.isEmpty())
 
-    LaunchedEffect(pendingAttachmentDelete) {
+    LaunchedEffect(pendingAttachmentDelete, uiLanguage) {
         val item = pendingAttachmentDelete ?: return@LaunchedEffect
         val result = snackbarHostState.showSnackbar(
-            message = "Removed ${item.originalName}",
-            actionLabel = "Undo",
+            message = translateUiText("Removed ${item.originalName}", uiLanguage),
+            actionLabel = translateUiText("Undo", uiLanguage),
             withDismissAction = true,
             duration = SnackbarDuration.Indefinite,
         )
@@ -204,10 +208,10 @@ internal fun LedgerEditorDialog(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     IconButton(onClick = onDismiss, enabled = !isSaving) {
-                        Icon(Icons.Outlined.Close, contentDescription = "Close")
+                        Icon(Icons.Outlined.Close, contentDescription = localizedText("Close"))
                     }
                     Text(
-                        text = if (initialDraft.id == null) "New entry" else "Edit entry",
+                        text = localizedText(if (initialDraft.id == null) "New entry" else "Edit entry"),
                         style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.weight(1f),
                     )
@@ -240,11 +244,11 @@ internal fun LedgerEditorDialog(
                                 attachments,
                             )
                         },
-                    ) { Text(if (isSaving) "Saving…" else "Save") }
+                    ) { Text(localizedText(if (isSaving) "Saving…" else "Save")) }
                 }
                 failureMessage?.let { message ->
                     Text(
-                        text = message,
+                        text = localizedText(message),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -278,13 +282,13 @@ internal fun LedgerEditorDialog(
                                         sanitizeAmountInput(candidate)?.let { amount = it }
                                     },
                                     modifier = Modifier.fillMaxWidth(),
-                                    label = { Text("Amount") },
-                                    prefix = { Text("$") },
+                                    label = { Text(localizedText("Amount")) },
+                                    prefix = { Text(localizedText("$")) },
                                     singleLine = true,
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                     isError = amount.isNotBlank() && amountCents == null,
                                     supportingText = {
-                                        Text("Required · up to $999,999,999.99 · max 2 decimal places")
+                                        Text(localizedText("Required · up to $999,999,999.99 · max 2 decimal places"))
                                     },
                                 )
                                 AdaptiveFieldPair(
@@ -294,8 +298,8 @@ internal fun LedgerEditorDialog(
                                             value = dateInput,
                                             onValueChange = { dateInput = it },
                                             modifier = Modifier.fillMaxWidth(),
-                                            label = { Text("Date") },
-                                            placeholder = { Text("15, 8/15, or 8/15/2026") },
+                                            label = { Text(localizedText("Date")) },
+                                            placeholder = { Text(localizedText("15, 8/15, or 8/15/2026")) },
                                             singleLine = true,
                                             isError = date == null,
                                             trailingIcon = {
@@ -310,15 +314,17 @@ internal fun LedgerEditorDialog(
                                                 ) {
                                                     Icon(
                                                         Icons.Outlined.Event,
-                                                        contentDescription = "Choose date",
+                                                        contentDescription = localizedText("Choose date"),
                                                     )
                                                 }
                                             },
                                             supportingText = {
                                                 Text(
-                                                    date?.let { selected ->
-                                                        "Selected: ${formatting.date(selected.toEpochDay())}"
-                                                    } ?: "Enter a valid day, month/day, or month/day/year",
+                                                    localizedText(
+                                                        date?.let { selected ->
+                                                            "Selected: ${formatting.date(selected.toEpochDay())}"
+                                                        } ?: "Enter a valid day, month/day, or month/day/year",
+                                                    ),
                                                 )
                                             },
                                         )
@@ -328,8 +334,8 @@ internal fun LedgerEditorDialog(
                                             value = timeInput,
                                             onValueChange = { timeInput = it },
                                             modifier = Modifier.fillMaxWidth(),
-                                            label = { Text("Time") },
-                                            placeholder = { Text("9:30 AM or 21:30") },
+                                            label = { Text(localizedText("Time")) },
+                                            placeholder = { Text(localizedText("9:30 AM or 21:30")) },
                                             singleLine = true,
                                             isError = minuteOfDay == null,
                                             trailingIcon = {
@@ -356,14 +362,16 @@ internal fun LedgerEditorDialog(
                                                 ) {
                                                     Icon(
                                                         Icons.Outlined.Schedule,
-                                                        contentDescription = "Choose time",
+                                                        contentDescription = localizedText("Choose time"),
                                                     )
                                                 }
                                             },
                                             supportingText = {
                                                 Text(
-                                                    minuteOfDay?.let(formatting::time)
-                                                        ?: "Enter a valid time such as 9:30 AM or 21:30",
+                                                    localizedText(
+                                                        minuteOfDay?.let(formatting::time)
+                                                            ?: "Enter a valid time such as 9:30 AM or 21:30",
+                                                    ),
                                                 )
                                             },
                                         )
@@ -376,7 +384,7 @@ internal fun LedgerEditorDialog(
                                         value = merchant,
                                         onValueChange = { merchant = it },
                                         modifier = Modifier.fillMaxWidth(),
-                                        label = { Text("Merchant") },
+                                        label = { Text(localizedText("Merchant")) },
                                         singleLine = true,
                                     )
                                     },
@@ -385,8 +393,8 @@ internal fun LedgerEditorDialog(
                                         value = tags,
                                         onValueChange = { tags = it },
                                         modifier = Modifier.fillMaxWidth(),
-                                        label = { Text("Tags") },
-                                        placeholder = { Text("travel, work") },
+                                        label = { Text(localizedText("Tags")) },
+                                        placeholder = { Text(localizedText("travel, work")) },
                                         singleLine = true,
                                     )
                                     },
@@ -395,7 +403,7 @@ internal fun LedgerEditorDialog(
                                     value = note,
                                     onValueChange = { note = it },
                                     modifier = Modifier.fillMaxWidth(),
-                                    label = { Text("Note") },
+                                    label = { Text(localizedText("Note")) },
                                     minLines = 2,
                                     maxLines = 5,
                                 )
@@ -516,9 +524,9 @@ private fun RecurrenceEditor(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Repeat", style = MaterialTheme.typography.titleSmall)
+                    Text(localizedText("Repeat"), style = MaterialTheme.typography.titleSmall)
                     Text(
-                        "Create independent entries on schedule",
+                        localizedText("Create independent entries on schedule"),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -531,7 +539,7 @@ private fun RecurrenceEditor(
             }
             if (scheduleLocked) {
                 Text(
-                    "This occurrence is independent. Stop its schedule from the Recurring page.",
+                    localizedText("This occurrence is independent. Stop its schedule from the Recurring page."),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -556,7 +564,7 @@ private fun RecurrenceEditor(
                             onClick = { onUnitChanged(option) },
                             enabled = !scheduleLocked,
                             label = {
-                                Text(option.name.lowercase().replaceFirstChar { it.titlecase(Locale.US) })
+                                Text(localizedText(option.name.lowercase().replaceFirstChar { it.titlecase(Locale.US) }))
                             },
                         )
                     }
@@ -565,13 +573,13 @@ private fun RecurrenceEditor(
                     value = interval,
                     onValueChange = onIntervalChanged,
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Every N ${unit.name.lowercase()}(s)") },
+                    label = { Text(localizedText("Every N ${unit.name.lowercase()}(s)")) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     isError = recurrenceIntervalError(interval) != null,
                     enabled = !scheduleLocked,
                     supportingText = recurrenceIntervalError(interval)?.let { message ->
-                        { Text(message) }
+                        { Text(localizedText(message)) }
                     },
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -580,7 +588,7 @@ private fun RecurrenceEditor(
                         onCheckedChange = onHasEndDateChanged,
                         enabled = !scheduleLocked,
                     )
-                    Text("End date")
+                    Text(localizedText("End date"))
                 }
                 if (hasEndDate) {
                     OutlinedButton(
@@ -594,7 +602,7 @@ private fun RecurrenceEditor(
                     }
                     if (endDate.isBefore(startDate)) {
                         Text(
-                            "End date cannot be before the entry date",
+                            localizedText("End date cannot be before the entry date"),
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodySmall,
                         )
@@ -636,14 +644,14 @@ private fun AttachmentPicker(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Attachments", style = MaterialTheme.typography.titleSmall)
+                    Text(localizedText("Attachments"), style = MaterialTheme.typography.titleSmall)
                     Text(
-                        "$attachmentCount of 10 files",
+                        localizedText("$attachmentCount of 10 files"),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
-                        "25 MB each, 128 MB total",
+                        localizedText("25 MB each, 128 MB total"),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -654,12 +662,12 @@ private fun AttachmentPicker(
                 ) {
                     Icon(Icons.Outlined.AttachFile, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
-                    Text("Choose")
+                    Text(localizedText("Choose"))
                 }
             }
             disabledReason?.let { reason ->
                 Text(
-                    reason,
+                    localizedText(reason),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -675,17 +683,17 @@ private fun AttachmentPicker(
                     TextButton(
                         onClick = { onOpenExisting(attachment) },
                         enabled = enabled,
-                    ) { Text("Open") }
+                    ) { Text(localizedText("Open")) }
                     TextButton(
                         onClick = { onRemoveExisting(attachment) },
                         enabled = enabled,
-                    ) { Text("Remove") }
+                    ) { Text(localizedText("Remove")) }
                 }
             }
             pendingAttachments.forEach { uri ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = uri.lastPathSegment ?: "Selected file",
+                        text = uri.lastPathSegment ?: localizedText("Selected file"),
                         style = MaterialTheme.typography.bodySmall,
                         maxLines = 1,
                         modifier = Modifier.weight(1f),
@@ -693,7 +701,7 @@ private fun AttachmentPicker(
                     TextButton(
                         onClick = { onRemovePending(uri) },
                         enabled = enabled,
-                    ) { Text("Remove") }
+                    ) { Text(localizedText("Remove")) }
                 }
             }
         }

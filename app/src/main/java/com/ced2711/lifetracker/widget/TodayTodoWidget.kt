@@ -40,6 +40,8 @@ import androidx.glance.text.TextStyle
 import com.ced2711.lifetracker.TaskLedgerApplication
 import com.ced2711.lifetracker.data.local.TodoEntity
 import com.ced2711.lifetracker.data.repository.TaskLedgerRepository
+import com.ced2711.lifetracker.domain.model.UiLanguage
+import com.ced2711.lifetracker.ui.localization.translateUiText
 import com.ced2711.lifetracker.worker.WorkScheduler
 import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
@@ -80,9 +82,10 @@ class TodayTodoWidget : GlanceAppWidget() {
         } else {
             emptyList()
         }
+        val uiLanguage = application.container.settingsRepository.settings.first().uiLanguage
         provideContent {
             GlanceTheme {
-                TodayTodoContent(context, todos, recoveryReady)
+                TodayTodoContent(context, todos, recoveryReady, uiLanguage)
             }
         }
     }
@@ -112,12 +115,13 @@ private fun TodayTodoContent(
     context: Context,
     todos: List<TodoEntity>,
     recoveryReady: Boolean,
+    uiLanguage: UiLanguage,
 ) {
     val size = LocalSize.current
     when (widgetLayoutForSize(size.width.value.toInt(), size.height.value.toInt())) {
-        WidgetLayout.TINY -> TinyTodayTodoContent(context, todos, recoveryReady)
-        WidgetLayout.WIDE_SHORT -> WideTodayTodoContent(context, todos, recoveryReady)
-        WidgetLayout.STANDARD -> StandardTodayTodoContent(context, todos, recoveryReady)
+        WidgetLayout.TINY -> TinyTodayTodoContent(context, todos, recoveryReady, uiLanguage)
+        WidgetLayout.WIDE_SHORT -> WideTodayTodoContent(context, todos, recoveryReady, uiLanguage)
+        WidgetLayout.STANDARD -> StandardTodayTodoContent(context, todos, recoveryReady, uiLanguage)
     }
 }
 
@@ -126,6 +130,7 @@ private fun TinyTodayTodoContent(
     context: Context,
     todos: List<TodoEntity>,
     recoveryReady: Boolean,
+    uiLanguage: UiLanguage,
 ) {
     Row(
         modifier = GlanceModifier
@@ -147,7 +152,7 @@ private fun TinyTodayTodoContent(
         Spacer(GlanceModifier.width(7.dp))
         Column(modifier = GlanceModifier.defaultWeight()) {
             Text(
-                text = "Today",
+                text = translateUiText("Today", uiLanguage),
                 style = TextStyle(
                     color = GlanceTheme.colors.onSurface,
                     fontSize = 14.sp,
@@ -156,7 +161,10 @@ private fun TinyTodayTodoContent(
                 maxLines = 1,
             )
             Text(
-                text = if (recoveryReady) "${todos.size} left" else "Unavailable",
+                text = translateUiText(
+                    if (recoveryReady) "${todos.size} left" else "Unavailable",
+                    uiLanguage,
+                ),
                 style = TextStyle(color = GlanceTheme.colors.secondary, fontSize = 10.sp),
                 maxLines = 1,
             )
@@ -169,6 +177,7 @@ private fun WideTodayTodoContent(
     context: Context,
     todos: List<TodoEntity>,
     recoveryReady: Boolean,
+    uiLanguage: UiLanguage,
 ) {
     Row(
         modifier = GlanceModifier
@@ -180,7 +189,7 @@ private fun WideTodayTodoContent(
     ) {
         Column(modifier = GlanceModifier.width(66.dp)) {
             Text(
-                text = "Today",
+                text = translateUiText("Today", uiLanguage),
                 style = TextStyle(
                     color = GlanceTheme.colors.onSurface,
                     fontSize = 15.sp,
@@ -189,7 +198,10 @@ private fun WideTodayTodoContent(
                 maxLines = 1,
             )
             Text(
-                text = if (recoveryReady) "${todos.size} left" else "Offline",
+                text = translateUiText(
+                    if (recoveryReady) "${todos.size} left" else "Offline",
+                    uiLanguage,
+                ),
                 style = TextStyle(color = GlanceTheme.colors.secondary, fontSize = 10.sp),
                 maxLines = 1,
             )
@@ -201,22 +213,22 @@ private fun WideTodayTodoContent(
         ) {
             when {
                 !recoveryReady -> Text(
-                    text = "Open Life Tracker to recover data",
+                    text = translateUiText("Open Life Tracker to recover data", uiLanguage),
                     style = TextStyle(color = GlanceTheme.colors.secondary, fontSize = 12.sp),
                     maxLines = 2,
                 )
                 todos.isEmpty() -> Text(
-                    text = "All clear for today ✓",
+                    text = translateUiText("All clear for today ✓", uiLanguage),
                     style = TextStyle(color = GlanceTheme.colors.primary, fontSize = 13.sp),
                     maxLines = 1,
                 )
-                else -> TodoRow(todos.first())
+                else -> TodoRow(todos.first(), uiLanguage)
             }
         }
         Spacer(GlanceModifier.width(6.dp))
         Row {
             WidgetShortcut(
-                text = "+ Task",
+                text = translateUiText("+ Task", uiLanguage),
                 compact = true,
                 modifier = GlanceModifier.width(52.dp),
                 onClick = actionStartActivity(WidgetNavigation.todoListIntent(context)),
@@ -237,6 +249,7 @@ private fun StandardTodayTodoContent(
     context: Context,
     todos: List<TodoEntity>,
     recoveryReady: Boolean,
+    uiLanguage: UiLanguage,
 ) {
     val size = LocalSize.current
     val visibleCount = visibleTodoCountForWidget(
@@ -260,7 +273,7 @@ private fun StandardTodayTodoContent(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "Today",
+                text = translateUiText("Today", uiLanguage),
                 modifier = GlanceModifier.defaultWeight(),
                 style = TextStyle(
                     color = GlanceTheme.colors.onSurface,
@@ -270,7 +283,10 @@ private fun StandardTodayTodoContent(
                 maxLines = 1,
             )
             Text(
-                text = if (recoveryReady) "${todos.size} left" else "Unavailable",
+                text = translateUiText(
+                    if (recoveryReady) "${todos.size} left" else "Unavailable",
+                    uiLanguage,
+                ),
                 style = TextStyle(color = GlanceTheme.colors.secondary, fontSize = 12.sp),
                 maxLines = 1,
             )
@@ -280,32 +296,32 @@ private fun StandardTodayTodoContent(
         Column(modifier = GlanceModifier.defaultWeight().fillMaxWidth()) {
             if (!recoveryReady) {
                 Text(
-                    text = "Open Life Tracker to finish data recovery",
+                    text = translateUiText("Open Life Tracker to finish data recovery", uiLanguage),
                     style = TextStyle(color = GlanceTheme.colors.secondary, fontSize = 13.sp),
                     maxLines = 2,
                 )
             } else if (todos.isEmpty()) {
                 Text(
-                    text = "All clear for today ✓",
+                    text = translateUiText("All clear for today ✓", uiLanguage),
                     style = TextStyle(color = GlanceTheme.colors.primary, fontSize = 13.sp),
                     maxLines = 2,
                 )
             } else {
-                todos.take(visibleCount).forEach { todo -> TodoRow(todo) }
+                todos.take(visibleCount).forEach { todo -> TodoRow(todo, uiLanguage) }
             }
         }
 
         Spacer(GlanceModifier.height(if (compact) 2.dp else 6.dp))
         Row(modifier = GlanceModifier.fillMaxWidth()) {
             WidgetShortcut(
-                text = "Todo",
+                text = translateUiText("Todo", uiLanguage),
                 compact = compact,
                 modifier = GlanceModifier.defaultWeight(),
                 onClick = actionStartActivity(WidgetNavigation.todoListIntent(context)),
             )
             Spacer(GlanceModifier.width(if (compact) 4.dp else 8.dp))
             WidgetShortcut(
-                text = "Ledger",
+                text = translateUiText("Ledger", uiLanguage),
                 compact = compact,
                 modifier = GlanceModifier.defaultWeight(),
                 onClick = actionStartActivity(WidgetNavigation.ledgerIntent(context)),
@@ -315,7 +331,7 @@ private fun StandardTodayTodoContent(
 }
 
 @Composable
-private fun TodoRow(todo: TodoEntity) {
+private fun TodoRow(todo: TodoEntity, uiLanguage: UiLanguage) {
     Row(
         modifier = GlanceModifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -324,7 +340,9 @@ private fun TodoRow(todo: TodoEntity) {
             modifier = GlanceModifier
                 .width(WIDGET_TODO_ROW_HEIGHT_DP.dp)
                 .height(WIDGET_TODO_ROW_HEIGHT_DP.dp)
-                .semantics { contentDescription = "Complete ${todo.title}" }
+                .semantics {
+                    contentDescription = "${translateUiText("Complete", uiLanguage)} ${todo.title}"
+                }
                 .clickable(
                     actionRunCallback<CompleteTodoFromWidgetAction>(
                         actionParametersOf(TodoIdKey to todo.id),

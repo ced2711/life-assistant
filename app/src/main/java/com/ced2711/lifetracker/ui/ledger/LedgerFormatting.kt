@@ -3,12 +3,12 @@ package com.ced2711.lifetracker.ui.ledger
 import android.text.format.DateFormat
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import com.ced2711.lifetracker.data.settings.AppSettings
 import com.ced2711.lifetracker.domain.format.UserFormatting
 import com.ced2711.lifetracker.domain.model.LedgerType
 import com.ced2711.lifetracker.domain.model.MAX_LEDGER_AMOUNT_CENTS
+import com.ced2711.lifetracker.ui.localization.uiLocale
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.DayOfWeek
@@ -51,8 +51,7 @@ internal data class LedgerDisplayFormatting(
 @Composable
 internal fun rememberLedgerDisplayFormatting(settings: AppSettings): LedgerDisplayFormatting {
     val context = LocalContext.current
-    val configuration = LocalConfiguration.current
-    val locale = configuration.locales[0] ?: Locale.getDefault()
+    val locale = uiLocale(settings.uiLanguage)
     val systemUses24Hour = DateFormat.is24HourFormat(context)
     return remember(settings, systemUses24Hour, locale) {
         LedgerDisplayFormatting(

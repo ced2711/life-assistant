@@ -3,6 +3,7 @@ package com.ced2711.lifetracker
 import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
@@ -21,7 +22,9 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import com.ced2711.lifetracker.ui.localization.localizedText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -50,6 +53,7 @@ import com.ced2711.lifetracker.ui.backup.BackupRestoreTask
 import com.ced2711.lifetracker.ui.backup.BackupRestoreViewModel
 import com.ced2711.lifetracker.ui.calendar.CalendarScreen
 import com.ced2711.lifetracker.ui.ledger.LedgerScreen
+import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
 import com.ced2711.lifetracker.ui.notes.NotesScreen
 import com.ced2711.lifetracker.ui.settings.SettingsScreen
 import com.ced2711.lifetracker.ui.theme.TaskLedgerTheme
@@ -271,8 +275,9 @@ class MainActivity : FragmentActivity() {
                 }
             }
 
-            TaskLedgerTheme(settings.themeMode, settings.accentColor) {
-                AdaptiveTaskLedgerScaffold(
+            CompositionLocalProvider(LocalUiLanguage provides settings.uiLanguage) {
+                TaskLedgerTheme(settings.themeMode, settings.accentColor) {
+                    AdaptiveTaskLedgerScaffold(
                     selected = selected,
                     onSelected = { destination ->
                         if (!showBackup || backupUiState.task == BackupRestoreTask.NONE) {
@@ -415,6 +420,7 @@ class MainActivity : FragmentActivity() {
                             }
                         }
                     }
+                    }
                 }
             }
         }
@@ -471,12 +477,17 @@ class MainActivity : FragmentActivity() {
 
     private fun applyEdgeToEdgeStyle(darkTheme: Boolean) {
         val background = if (darkTheme) DARK_SYSTEM_BAR_COLOR else LIGHT_SYSTEM_BAR_COLOR
-        val style = if (darkTheme) {
+        val statusStyle = if (darkTheme) {
+            SystemBarStyle.dark(Color.TRANSPARENT)
+        } else {
+            SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+        }
+        val navigationStyle = if (darkTheme) {
             SystemBarStyle.dark(background)
         } else {
             SystemBarStyle.light(background, DARK_SYSTEM_BAR_COLOR)
         }
-        enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
+        enableEdgeToEdge(statusBarStyle = statusStyle, navigationBarStyle = navigationStyle)
     }
 
     companion object {
@@ -526,12 +537,12 @@ private fun StartupRecoveryGate(
                 StartupRecoveryState.Recovering -> {
                     CircularProgressIndicator()
                     Text(
-                        text = "Finishing data recovery…",
+                        text = localizedText("Finishing data recovery…"),
                         style = MaterialTheme.typography.titleMedium,
                         textAlign = TextAlign.Center,
                     )
                     Text(
-                        text = "Your tasks, ledger, and vault will open when it is safe.",
+                        text = localizedText("Your tasks, ledger, and vault will open when it is safe."),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
                     )
@@ -539,18 +550,20 @@ private fun StartupRecoveryGate(
 
                 is StartupRecoveryState.Failed -> {
                     Text(
-                        text = "Data recovery couldn't finish",
+                        text = localizedText("Data recovery couldn't finish"),
                         style = MaterialTheme.typography.titleLarge,
                         textAlign = TextAlign.Center,
                     )
                     Text(
-                        text = "Life Tracker has kept your data closed to avoid conflicting changes. " +
-                            "Try again before using the app.",
+                        text = localizedText(
+                            "Life Tracker has kept your data closed to avoid conflicting changes. " +
+                                "Try again before using the app.",
+                        ),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
                     )
                     Button(onClick = onRetry) {
-                        Text("Retry")
+                        Text(localizedText("Retry"))
                     }
                 }
 

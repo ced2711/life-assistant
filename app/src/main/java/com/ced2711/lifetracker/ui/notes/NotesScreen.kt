@@ -57,6 +57,10 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import com.ced2711.lifetracker.ui.localization.localizedText
+import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
+import com.ced2711.lifetracker.ui.localization.translateUiText
+import com.ced2711.lifetracker.ui.localization.uiLocale
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
@@ -107,6 +111,7 @@ fun NotesScreen(
     var attachmentTargetId by remember { mutableStateOf<Long?>(null) }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val uiLanguage = LocalUiLanguage.current
 
     val selectedFolderId = folderSelection.toLongOrNull()
     val visibleNotes = remember(notes, folderSelection, query) {
@@ -139,7 +144,9 @@ fun NotesScreen(
                 ownerId = noteId,
                 uris = uris,
                 copyAttemptId = UUID.randomUUID().toString(),
-                onCopyFailed = { message -> scope.launch { snackbar.showSnackbar(message) } },
+                onCopyFailed = { message ->
+                    scope.launch { snackbar.showSnackbar(translateUiText(message, uiLanguage)) }
+                },
             )
         }
     }
@@ -163,7 +170,9 @@ fun NotesScreen(
                     attachmentTargetId = noteId
                     attachmentLauncher.launch(arrayOf("*/*"))
                 },
-                onFailure = { message -> scope.launch { snackbar.showSnackbar(message) } },
+                onFailure = { message ->
+                    scope.launch { snackbar.showSnackbar(translateUiText(message, uiLanguage)) }
+                },
             )
         }
     }
@@ -256,32 +265,33 @@ private fun NotesBrowser(
     modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
+    val uiLanguage = LocalUiLanguage.current
     var folderDialogMode by remember { mutableStateOf<FolderDialogMode?>(null) }
     var confirmDeleteFolder by remember { mutableStateOf(false) }
     var searchExpanded by rememberSaveable { mutableStateOf(false) }
     var foldersExpanded by rememberSaveable { mutableStateOf(false) }
     val selectedFolder = folders.firstOrNull { it.id.toString() == folderSelection }
     val selectedFolderLabel = when (folderSelection) {
-        ALL_FOLDERS -> "All notes"
-        ROOT_FOLDER -> "Unfiled"
-        else -> selectedFolder?.name ?: "All notes"
+        ALL_FOLDERS -> localizedText("All notes")
+        ROOT_FOLDER -> localizedText("Unfiled")
+        else -> selectedFolder?.name ?: localizedText("All notes")
     }
 
     Column(modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Notes", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                Text(localizedText("Notes"), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    "Long-term writing and private files",
+                    localizedText("Long-term writing and private files"),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             IconButton(onClick = onOpenVault) {
-                Icon(Icons.Outlined.Lock, contentDescription = "Open password vault")
+                Icon(Icons.Outlined.Lock, contentDescription = localizedText("Open password vault"))
             }
             IconButton(onClick = { folderDialogMode = FolderDialogMode.Create }) {
-                Icon(Icons.Outlined.CreateNewFolder, contentDescription = "New folder")
+                Icon(Icons.Outlined.CreateNewFolder, contentDescription = localizedText("New folder"))
             }
         }
         NotesBrowserSectionHeader(
@@ -300,11 +310,11 @@ private fun NotesBrowser(
                 trailingIcon = if (query.isNotEmpty()) {
                     {
                         IconButton(onClick = { onQueryChanged("") }) {
-                            Icon(Icons.Outlined.Close, contentDescription = "Clear search")
+                            Icon(Icons.Outlined.Close, contentDescription = localizedText("Clear search"))
                         }
                     }
                 } else null,
-                placeholder = { Text("Search notes") },
+                placeholder = { Text(localizedText("Search notes")) },
             )
         }
         NotesBrowserSectionHeader(
@@ -321,10 +331,10 @@ private fun NotesBrowser(
                         .heightIn(max = 190.dp)
                         .verticalScroll(rememberScrollState()),
                 ) {
-                    FolderRow("All notes", Icons.Outlined.FolderOpen, folderSelection == ALL_FOLDERS) {
+                    FolderRow(localizedText("All notes"), Icons.Outlined.FolderOpen, folderSelection == ALL_FOLDERS) {
                         onFolderSelected(ALL_FOLDERS)
                     }
-                    FolderRow("Unfiled", Icons.Outlined.Folder, folderSelection == ROOT_FOLDER) {
+                    FolderRow(localizedText("Unfiled"), Icons.Outlined.Folder, folderSelection == ROOT_FOLDER) {
                         onFolderSelected(ROOT_FOLDER)
                     }
                     flattenNoteFolders(folders).forEach { row ->
@@ -341,12 +351,12 @@ private fun NotesBrowser(
                         TextButton(onClick = { folderDialogMode = FolderDialogMode.Rename }) {
                             Icon(Icons.Outlined.Edit, null)
                             Spacer(Modifier.width(4.dp))
-                            Text("Rename")
+                            Text(localizedText("Rename"))
                         }
                         TextButton(onClick = { confirmDeleteFolder = true }) {
                             Icon(Icons.Outlined.Delete, null)
                             Spacer(Modifier.width(4.dp))
-                            Text("Delete folder")
+                            Text(localizedText("Delete folder"))
                         }
                     }
                 }
@@ -354,16 +364,16 @@ private fun NotesBrowser(
         }
         HorizontalDivider()
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("${notes.size} notes", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+            Text(localizedText("${notes.size} notes"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
             FilledTonalButton(onClick = onCreateNote) {
                 Icon(Icons.Outlined.Add, null)
-                Text("New")
+                Text(localizedText("New"))
             }
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             if (notes.isEmpty()) {
                 Text(
-                    if (query.isBlank()) "No notes here yet." else "No matching notes.",
+                    localizedText(if (query.isBlank()) "No notes here yet." else "No matching notes."),
                     modifier = Modifier.padding(vertical = 24.dp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -387,14 +397,18 @@ private fun NotesBrowser(
                         name = name,
                         parentId = selectedFolder?.id,
                         onSaved = { id -> folderDialogMode = null; onFolderSelected(id.toString()) },
-                        onFailure = { message -> scope.launch { snackbar.showSnackbar(message) } },
+                        onFailure = { message ->
+                            scope.launch { snackbar.showSnackbar(translateUiText(message, uiLanguage)) }
+                        },
                     )
                 } else if (selectedFolder != null) {
                     viewModel.renameNoteFolder(
                         folderId = selectedFolder.id,
                         name = name,
                         onSaved = { folderDialogMode = null },
-                        onFailure = { message -> scope.launch { snackbar.showSnackbar(message) } },
+                        onFailure = { message ->
+                            scope.launch { snackbar.showSnackbar(translateUiText(message, uiLanguage)) }
+                        },
                     )
                 }
             },
@@ -403,19 +417,21 @@ private fun NotesBrowser(
     if (confirmDeleteFolder && selectedFolder != null) {
         AlertDialog(
             onDismissRequest = { confirmDeleteFolder = false },
-            title = { Text("Delete ${selectedFolder.name}?") },
-            text = { Text("Notes will move to Unfiled. Child folders will move up one level.") },
+            title = { Text(localizedText("Delete ${selectedFolder.name}?")) },
+            text = { Text(localizedText("Notes will move to Unfiled. Child folders will move up one level.")) },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.deleteNoteFolder(
                         selectedFolder.id,
-                        onFailure = { message -> scope.launch { snackbar.showSnackbar(message) } },
+                        onFailure = { message ->
+                            scope.launch { snackbar.showSnackbar(translateUiText(message, uiLanguage)) }
+                        },
                     )
                     confirmDeleteFolder = false
                     onFolderSelected(ALL_FOLDERS)
-                }) { Text("Delete") }
+                }) { Text(localizedText("Delete")) }
             },
-            dismissButton = { TextButton(onClick = { confirmDeleteFolder = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { confirmDeleteFolder = false }) { Text(localizedText("Cancel")) } },
         )
     }
 }
@@ -439,7 +455,7 @@ private fun NotesBrowserSectionHeader(
             Icon(icon, null)
             Spacer(Modifier.width(8.dp))
             Text(
-                label,
+                localizedText(label),
                 style = MaterialTheme.typography.titleSmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -447,7 +463,7 @@ private fun NotesBrowserSectionHeader(
             )
             Icon(
                 if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                contentDescription = if (expanded) "Collapse" else "Expand",
+                contentDescription = localizedText(if (expanded) "Collapse" else "Expand"),
             )
         }
     }
@@ -503,7 +519,11 @@ private fun NoteListItem(note: NoteEntity, selected: Boolean, onClick: () -> Uni
                 )
             }
             Text(
-                DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(note.updatedAt)),
+                DateFormat.getDateTimeInstance(
+                    DateFormat.MEDIUM,
+                    DateFormat.SHORT,
+                    uiLocale(LocalUiLanguage.current),
+                ).format(Date(note.updatedAt)),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.outline,
             )
@@ -530,7 +550,7 @@ private fun NoteEditorPane(
         Box(modifier, contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(Icons.Outlined.Edit, null)
-                Text("Select a note or create a new one.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(localizedText("Select a note or create a new one."), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         return
@@ -543,14 +563,15 @@ private fun NoteEditorPane(
     var folderMenu by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val uiLanguage = LocalUiLanguage.current
     val attachmentFlow = remember(note?.id) {
         note?.id?.let { viewModel.attachments(AttachmentOwnerType.NOTE, it) } ?: flowOf(emptyList())
     }
     val attachments by attachmentFlow.collectAsStateWithLifecycle(initialValue = emptyList())
     val openAttachment = rememberAttachmentOpener { message ->
-        scope.launch { snackbar.showSnackbar(message) }
+        scope.launch { snackbar.showSnackbar(translateUiText(message, uiLanguage)) }
     }
-    val folderLabel = folders.firstOrNull { it.id == folderId }?.name ?: "Unfiled"
+    val folderLabel = folders.firstOrNull { it.id == folderId }?.name ?: localizedText("Unfiled")
 
     fun draft() = NoteDraft(note?.id, folderId, title, body, pinned)
 
@@ -558,18 +579,18 @@ private fun NoteEditorPane(
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (onBack != null) {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back to notes")
+                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = localizedText("Back to notes"))
                 }
             }
             Text(
-                if (note == null) "New note" else "Edit note",
+                localizedText(if (note == null) "New note" else "Edit note"),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f),
             )
             if (note != null) {
                 IconButton(onClick = { confirmDelete = true }) {
-                    Icon(Icons.Outlined.Delete, contentDescription = "Delete note")
+                    Icon(Icons.Outlined.Delete, contentDescription = localizedText("Delete note"))
                 }
             }
         }
@@ -577,8 +598,8 @@ private fun NoteEditorPane(
         OutlinedTextField(
             value = title,
             onValueChange = { title = it },
-            label = { Text("Title (optional)") },
-            placeholder = { Text("Derived from the first line if empty") },
+            label = { Text(localizedText("Title (optional)")) },
+            placeholder = { Text(localizedText("Derived from the first line if empty")) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
         )
@@ -592,12 +613,12 @@ private fun NoteEditorPane(
             }
             DropdownMenu(expanded = folderMenu, onDismissRequest = { folderMenu = false }) {
                 DropdownMenuItem(
-                    text = { Text("Unfiled") },
+                    text = { Text(localizedText("Unfiled")) },
                     onClick = { folderId = null; folderMenu = false },
                 )
                 flattenNoteFolders(folders).forEach { row ->
                     DropdownMenuItem(
-                        text = { Text("  ".repeat(row.depth) + row.folder.name) },
+                        text = { Text(localizedText("  ").repeat(row.depth) + row.folder.name) },
                         onClick = { folderId = row.folder.id; folderMenu = false },
                     )
                 }
@@ -605,13 +626,13 @@ private fun NoteEditorPane(
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = pinned, onCheckedChange = { pinned = it })
-            Text("Pin this note")
+            Text(localizedText("Pin this note"))
         }
         OutlinedTextField(
             value = body,
             onValueChange = { body = it },
-            label = { Text("Note") },
-            placeholder = { Text("Write anything…") },
+            label = { Text(localizedText("Note")) },
+            placeholder = { Text(localizedText("Write anything…")) },
             modifier = Modifier.fillMaxWidth().height(300.dp),
         )
         Spacer(Modifier.height(14.dp))
@@ -619,17 +640,22 @@ private fun NoteEditorPane(
             Button(onClick = {
                 viewModel.saveNote(
                     draft(),
-                    onSaved = { id -> onSaved(id); scope.launch { snackbar.showSnackbar("Note saved") } },
-                    onFailure = { message -> scope.launch { snackbar.showSnackbar(message) } },
+                    onSaved = { id ->
+                        onSaved(id)
+                        scope.launch { snackbar.showSnackbar(translateUiText("Note saved", uiLanguage)) }
+                    },
+                    onFailure = { message ->
+                        scope.launch { snackbar.showSnackbar(translateUiText(message, uiLanguage)) }
+                    },
                 )
-            }) { Text("Save") }
+            }) { Text(localizedText("Save")) }
             FilledTonalButton(onClick = { onRequestAttachments(draft()) }) {
                 Icon(Icons.Outlined.AttachFile, null)
-                Text("Add files")
+                Text(localizedText("Add files"))
             }
         }
         Text(
-            "Files and images are copied into private app storage. Passwords should use the secure Vault.",
+            localizedText("Files and images are copied into private app storage. Passwords should use the secure Vault."),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(vertical = 10.dp),
@@ -642,8 +668,8 @@ private fun NoteEditorPane(
                     viewModel.removeAttachment(attachment.id) { token ->
                         scope.launch {
                             val result = snackbar.showSnackbar(
-                                message = "Removed ${attachment.originalName}",
-                                actionLabel = "Undo",
+                                message = translateUiText("Removed ${attachment.originalName}", uiLanguage),
+                                actionLabel = translateUiText("Undo", uiLanguage),
                                 withDismissAction = true,
                                 duration = SnackbarDuration.Long,
                             )
@@ -659,19 +685,21 @@ private fun NoteEditorPane(
     if (confirmDelete && note != null) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text("Delete this note?") },
-            text = { Text("The note will be removed. Its private files will be cleaned up safely.") },
+            title = { Text(localizedText("Delete this note?")) },
+            text = { Text(localizedText("The note will be removed. Its private files will be cleaned up safely.")) },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.deleteNote(
                         note.id,
                         onDeleted = onDeleted,
-                        onFailure = { message -> scope.launch { snackbar.showSnackbar(message) } },
+                        onFailure = { message ->
+                            scope.launch { snackbar.showSnackbar(translateUiText(message, uiLanguage)) }
+                        },
                     )
                     confirmDelete = false
-                }) { Text("Delete") }
+                }) { Text(localizedText("Delete")) }
             },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(localizedText("Cancel")) } },
         )
     }
 }
@@ -690,7 +718,10 @@ private fun AttachmentRow(
             modifier = Modifier.weight(1f),
         )
         IconButton(onClick = onRemove) {
-            Icon(Icons.Outlined.Delete, contentDescription = "Remove ${attachment.originalName}")
+            Icon(
+                Icons.Outlined.Delete,
+                contentDescription = localizedText("Remove ${attachment.originalName}"),
+            )
         }
     }
 }
@@ -706,27 +737,27 @@ private fun FolderNameDialog(
     var name by rememberSaveable(initialName) { mutableStateOf(initialName) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
+        title = { Text(localizedText(title)) },
         text = {
             Column {
                 if (parentName != null) {
-                    Text("Inside $parentName", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(localizedText("Inside $parentName"), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.height(8.dp))
                 }
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Folder name") },
+                    label = { Text(localizedText("Folder name")) },
                     singleLine = true,
                 )
             }
         },
         confirmButton = {
             TextButton(onClick = { if (name.isNotBlank()) onConfirm(name) }, enabled = name.isNotBlank()) {
-                Text("Save")
+                Text(localizedText("Save"))
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localizedText("Cancel")) } },
     )
 }
 

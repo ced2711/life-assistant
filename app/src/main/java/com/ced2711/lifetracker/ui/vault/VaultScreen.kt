@@ -57,6 +57,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import com.ced2711.lifetracker.ui.localization.localizedText
+import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
+import com.ced2711.lifetracker.ui.localization.translateUiText
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
@@ -110,6 +113,7 @@ fun VaultScreen(
     }
     var deviceSecure by remember { mutableStateOf(keyguardManager?.isDeviceSecure == true) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val uiLanguage = LocalUiLanguage.current
     var deleteEntryId by remember { mutableStateOf<String?>(null) }
     var showResetConfirmation by remember { mutableStateOf(false) }
 
@@ -142,9 +146,9 @@ fun VaultScreen(
         deviceSecure = deviceSecure,
     )
 
-    LaunchedEffect(uiState.snackbarMessage) {
+    LaunchedEffect(uiState.snackbarMessage, uiLanguage) {
         val message = uiState.snackbarMessage ?: return@LaunchedEffect
-        snackbarHostState.showSnackbar(message)
+        snackbarHostState.showSnackbar(translateUiText(message, uiLanguage))
         viewModel.consumeSnackbarMessage()
     }
 
@@ -244,10 +248,12 @@ fun VaultScreen(
                     deleteEntryId = null
                 }
             },
-            title = { Text("Delete entry?") },
+            title = { Text(localizedText("Delete entry?")) },
             text = {
                 Text(
-                    "Delete ${deleteTarget?.displayLabel() ?: "this entry"}? This cannot be undone.",
+                    localizedText(
+                        "Delete ${deleteTarget?.displayLabel() ?: "this entry"}? This cannot be undone.",
+                    ),
                 )
             },
             dismissButton = {
@@ -257,7 +263,7 @@ fun VaultScreen(
                         viewModel.touch()
                         deleteEntryId = null
                     },
-                ) { Text("Cancel") }
+                ) { Text(localizedText("Cancel")) }
             },
             confirmButton = {
                 TextButton(
@@ -267,7 +273,7 @@ fun VaultScreen(
                         deleteEntryId = null
                         if (id != null) viewModel.deleteEntry(id)
                     },
-                ) { Text("Delete") }
+                ) { Text(localizedText("Delete")) }
             },
         )
     }
@@ -280,11 +286,13 @@ fun VaultScreen(
                     showResetConfirmation = false
                 }
             },
-            title = { Text("Reset vault?") },
+            title = { Text(localizedText("Reset vault?")) },
             text = {
                 Text(
-                    "Android will ask you to confirm your identity, then permanently delete " +
-                        "every vault entry and encryption key. This cannot be undone.",
+                    localizedText(
+                        "Android will ask you to confirm your identity, then permanently delete " +
+                            "every vault entry and encryption key. This cannot be undone.",
+                    ),
                 )
             },
             dismissButton = {
@@ -294,7 +302,7 @@ fun VaultScreen(
                         viewModel.touch()
                         showResetConfirmation = false
                     },
-                ) { Text("Cancel") }
+                ) { Text(localizedText("Cancel")) }
             },
             confirmButton = {
                 TextButton(
@@ -303,7 +311,7 @@ fun VaultScreen(
                         showResetConfirmation = false
                         viewModel.resetVault()
                     },
-                ) { Text("Reset vault") }
+                ) { Text(localizedText("Reset vault")) }
             },
         )
     }
@@ -317,6 +325,7 @@ internal fun VaultAuthenticationCoordinator(
     deviceSecure: Boolean,
 ) {
     val context = LocalContext.current
+    val uiLanguage = LocalUiLanguage.current
     val activity = remember(context) { context.findFragmentActivity() }
     val legacyCredentialFragment = remember(activity) {
         activity?.getOrCreateVaultLegacyCredentialFragment()
@@ -369,7 +378,7 @@ internal fun VaultAuthenticationCoordinator(
         }
     }
 
-    LaunchedEffect(request?.id, activity, deviceSecure) {
+    LaunchedEffect(request?.id, activity, deviceSecure, uiLanguage) {
         val pending = request
         val previousAttempt = biometricAttempts.active
         if (previousAttempt != null && previousAttempt.requestId != pending?.id) {
@@ -413,8 +422,8 @@ internal fun VaultAuthenticationCoordinator(
                 attachedBiometricAttempt = attempt
                 if (restoredAttempt != null) return@LaunchedEffect
                 val promptInfo = BiometricPrompt.PromptInfo.Builder()
-                    .setTitle(pending.promptTitle(hasVault))
-                    .setSubtitle("Confirm your identity")
+                    .setTitle(translateUiText(pending.promptTitle(hasVault), uiLanguage))
+                    .setSubtitle(translateUiText("Confirm your identity", uiLanguage))
                     .setAllowedAuthenticators(pending.allowedAuthenticators)
                     .build()
                 runCatching { prompt.authenticate(promptInfo) }
@@ -459,10 +468,10 @@ internal fun VaultAuthenticationCoordinator(
                     "Cancel"
                 }
                 val promptInfo = BiometricPrompt.PromptInfo.Builder()
-                    .setTitle(pending.promptTitle(hasVault))
-                    .setSubtitle("Confirm your fingerprint")
+                    .setTitle(translateUiText(pending.promptTitle(hasVault), uiLanguage))
+                    .setSubtitle(translateUiText("Confirm your fingerprint", uiLanguage))
                     .setAllowedAuthenticators(pending.allowedAuthenticators)
-                    .setNegativeButtonText(negativeText)
+                    .setNegativeButtonText(translateUiText(negativeText, uiLanguage))
                     .build()
                 runCatching {
                     prompt.authenticate(promptInfo, BiometricPrompt.CryptoObject(pending.cipher))
@@ -479,8 +488,8 @@ internal fun VaultAuthenticationCoordinator(
                 if (biometricAttempts.active != null) cancelActiveBiometric()
                 val manager = context.getSystemService(KeyguardManager::class.java)
                 val intent = manager?.createConfirmDeviceCredentialIntent(
-                    pending.promptTitle(hasVault),
-                    "Confirm your screen lock to continue.",
+                    translateUiText(pending.promptTitle(hasVault), uiLanguage),
+                    translateUiText("Confirm your screen lock to continue.", uiLanguage),
                 )
                 if (intent == null) {
                     viewModel.authenticationUnavailable(
@@ -511,8 +520,11 @@ internal fun VaultAuthenticationCoordinator(
                     if (biometricAttempts.active != null) cancelActiveBiometric()
                     val manager = context.getSystemService(KeyguardManager::class.java)
                     val intent = manager?.createConfirmDeviceCredentialIntent(
-                        pending.promptTitle(hasVault),
-                        "Confirm your screen lock to permanently reset the vault.",
+                        translateUiText(pending.promptTitle(hasVault), uiLanguage),
+                        translateUiText(
+                            "Confirm your screen lock to permanently reset the vault.",
+                            uiLanguage,
+                        ),
                     )
                     val launcher = legacyCredentialFragment
                     when {
@@ -561,8 +573,8 @@ internal fun VaultAuthenticationCoordinator(
                 attachedBiometricAttempt = attempt
                 if (restoredAttempt != null) return@LaunchedEffect
                 val promptInfo = BiometricPrompt.PromptInfo.Builder()
-                    .setTitle(pending.promptTitle(hasVault))
-                    .setSubtitle("Confirm to permanently reset the vault")
+                    .setTitle(translateUiText(pending.promptTitle(hasVault), uiLanguage))
+                    .setSubtitle(translateUiText("Confirm to permanently reset the vault", uiLanguage))
                     .setAllowedAuthenticators(pending.allowedAuthenticators)
                     .build()
                 runCatching { prompt.authenticate(promptInfo) }
@@ -650,10 +662,10 @@ private fun VaultActions(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onLock, enabled = unlocked && !mutationInProgress) {
-            Icon(Icons.Default.Lock, contentDescription = "Lock vault")
+            Icon(Icons.Default.Lock, contentDescription = localizedText("Lock vault"))
         }
         IconButton(onClick = onAdd, enabled = unlocked && !mutationInProgress) {
-            Icon(Icons.Default.Add, contentDescription = "Add vault entry")
+            Icon(Icons.Default.Add, contentDescription = localizedText("Add vault entry"))
         }
     }
 }
@@ -685,30 +697,30 @@ private fun LockedVaultContent(
                 tint = MaterialTheme.colorScheme.primary,
             )
             Text(
-                text = if (hasVault) "Vault locked" else "Create your vault",
+                text = localizedText(if (hasVault) "Vault locked" else "Create your vault"),
                 style = MaterialTheme.typography.headlineSmall,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
             Text(
-                text = if (deviceSecure) {
+                text = localizedText(if (deviceSecure) {
                     "Your accounts and passwords are encrypted on this device. Unlocking requires your fingerprint, face, PIN, pattern, or password."
                 } else {
                     "Set a secure screen lock in Android Settings before using the vault."
-                },
+                }),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
             Button(onClick = onUnlock, enabled = deviceSecure) {
-                Text(if (hasVault) "Unlock" else "Create vault")
+                Text(localizedText(if (hasVault) "Unlock" else "Create vault"))
             }
             if (!deviceSecure) {
                 OutlinedButton(onClick = onOpenSecuritySettings) {
-                    Text("Open Android security settings")
+                    Text(localizedText("Open Android security settings"))
                 }
             }
             if (hasVault) {
                 TextButton(onClick = onReset) {
-                    Text("Reset vault", color = MaterialTheme.colorScheme.error)
+                    Text(localizedText("Reset vault"), color = MaterialTheme.colorScheme.error)
                 }
             }
         }
@@ -738,16 +750,16 @@ private fun VaultStatusContent(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             if (progress) CircularProgressIndicator()
-            Text(title, style = MaterialTheme.typography.headlineSmall)
+            Text(localizedText(title), style = MaterialTheme.typography.headlineSmall)
             Text(
-                message,
+                localizedText(message),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
-            if (actionLabel != null) Button(onClick = onAction) { Text(actionLabel) }
+            if (actionLabel != null) Button(onClick = onAction) { Text(localizedText(actionLabel)) }
             if (secondaryActionLabel != null) {
                 TextButton(onClick = onSecondaryAction) {
-                    Text(secondaryActionLabel, color = MaterialTheme.colorScheme.error)
+                    Text(localizedText(secondaryActionLabel), color = MaterialTheme.colorScheme.error)
                 }
             }
         }
@@ -835,7 +847,7 @@ private fun VaultEntryList(
                 value = uiState.query,
                 onValueChange = viewModel::setQuery,
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Search") },
+                label = { Text(localizedText("Search")) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 singleLine = true,
                 enabled = actionsEnabled,
@@ -868,11 +880,11 @@ private fun VaultEntryList(
         if (entries.isEmpty()) {
             item {
                 Text(
-                    text = if (uiState.query.isBlank()) {
+                    text = localizedText(if (uiState.query.isBlank()) {
                         "No vault entries yet. Use Add to store an account."
                     } else {
                         "No entries match your search."
-                    },
+                    }),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 32.dp),
@@ -897,7 +909,7 @@ private fun VaultEntryList(
                 enabled = actionsEnabled,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("Reset vault", color = MaterialTheme.colorScheme.error)
+                Text(localizedText("Reset vault"), color = MaterialTheme.colorScheme.error)
             }
         }
     }
@@ -927,7 +939,10 @@ private fun VaultEntryRow(entry: VaultEntry, enabled: Boolean, onClick: () -> Un
                 style = MaterialTheme.typography.titleMedium,
             )
             IconButton(onClick = onClick, enabled = enabled) {
-                Icon(Icons.Default.Edit, contentDescription = "Edit ${entry.displayLabel()}")
+                Icon(
+                    Icons.Default.Edit,
+                    contentDescription = localizedText("Edit ${entry.displayLabel()}"),
+                )
             }
         }
     }
@@ -951,14 +966,14 @@ private fun VaultOfferCard(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            Text(message, style = MaterialTheme.typography.bodyMedium)
+            Text(localizedText(title), style = MaterialTheme.typography.titleMedium)
+            Text(localizedText(message), style = MaterialTheme.typography.bodyMedium)
             TextButton(
                 onClick = onClick,
                 enabled = enabled,
                 modifier = Modifier.align(Alignment.End),
             ) {
-                Text(actionLabel)
+                Text(localizedText(actionLabel))
             }
         }
     }
@@ -988,11 +1003,11 @@ private fun VaultEditor(
                     onClick = viewModel::closeEditor,
                     enabled = !mutationInProgress,
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to entries")
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = localizedText("Back to entries"))
                 }
             }
             Text(
-                text = if (editor.id == null) "New entry" else "Edit entry",
+                text = localizedText(if (editor.id == null) "New entry" else "Edit entry"),
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
@@ -1002,7 +1017,7 @@ private fun VaultEditor(
                     onClick = { onDelete(editor.id) },
                     enabled = !mutationInProgress,
                 ) {
-                    Icon(Icons.Default.Delete, contentDescription = "Delete entry")
+                    Icon(Icons.Default.Delete, contentDescription = localizedText("Delete entry"))
                 }
             }
         }
@@ -1011,7 +1026,7 @@ private fun VaultEditor(
             value = editor.label,
             onValueChange = viewModel::updateLabel,
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("Label") },
+            label = { Text(localizedText("Label")) },
             singleLine = true,
             enabled = !mutationInProgress,
         )
@@ -1019,7 +1034,7 @@ private fun VaultEditor(
             value = editor.account,
             onValueChange = viewModel::updateAccount,
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("Account or username") },
+            label = { Text(localizedText("Account or username")) },
             singleLine = true,
             enabled = !mutationInProgress,
             trailingIcon = {
@@ -1027,7 +1042,7 @@ private fun VaultEditor(
                     onClick = viewModel::copyEditorAccount,
                     enabled = editor.account.isNotBlank() && !mutationInProgress,
                 ) {
-                    Icon(Icons.Default.ContentCopy, contentDescription = "Copy account")
+                    Icon(Icons.Default.ContentCopy, contentDescription = localizedText("Copy account"))
                 }
             },
         )
@@ -1043,7 +1058,7 @@ private fun VaultEditor(
             value = editor.website,
             onValueChange = viewModel::updateWebsite,
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("Website") },
+            label = { Text(localizedText("Website")) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
             enabled = !mutationInProgress,
@@ -1052,12 +1067,12 @@ private fun VaultEditor(
             value = editor.notes,
             onValueChange = viewModel::updateNotes,
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("Notes") },
+            label = { Text(localizedText("Notes")) },
             minLines = 4,
             enabled = !mutationInProgress,
         )
         Text(
-            text = "Enter at least one field. Passwords stay encrypted on this device.",
+            text = localizedText("Enter at least one field. Passwords stay encrypted on this device."),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -1068,7 +1083,7 @@ private fun VaultEditor(
             OutlinedButton(
                 onClick = viewModel::closeEditor,
                 enabled = !mutationInProgress,
-            ) { Text("Close") }
+            ) { Text(localizedText("Close")) }
             Spacer(Modifier.width(8.dp))
             Button(
                 onClick = viewModel::saveEditor,
@@ -1078,7 +1093,7 @@ private fun VaultEditor(
                     CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(8.dp))
                 }
-                Text(if (mutationInProgress) "Working…" else "Save")
+                Text(localizedText(if (mutationInProgress) "Working…" else "Save"))
             }
         }
         Spacer(Modifier.height(20.dp))
@@ -1116,7 +1131,7 @@ internal fun VaultPasswordField(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(protectedSemantics),
-            label = { Text("Password") },
+            label = { Text(localizedText("Password")) },
             singleLine = true,
             enabled = enabled,
             readOnly = passwordVisible,
@@ -1144,7 +1159,7 @@ internal fun VaultPasswordField(
                     contentDescription = null,
                 )
                 Spacer(Modifier.width(4.dp))
-                Text(if (passwordVisible) "Hide" else "Show")
+                Text(localizedText(if (passwordVisible) "Hide" else "Show"))
             }
             TextButton(
                 onClick = onCopyPassword,
@@ -1152,7 +1167,7 @@ internal fun VaultPasswordField(
             ) {
                 Icon(Icons.Default.ContentCopy, contentDescription = null)
                 Spacer(Modifier.width(4.dp))
-                Text("Copy")
+                Text(localizedText("Copy"))
             }
         }
     }
@@ -1170,7 +1185,7 @@ private fun EmptyEditorPlaceholder() {
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            "Select an entry or use Add.",
+            localizedText("Select an entry or use Add."),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )

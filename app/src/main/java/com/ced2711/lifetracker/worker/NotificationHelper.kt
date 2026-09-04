@@ -15,6 +15,8 @@ import androidx.core.content.edit
 import com.ced2711.lifetracker.MainActivity
 import com.ced2711.lifetracker.R
 import com.ced2711.lifetracker.data.local.TodoEntity
+import com.ced2711.lifetracker.domain.model.UiLanguage
+import com.ced2711.lifetracker.ui.localization.translateUiText
 
 internal enum class NotificationDeliveryResult {
     DELIVERED,
@@ -33,6 +35,7 @@ internal object NotificationHelper {
         context: Context,
         todo: TodoEntity,
         deliveryKey: ReminderDeliveryKey,
+        uiLanguage: UiLanguage,
     ): NotificationDeliveryResult {
         if (
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -53,8 +56,12 @@ internal object NotificationHelper {
 
             val manager = context.getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_DEFAULT).apply {
-                    description = CHANNEL_DESCRIPTION
+                NotificationChannel(
+                    CHANNEL_ID,
+                    translateUiText(CHANNEL_NAME, uiLanguage),
+                    NotificationManager.IMPORTANCE_DEFAULT,
+                ).apply {
+                    description = translateUiText(CHANNEL_DESCRIPTION, uiLanguage)
                 },
             )
             if (manager.getNotificationChannel(CHANNEL_ID)?.importance == NotificationManager.IMPORTANCE_NONE) {
@@ -76,7 +83,8 @@ internal object NotificationHelper {
                 launchIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
-            val body = todo.description.takeIf(String::isNotBlank) ?: "Todo reminder"
+            val body = todo.description.takeIf(String::isNotBlank)
+                ?: translateUiText("Todo reminder", uiLanguage)
             val notification = NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification)
                 .setContentTitle(todo.title)

@@ -21,6 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import com.ced2711.lifetracker.ui.localization.localizedText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -108,9 +109,9 @@ internal fun LedgerRecurringPage(
                     .widthIn(max = 820.dp)
                     .padding(bottom = 4.dp),
             ) {
-                Text("Recurring entries", style = MaterialTheme.typography.titleMedium)
+                Text(localizedText("Recurring entries"), style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Scheduled entries are generated independently. Stopping a schedule keeps existing entries.",
+                    localizedText("Scheduled entries are generated independently. Stopping a schedule keeps existing entries."),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -125,7 +126,7 @@ internal fun LedgerRecurringPage(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        "No recurring entries",
+                        localizedText("No recurring entries"),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -168,6 +169,9 @@ private fun RecurringCard(
     } else {
         "Every ${item.intervalCount} ${item.recurrenceUnit.name.lowercase()}s"
     }
+    val localizedIntervalLabel = localizedText(intervalLabel)
+    val startsLabel = localizedText("starts")
+    val endsLabel = localizedText("ends")
     Card(modifier = modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -176,7 +180,11 @@ private fun RecurringCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = item.merchant.ifBlank { item.note.ifBlank { item.type.displayName() } },
+                        text = when {
+                            item.merchant.isNotBlank() -> item.merchant
+                            item.note.isNotBlank() -> item.note
+                            else -> localizedText(item.type.displayName())
+                        },
                         style = MaterialTheme.typography.titleSmall,
                         maxLines = 2,
                     )
@@ -191,16 +199,16 @@ private fun RecurringCard(
                 AssistChip(
                     onClick = {},
                     enabled = false,
-                    label = { Text(if (item.active) "Active" else "Stopped") },
+                    label = { Text(localizedText(if (item.active) "Active" else "Stopped")) },
                 )
             }
             Text(
                 text = buildString {
-                    append(intervalLabel)
-                    append(" · starts ")
+                    append(localizedIntervalLabel)
+                    append(" · $startsLabel ")
                     append(formatting.date(item.startEpochDay))
                     item.endEpochDay?.let {
-                        append(" · ends ")
+                        append(" · $endsLabel ")
                         append(formatting.date(it))
                     }
                 },
@@ -221,11 +229,11 @@ private fun RecurringCard(
                 ) {
                     OutlinedButton(onClick = onEdit, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Outlined.Edit, contentDescription = null)
-                        Text(" Edit rule")
+                        Text(localizedText(" Edit rule"))
                     }
                     OutlinedButton(onClick = onStop, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Outlined.StopCircle, contentDescription = null)
-                        Text(" Stop")
+                        Text(localizedText(" Stop"))
                     }
                 }
             }

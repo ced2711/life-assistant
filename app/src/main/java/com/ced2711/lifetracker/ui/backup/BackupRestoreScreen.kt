@@ -42,6 +42,9 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import com.ced2711.lifetracker.ui.localization.localizedText
+import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
+import com.ced2711.lifetracker.ui.localization.translateUiText
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -87,6 +90,7 @@ fun BackupRestoreScreen(
     var pendingSubmission by remember { mutableStateOf<BackupRestoreTask?>(null) }
     var reviewStep by remember { mutableStateOf(RestoreReviewStep.PREVIEW) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val uiLanguage = LocalUiLanguage.current
 
     val createBackupLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument(TASK_LEDGER_BACKUP_MIME_TYPE),
@@ -105,9 +109,9 @@ fun BackupRestoreScreen(
     LaunchedEffect(uiState.restorePreview) {
         if (uiState.restorePreview == null) reviewStep = RestoreReviewStep.PREVIEW
     }
-    LaunchedEffect(uiState.notice) {
+    LaunchedEffect(uiState.notice, uiLanguage) {
         val notice = uiState.notice ?: return@LaunchedEffect
-        snackbarHostState.showSnackbar(notice.message)
+        snackbarHostState.showSnackbar(translateUiText(notice.message, uiLanguage))
         actions.acknowledgeNotice()
     }
 
@@ -301,7 +305,7 @@ private fun IncludedPersonalBackupCard(
                 enabled = enabled,
                 onClick = onRestore,
             ) {
-                Text("Restore included backup")
+                Text(localizedText("Restore included backup"))
             }
         },
         modifier = Modifier.fillMaxWidth(),
@@ -323,18 +327,20 @@ private fun OfflineEncryptionCard() {
             )
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
-                    text = "Private, offline backup",
+                    text = localizedText("Private, offline backup"),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    text = "Your todos, ledger, notes, settings, attachments, and Vault are encrypted " +
-                        "into one local .tlb file. Nothing is uploaded.",
+                    text = localizedText(
+                        "Your todos, ledger, notes, settings, attachments, and Vault are encrypted " +
+                            "into one local .tlb file. Nothing is uploaded.",
+                    ),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    text = "The backup password is never saved and cannot be recovered.",
+                    text = localizedText("The backup password is never saved and cannot be recovered."),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.error,
                     fontWeight = FontWeight.Medium,
@@ -362,7 +368,7 @@ private fun ExportCard(
                 enabled = enabled,
                 onClick = onChooseDestination,
             ) {
-                Text("Choose export location")
+                Text(localizedText("Choose export location"))
             }
         },
         modifier = modifier,
@@ -387,7 +393,7 @@ private fun RestoreCard(
                 enabled = enabled,
                 onClick = onChooseSource,
             ) {
-                Text("Choose backup file")
+                Text(localizedText("Choose backup file"))
             }
         },
         modifier = modifier,
@@ -420,12 +426,12 @@ private fun BackupActionCard(
                 }
             }
             Text(
-                text = title,
+                text = localizedText(title),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
             )
             Text(
-                text = description,
+                text = localizedText(description),
                 modifier = Modifier.weight(1f, fill = false),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -453,11 +459,11 @@ private fun ExportPasswordDialog(
 
     HingeSafeAlertDialog(
         onDismissRequest = dismiss,
-        title = { Text("Encrypt backup") },
+        title = { Text(localizedText("Encrypt backup")) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    "Use at least 8 characters. This password is not saved and cannot be recovered.",
+                    localizedText("Use at least 8 characters. This password is not saved and cannot be recovered."),
                 )
                 PasswordField(
                     value = password,
@@ -483,7 +489,7 @@ private fun ExportPasswordDialog(
                 )
                 if (issue != null) {
                     Text(
-                        text = issue.message,
+                        text = localizedText(issue.message),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                     )
@@ -491,7 +497,7 @@ private fun ExportPasswordDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = dismiss) { Text("Cancel") }
+            TextButton(onClick = dismiss) { Text(localizedText("Cancel")) }
         },
         confirmButton = {
             Button(
@@ -505,7 +511,7 @@ private fun ExportPasswordDialog(
                     }
                 },
             ) {
-                Text("Export")
+                Text(localizedText("Export"))
             }
         },
     )
@@ -527,11 +533,11 @@ private fun RestorePasswordDialog(
 
     HingeSafeAlertDialog(
         onDismissRequest = dismiss,
-        title = { Text("Unlock backup") },
+        title = { Text(localizedText("Unlock backup")) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    "Enter the password used when this backup was created. It is not saved.",
+                    localizedText("Enter the password used when this backup was created. It is not saved."),
                 )
                 PasswordField(
                     value = password,
@@ -546,7 +552,7 @@ private fun RestorePasswordDialog(
                 )
                 if (issue != null) {
                     Text(
-                        text = issue.message,
+                        text = localizedText(issue.message),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                     )
@@ -554,7 +560,7 @@ private fun RestorePasswordDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = dismiss) { Text("Cancel") }
+            TextButton(onClick = dismiss) { Text(localizedText("Cancel")) }
         },
         confirmButton = {
             Button(
@@ -567,7 +573,7 @@ private fun RestorePasswordDialog(
                     }
                 },
             ) {
-                Text("Decrypt & review")
+                Text(localizedText("Decrypt & review"))
             }
         },
     )
@@ -586,7 +592,7 @@ private fun PasswordField(
         value = value,
         onValueChange = onValueChange,
         modifier = Modifier.fillMaxWidth(),
-        label = { Text(label) },
+        label = { Text(localizedText(label)) },
         singleLine = true,
         isError = isError,
         visualTransformation = if (visible) {
@@ -602,7 +608,7 @@ private fun PasswordField(
             IconButton(onClick = onVisibilityChange) {
                 Icon(
                     imageVector = if (visible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                    contentDescription = if (visible) "Hide password" else "Show password",
+                    contentDescription = localizedText(if (visible) "Hide password" else "Show password"),
                 )
             }
         },
@@ -617,11 +623,11 @@ private fun RestorePreviewDialog(
 ) {
     HingeSafeAlertDialog(
         onDismissRequest = onCancel,
-        title = { Text("Review backup") },
+        title = { Text(localizedText("Review backup")) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    "The backup was decrypted and validated. Review it before continuing.",
+                    localizedText("The backup was decrypted and validated. Review it before continuing."),
                 )
                 HorizontalDivider()
                 PreviewValue("Created", preview.createdAtLabel)
@@ -636,17 +642,17 @@ private fun RestorePreviewDialog(
                 PreviewValue("Total backup size", formatBackupByteCount(preview.totalBytes))
                 HorizontalDivider()
                 Text(
-                    text = "Continuing does not restore yet. You will see a final replacement warning.",
+                    text = localizedText("Continuing does not restore yet. You will see a final replacement warning."),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
         },
         dismissButton = {
-            TextButton(onClick = onCancel) { Text("Cancel restore") }
+            TextButton(onClick = onCancel) { Text(localizedText("Cancel restore")) }
         },
         confirmButton = {
-            Button(onClick = onContinue) { Text("Continue") }
+            Button(onClick = onContinue) { Text(localizedText("Continue")) }
         },
     )
 }
@@ -659,7 +665,7 @@ private fun PreviewValue(label: String, value: String) {
         verticalAlignment = Alignment.Top,
     ) {
         Text(
-            text = label,
+            text = localizedText(label),
             modifier = Modifier.weight(1f),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -680,26 +686,30 @@ private fun RestoreReplacementConfirmationDialog(
 ) {
     HingeSafeAlertDialog(
         onDismissRequest = onBackToPreview,
-        title = { Text("Replace all local data?") },
+        title = { Text(localizedText("Replace all local data?")) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    "This is a complete replacement, not a merge. It permanently replaces your " +
-                        "current todos, ledger, notes, settings, attachments, and Vault with the backup.",
+                    localizedText(
+                        "This is a complete replacement, not a merge. It permanently replaces your " +
+                            "current todos, ledger, notes, settings, attachments, and Vault with the backup.",
+                    ),
                     color = MaterialTheme.colorScheme.error,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    "Once restore starts, it cannot be cancelled. The existing data is left " +
-                        "unchanged if validation or preparation fails.",
+                    localizedText(
+                        "Once restore starts, it cannot be cancelled. The existing data is left " +
+                            "unchanged if validation or preparation fails.",
+                    ),
                 )
             }
         },
         dismissButton = {
-            TextButton(onClick = onBackToPreview) { Text("Back to preview") }
+            TextButton(onClick = onBackToPreview) { Text(localizedText("Back to preview")) }
         },
         confirmButton = {
-            Button(onClick = onRestore) { Text("Replace & restore") }
+            Button(onClick = onRestore) { Text(localizedText("Replace & restore")) }
         },
     )
 }
@@ -724,8 +734,8 @@ private fun BlockingBackupDialog(task: BackupRestoreTask) {
             decorFitsSystemWindows = false,
         ),
         icon = { CircularProgressIndicator(modifier = Modifier.size(28.dp)) },
-        title = { Text(title) },
-        text = { Text(message) },
+        title = { Text(localizedText(title)) },
+        text = { Text(localizedText(message)) },
         confirmButton = { },
     )
 }

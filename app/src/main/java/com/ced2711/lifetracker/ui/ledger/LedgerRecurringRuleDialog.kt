@@ -26,6 +26,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import com.ced2711.lifetracker.ui.localization.localizedText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -123,10 +124,10 @@ internal fun LedgerRecurringRuleDialog(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     IconButton(onClick = onDismiss, enabled = !isSaving) {
-                        Icon(Icons.Outlined.Close, contentDescription = "Close")
+                        Icon(Icons.Outlined.Close, contentDescription = localizedText("Close"))
                     }
                     Text(
-                        text = "Edit recurring rule",
+                        text = localizedText("Edit recurring rule"),
                         style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.weight(1f),
                     )
@@ -154,11 +155,11 @@ internal fun LedgerRecurringRuleDialog(
                                 ),
                             )
                         },
-                    ) { Text(if (isSaving) "Saving…" else "Save") }
+                    ) { Text(localizedText(if (isSaving) "Saving…" else "Save")) }
                 }
                 failureMessage?.let { message ->
                     Text(
-                        text = message,
+                        text = localizedText(message),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -182,7 +183,7 @@ internal fun LedgerRecurringRuleDialog(
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
                             Text(
-                                "The old schedule and every existing entry are preserved. The replacement starts tomorrow or later.",
+                                localizedText("The old schedule and every existing entry are preserved. The replacement starts tomorrow or later."),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -191,19 +192,19 @@ internal fun LedgerRecurringRuleDialog(
                                 value = amount,
                                 onValueChange = { candidate -> sanitizeAmountInput(candidate)?.let { amount = it } },
                                 modifier = Modifier.fillMaxWidth(),
-                                label = { Text("Amount") },
-                                prefix = { Text("$") },
+                                label = { Text(localizedText("Amount")) },
+                                prefix = { Text(localizedText("$")) },
                                 singleLine = true,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                 isError = amount.isNotBlank() && amountCents == null,
-                                supportingText = { Text("Up to $999,999,999.99 · max 2 decimal places") },
+                                supportingText = { Text(localizedText("Up to $999,999,999.99 · max 2 decimal places")) },
                             )
                             OutlinedTextField(
                                 value = effectiveDateInput,
                                 onValueChange = { effectiveDateInput = it },
                                 modifier = Modifier.fillMaxWidth(),
-                                label = { Text("Apply changes from") },
-                                placeholder = { Text("15, 8/15, or 8/15/2026") },
+                                label = { Text(localizedText("Apply changes from")) },
+                                placeholder = { Text(localizedText("15, 8/15, or 8/15/2026")) },
                                 singleLine = true,
                                 isError = effectiveDate == null || effectiveDate.isBefore(tomorrow),
                                 trailingIcon = {
@@ -213,21 +214,21 @@ internal fun LedgerRecurringRuleDialog(
                                                 effectiveDateInput = selected.format(LEDGER_SHORTCUT_DATE_FORMATTER)
                                             }
                                         },
-                                    ) { Icon(Icons.Outlined.Event, contentDescription = "Choose start date") }
+                                    ) { Icon(Icons.Outlined.Event, contentDescription = localizedText("Choose start date")) }
                                 },
                                 supportingText = {
                                     Text(
-                                        when {
+                                        localizedText(when {
                                             effectiveDate == null ->
                                                 "Enter a valid day, month/day, or month/day/year"
                                             effectiveDate.isBefore(tomorrow) ->
                                                 "Replacement schedules must start tomorrow or later"
                                             else -> "Selected: ${formatting.date(effectiveDate.toEpochDay())}"
-                                        },
+                                        }),
                                     )
                                 },
                             )
-                            Text("Repeat interval", style = MaterialTheme.typography.titleSmall)
+                            Text(localizedText("Repeat interval"), style = MaterialTheme.typography.titleSmall)
                             Row(
                                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).selectableGroup(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -249,7 +250,7 @@ internal fun LedgerRecurringRuleDialog(
                                             verticalAlignment = Alignment.CenterVertically,
                                         ) {
                                             RadioButton(selected = selected, onClick = null)
-                                            Text(option.name.lowercase().replaceFirstChar { it.titlecase(Locale.US) })
+                                            Text(localizedText(option.name.lowercase().replaceFirstChar { it.titlecase(Locale.US) }))
                                         }
                                     }
                                 }
@@ -260,25 +261,25 @@ internal fun LedgerRecurringRuleDialog(
                                     sanitizeRecurrenceIntervalInput(candidate)?.let { interval = it }
                                 },
                                 modifier = Modifier.fillMaxWidth(),
-                                label = { Text("Every N ${unit.name.lowercase()}(s)") },
+                                label = { Text(localizedText("Every N ${unit.name.lowercase()}(s)")) },
                                 singleLine = true,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 isError = recurrenceIntervalError(interval) != null,
                                 supportingText = recurrenceIntervalError(interval)?.let { message ->
-                                    { Text(message) }
+                                    { Text(localizedText(message)) }
                                 },
                             )
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Checkbox(checked = hasEndDate, onCheckedChange = { hasEndDate = it })
-                                Text("End date")
+                                Text(localizedText("End date"))
                             }
                             if (hasEndDate) {
                                 OutlinedTextField(
                                     value = endDateInput,
                                     onValueChange = { endDateInput = it },
                                     modifier = Modifier.fillMaxWidth(),
-                                    label = { Text("End date") },
-                                    placeholder = { Text("15, 8/15, or 8/15/2026") },
+                                    label = { Text(localizedText("End date")) },
+                                    placeholder = { Text(localizedText("15, 8/15, or 8/15/2026")) },
                                     singleLine = true,
                                     isError = endDate == null ||
                                         (effectiveDate != null && endDate.isBefore(effectiveDate)),
@@ -294,19 +295,19 @@ internal fun LedgerRecurringRuleDialog(
                                         ) {
                                             Icon(
                                                 Icons.Outlined.Event,
-                                                contentDescription = "Choose end date",
+                                                contentDescription = localizedText("Choose end date"),
                                             )
                                         }
                                     },
                                     supportingText = {
                                         Text(
-                                            when {
+                                            localizedText(when {
                                                 endDate == null ->
                                                     "Enter a valid day, month/day, or month/day/year"
                                                 effectiveDate != null && endDate.isBefore(effectiveDate) ->
                                                     "End date cannot be before the effective date"
                                                 else -> "Selected: ${formatting.date(endDate.toEpochDay())}"
-                                            },
+                                            }),
                                         )
                                     },
                                 )
@@ -315,26 +316,26 @@ internal fun LedgerRecurringRuleDialog(
                                 value = merchant,
                                 onValueChange = { merchant = it },
                                 modifier = Modifier.fillMaxWidth(),
-                                label = { Text("Merchant") },
+                                label = { Text(localizedText("Merchant")) },
                                 singleLine = true,
                             )
                             OutlinedTextField(
                                 value = tags,
                                 onValueChange = { tags = it },
                                 modifier = Modifier.fillMaxWidth(),
-                                label = { Text("Tags") },
+                                label = { Text(localizedText("Tags")) },
                                 singleLine = true,
                             )
                             OutlinedTextField(
                                 value = note,
                                 onValueChange = { note = it },
                                 modifier = Modifier.fillMaxWidth(),
-                                label = { Text("Note") },
+                                label = { Text(localizedText("Note")) },
                                 minLines = 2,
                                 maxLines = 5,
                             )
                             Text(
-                                "Generated entries use 12:00 AM (00:00).",
+                                localizedText("Generated entries use 12:00 AM (00:00)."),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )

@@ -38,6 +38,9 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import com.ced2711.lifetracker.ui.localization.localizedText
+import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
+import com.ced2711.lifetracker.ui.localization.translateUiText
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -67,6 +70,7 @@ import com.ced2711.lifetracker.domain.model.ReminderOffsetPreset
 import com.ced2711.lifetracker.domain.model.ThemeMode
 import com.ced2711.lifetracker.domain.model.TimeFormatOption
 import com.ced2711.lifetracker.domain.model.TodoQuickAddField
+import com.ced2711.lifetracker.domain.model.UiLanguage
 import com.ced2711.lifetracker.domain.model.WeekStart
 import com.ced2711.lifetracker.ui.TaskLedgerViewModel
 import com.ced2711.lifetracker.ui.adaptive.HingeSafeAlertDialog
@@ -93,10 +97,13 @@ fun SettingsScreen(
     val platformDialogLauncher = rememberHingeSafePlatformDialogLauncher()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val uiLanguage = LocalUiLanguage.current
     var choiceDialog by rememberSettingsDialogState()
 
-    LaunchedEffect(viewModel) {
-        viewModel.errors.collect { message -> snackbarHostState.showSnackbar(message) }
+    LaunchedEffect(viewModel, uiLanguage) {
+        viewModel.errors.collect { message ->
+            snackbarHostState.showSnackbar(translateUiText(message, uiLanguage))
+        }
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -106,7 +113,10 @@ fun SettingsScreen(
         if (!granted) {
             scope.launch {
                 snackbarHostState.showSnackbar(
-                    "Notification permission was denied. Notifications remain off.",
+                    translateUiText(
+                        "Notification permission was denied. Notifications remain off.",
+                        uiLanguage,
+                    ),
                 )
             }
         }
@@ -159,6 +169,12 @@ fun SettingsScreen(
                     title = "Accent color",
                     value = settings.accentColor.label,
                     onClick = { choiceDialog = SettingsDialog.AccentColor },
+                )
+                HorizontalDivider()
+                SettingsValueRow(
+                    title = "UI language",
+                    value = settings.uiLanguage.label,
+                    onClick = { choiceDialog = SettingsDialog.UiLanguage },
                 )
 
                 SettingsSectionTitle("Regional preferences")
@@ -229,9 +245,9 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Text("Life Tracker by ced2711", style = MaterialTheme.typography.titleMedium)
+                    Text(localizedText("Life Tracker by ced2711"), style = MaterialTheme.typography.titleMedium)
                     Text(
-                        text = "Version ${BuildConfig.VERSION_NAME} • Private and offline",
+                        text = localizedText("Version ${BuildConfig.VERSION_NAME} • Private and offline"),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodyMedium,
                     )
@@ -252,6 +268,14 @@ fun SettingsScreen(
         SettingsDialog.AccentColor -> AccentColorDialog(
             selected = settings.accentColor,
             onSelect = viewModel::setAccentColor,
+            onDismiss = { choiceDialog = null },
+        )
+
+        SettingsDialog.UiLanguage -> ChoiceDialog(
+            title = "UI language",
+            choices = UiLanguage.entries.map { Choice(it.label, it) },
+            selected = settings.uiLanguage,
+            onSelect = viewModel::setUiLanguage,
             onDismiss = { choiceDialog = null },
         )
 
@@ -327,7 +351,7 @@ fun SettingsScreen(
 @Composable
 private fun SettingsSectionTitle(title: String) {
     Text(
-        text = title,
+        text = localizedText(title),
         color = MaterialTheme.colorScheme.primary,
         style = MaterialTheme.typography.titleSmall,
         modifier = Modifier.padding(start = 16.dp, top = 24.dp, end = 16.dp, bottom = 8.dp),
@@ -349,12 +373,12 @@ private fun SettingsValueRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = title,
+            text = localizedText(title),
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.weight(1f),
         )
         Text(
-            text = value,
+            text = localizedText(value),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.End,
@@ -383,9 +407,9 @@ private fun SettingsSwitchRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, style = MaterialTheme.typography.bodyLarge)
+            Text(text = localizedText(title), style = MaterialTheme.typography.bodyLarge)
             Text(
-                text = supportingText,
+                text = localizedText(supportingText),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyMedium,
             )
@@ -404,7 +428,7 @@ private fun <T> ChoiceDialog(
 ) {
     HingeSafeAlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
+        title = { Text(localizedText(title)) },
         text = {
             Column(
                 modifier = Modifier
@@ -431,13 +455,13 @@ private fun <T> ChoiceDialog(
                             onClick = null,
                         )
                         Spacer(modifier = Modifier.width(12.dp))
-                        Text(choice.label, style = MaterialTheme.typography.bodyLarge)
+                        Text(localizedText(choice.label), style = MaterialTheme.typography.bodyLarge)
                     }
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(localizedText("Cancel")) }
         },
     )
 }
@@ -450,7 +474,7 @@ private fun AccentColorDialog(
 ) {
     HingeSafeAlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Accent color") },
+        title = { Text(localizedText("Accent color")) },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth().selectableGroup(),
@@ -480,13 +504,13 @@ private fun AccentColorDialog(
                                 .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
                         )
                         Spacer(modifier = Modifier.width(12.dp))
-                        Text(accent.label, style = MaterialTheme.typography.bodyLarge)
+                        Text(localizedText(accent.label), style = MaterialTheme.typography.bodyLarge)
                     }
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(localizedText("Cancel")) }
         },
     )
 }
@@ -501,13 +525,13 @@ private fun DefaultRemindersDialog(
 
     HingeSafeAlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Default reminders") },
+        title = { Text(localizedText("Default reminders")) },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(
-                    text = "Automatically add these to new todos that have a deadline.",
+                    text = localizedText("Automatically add these to new todos that have a deadline."),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(bottom = 8.dp),
@@ -532,7 +556,7 @@ private fun DefaultRemindersDialog(
                             onCheckedChange = null,
                         )
                         Spacer(modifier = Modifier.width(12.dp))
-                        Text(preset.label, style = MaterialTheme.typography.bodyLarge)
+                        Text(localizedText(preset.label), style = MaterialTheme.typography.bodyLarge)
                     }
                 }
                 val presetOffsets = ReminderOffsetPreset.entries
@@ -556,7 +580,7 @@ private fun DefaultRemindersDialog(
                         ) {
                             Checkbox(checked = true, onCheckedChange = null)
                             Spacer(modifier = Modifier.width(12.dp))
-                            Text(formatReminderOffset(offset), style = MaterialTheme.typography.bodyLarge)
+                            Text(localizedText(formatReminderOffset(offset)), style = MaterialTheme.typography.bodyLarge)
                         }
                     }
                 CustomReminderOffsetInput(
@@ -571,10 +595,10 @@ private fun DefaultRemindersDialog(
                     onSave(draft)
                     onDismiss()
                 },
-            ) { Text("Save") }
+            ) { Text(localizedText("Save")) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(localizedText("Cancel")) }
         },
     )
 }
@@ -591,11 +615,11 @@ private fun TodoQuickAddFieldsDialog(
 
     HingeSafeAlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Quick add fields") },
+        title = { Text(localizedText("Quick add fields")) },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    text = "Choose optional fields shown below the quick add description.",
+                    text = localizedText("Choose optional fields shown below the quick add description."),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(bottom = 8.dp),
@@ -616,7 +640,7 @@ private fun TodoQuickAddFieldsDialog(
                     ) {
                         Checkbox(checked = field in draft, onCheckedChange = null)
                         Spacer(modifier = Modifier.width(12.dp))
-                        Text(field.label, style = MaterialTheme.typography.bodyLarge)
+                        Text(localizedText(field.label), style = MaterialTheme.typography.bodyLarge)
                     }
                 }
             }
@@ -627,10 +651,10 @@ private fun TodoQuickAddFieldsDialog(
                     onSave(draft)
                     onDismiss()
                 },
-            ) { Text("Save") }
+            ) { Text(localizedText("Save")) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(localizedText("Cancel")) }
         },
     )
 }
@@ -648,14 +672,14 @@ private fun AllDayReminderTimeDialog(
 
     HingeSafeAlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("All-day reminder time") },
+        title = { Text(localizedText("All-day reminder time")) },
         text = {
             OutlinedTextField(
                 value = input,
                 onValueChange = { input = it },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Time") },
-                placeholder = { Text("9:30 AM or 21:30") },
+                label = { Text(localizedText("Time")) },
+                placeholder = { Text(localizedText("9:30 AM or 21:30")) },
                 supportingText = {
                     Text(
                         if (parsedMinute == null) {
@@ -676,12 +700,12 @@ private fun AllDayReminderTimeDialog(
                     parsedMinute?.let(onSave)
                     onDismiss()
                 },
-            ) { Text("Save") }
+            ) { Text(localizedText("Save")) }
         },
         dismissButton = {
             Row {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
-                TextButton(onClick = onOpenSystemPicker) { Text("System picker") }
+                TextButton(onClick = onDismiss) { Text(localizedText("Cancel")) }
+                TextButton(onClick = onOpenSystemPicker) { Text(localizedText("System picker")) }
             }
         },
     )
@@ -709,6 +733,7 @@ private data class Choice<T>(val label: String, val value: T)
 internal enum class SettingsDialog {
     Theme,
     AccentColor,
+    UiLanguage,
     WeekStart,
     TimeFormat,
     DateFormat,
@@ -716,6 +741,12 @@ internal enum class SettingsDialog {
     DefaultReminders,
     AllDayReminderTime,
 }
+
+private val UiLanguage.label: String
+    get() = when (this) {
+        UiLanguage.ENGLISH -> "English"
+        UiLanguage.SIMPLIFIED_CHINESE -> "Simplified Chinese"
+    }
 
 private val SettingsDialogSaver = Saver<SettingsDialog?, String>(
     save = { dialog -> dialog?.name },
