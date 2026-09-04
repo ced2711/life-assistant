@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,11 +16,9 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clipToBounds
@@ -189,7 +186,6 @@ private fun FoldAwareScaffold(
         else -> PaneHost(
             pane = safePaneLayout.primaryPane,
             includeIme = true,
-            includeTopSafeInset = false,
         ) {
             StandardAdaptiveScaffold(
                 selected = selected,
@@ -290,7 +286,6 @@ private fun VerticalFoldScaffold(
                     onSettings = onSettings,
                     isSettings = isSettings,
                     compact = compactChrome,
-                    includeStatusBarInset = false,
                 )
             },
             content = content,
@@ -335,7 +330,6 @@ private fun HorizontalFoldScaffold(
                     onSettings = onSettings,
                     isSettings = isSettings,
                     compact = compactChrome,
-                    includeStatusBarInset = false,
                 )
                 if (chromeIsAboveContent) {
                     TaskLedgerNavigationBar(
@@ -365,14 +359,8 @@ private fun HorizontalFoldScaffold(
 private fun PaneHost(
     pane: SafePaneBounds,
     includeIme: Boolean,
-    includeTopSafeInset: Boolean = true,
     content: @Composable () -> Unit,
 ) {
-    val safeInsets = if (includeTopSafeInset) {
-        WindowInsets.safeDrawing
-    } else {
-        WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)
-    }
     Box(
         modifier = Modifier
             .offset(x = pane.left, y = pane.top)
@@ -381,9 +369,9 @@ private fun PaneHost(
             .clipToBounds()
             .windowInsetsPadding(
                 if (includeIme) {
-                    safeInsets.union(WindowInsets.ime)
+                    WindowInsets.safeDrawing.union(WindowInsets.ime)
                 } else {
-                    safeInsets
+                    WindowInsets.safeDrawing
                 },
             ),
     ) {
@@ -437,7 +425,6 @@ private fun ExpandedScaffold(
             onSelected = onSelected,
             isSettings = isSettings,
             compact = compactChrome,
-            includeTopInset = true,
             modifier = Modifier
                 .width(if (compactChrome) CompactRailWidth else RailWidth)
                 .fillMaxHeight(),
@@ -499,16 +486,11 @@ private fun TaskLedgerNavigationRail(
     onSelected: (TopLevelDestination) -> Unit,
     isSettings: Boolean,
     compact: Boolean,
-    includeTopInset: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     NavigationRail(
         modifier = modifier,
-        windowInsets = if (includeTopInset) {
-            WindowInsets.statusBars.only(WindowInsetsSides.Top)
-        } else {
-            NoInsets
-        },
+        windowInsets = NoInsets,
     ) {
         Column(
             modifier = Modifier
@@ -546,7 +528,6 @@ private fun TaskLedgerTopBar(
     onSettings: () -> Unit,
     isSettings: Boolean,
     compact: Boolean,
-    includeStatusBarInset: Boolean = true,
 ) {
     val auxiliaryTitle = LocalAuxiliaryTitle.current
     Surface(
@@ -556,15 +537,6 @@ private fun TaskLedgerTopBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .then(
-                    if (includeStatusBarInset) {
-                        Modifier.windowInsetsPadding(
-                            WindowInsets.statusBars.only(WindowInsetsSides.Top),
-                        )
-                    } else {
-                        Modifier
-                    },
-                )
                 .height(if (compact) 48.dp else 56.dp)
                 .padding(start = 16.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically,

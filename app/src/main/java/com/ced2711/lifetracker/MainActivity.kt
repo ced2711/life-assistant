@@ -477,17 +477,15 @@ class MainActivity : FragmentActivity() {
 
     private fun applyEdgeToEdgeStyle(darkTheme: Boolean) {
         val background = if (darkTheme) DARK_SYSTEM_BAR_COLOR else LIGHT_SYSTEM_BAR_COLOR
-        val statusStyle = if (darkTheme) {
-            SystemBarStyle.dark(Color.TRANSPARENT)
-        } else {
-            SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
-        }
         val navigationStyle = if (darkTheme) {
             SystemBarStyle.dark(background)
         } else {
             SystemBarStyle.light(background, DARK_SYSTEM_BAR_COLOR)
         }
-        enableEdgeToEdge(statusBarStyle = statusStyle, navigationBarStyle = navigationStyle)
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(Color.BLACK),
+            navigationBarStyle = navigationStyle,
+        )
     }
 
     companion object {
