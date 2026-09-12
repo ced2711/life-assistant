@@ -1,6 +1,6 @@
 # Life Tracker
 
-Life Tracker is a private, offline-first Android app that combines Todo, Ledger, Calendar, and Notes in one adaptive interface. It is built for phones, tablets, unusual aspect ratios, and foldables such as the Samsung Galaxy Z Fold series.
+Life Tracker is an open-source, offline-first Android app that combines Todo, Ledger, Calendar, and Notes in one adaptive interface. It is built for phones, tablets, unusual aspect ratios, and foldables such as the Samsung Galaxy Z Fold series.
 
 ## Highlights
 
@@ -50,3 +50,9 @@ The personal flavor intentionally requires a local `app/src/personal/assets/pers
 ## Privacy
 
 All application data stays on the device unless the user explicitly exports an encrypted backup or attachment through Android's system file picker. Android automatic backup is disabled. Vault keys remain device-bound in Android Keystore and are never exported.
+
+## License
+
+Copyright 2026 ced2711.
+
+Life Tracker is licensed under the [Apache License 2.0](LICENSE). It may be used, modified, and distributed under the terms of that license, including its patent grant and notice requirements.
