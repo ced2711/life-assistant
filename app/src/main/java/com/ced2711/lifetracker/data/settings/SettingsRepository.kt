@@ -3,6 +3,7 @@ package com.ced2711.lifetracker.data.settings
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -56,30 +57,30 @@ class SettingsRepository internal constructor(
         val lastDestination = stringPreferencesKey("last_destination")
     }
 
-    val settings: Flow<AppSettings> = dataStore.data.map { preferences ->
-        AppSettings(
-            themeMode = preferences[Keys.theme].enumOrDefault(ThemeMode.DARK),
-            accentColor = preferences[Keys.accentColor].enumOrDefault(AccentColor.TEAL),
-            uiLanguage = preferences[Keys.uiLanguage].enumOrDefault(UiLanguage.ENGLISH),
-            weekStart = preferences[Keys.weekStart].enumOrDefault(WeekStart.SUNDAY),
-            timeFormat = preferences[Keys.timeFormat].enumOrDefault(TimeFormatOption.HOUR_12),
-            dateFormat = preferences[Keys.dateFormat].enumOrDefault(DateFormatOption.MONTH_DAY_YEAR),
-            notificationsEnabled = preferences[Keys.notificationsEnabled] ?: false,
-            defaultAllDayReminderMinute = (preferences[Keys.allDayReminderMinute] ?: 0)
+    val settings: Flow<AppSettings> = dataStore.data.map { preferences -> preferences.toAppSettings() }
+
+    private fun Preferences.toAppSettings(): AppSettings = AppSettings(
+            themeMode = this[Keys.theme].enumOrDefault(ThemeMode.DARK),
+            accentColor = this[Keys.accentColor].enumOrDefault(AccentColor.TEAL),
+            uiLanguage = this[Keys.uiLanguage].enumOrDefault(UiLanguage.ENGLISH),
+            weekStart = this[Keys.weekStart].enumOrDefault(WeekStart.SUNDAY),
+            timeFormat = this[Keys.timeFormat].enumOrDefault(TimeFormatOption.HOUR_12),
+            dateFormat = this[Keys.dateFormat].enumOrDefault(DateFormatOption.MONTH_DAY_YEAR),
+            notificationsEnabled = this[Keys.notificationsEnabled] ?: false,
+            defaultAllDayReminderMinute = (this[Keys.allDayReminderMinute] ?: 0)
                 .coerceIn(0, 1_439),
-            defaultReminderOffsetsMinutes = preferences[Keys.defaultReminderOffsetsMinutes]
+            defaultReminderOffsetsMinutes = this[Keys.defaultReminderOffsetsMinutes]
                 ?.mapNotNull(String::toLongOrNull)
                 ?.filter { it >= 0 }
                 ?.sorted()
                 ?.toSet()
                 ?: setOf(0L),
-            todoQuickAddFields = preferences[Keys.todoQuickAddFields]
+            todoQuickAddFields = this[Keys.todoQuickAddFields]
                 .orEmpty()
                 .mapNotNull { saved -> TodoQuickAddField.entries.firstOrNull { it.name == saved } }
                 .toSet(),
-            lastDestination = preferences[Keys.lastDestination].enumOrDefault(TopLevelDestination.TODO),
+            lastDestination = this[Keys.lastDestination].enumOrDefault(TopLevelDestination.TODO),
         )
-    }
 
     suspend fun setTheme(value: ThemeMode) = edit(Keys.theme, value.name)
     suspend fun setAccentColor(value: AccentColor) = edit(Keys.accentColor, value.name)
@@ -110,32 +111,52 @@ class SettingsRepository internal constructor(
     /** Atomically replaces every setting owned by this repository. */
     suspend fun replace(value: AppSettings) {
         dataStore.edit { preferences ->
-            preferences[Keys.theme] = value.themeMode.name
-            preferences[Keys.accentColor] = value.accentColor.name
-            // UI language is a device preference rather than backed-up user content. Preserve the
-            // current selection when a .tlb restore replaces the remaining settings.
-            preferences[Keys.weekStart] = value.weekStart.name
-            preferences[Keys.timeFormat] = value.timeFormat.name
-            preferences[Keys.dateFormat] = value.dateFormat.name
-            preferences[Keys.notificationsEnabled] = value.notificationsEnabled
-            preferences[Keys.allDayReminderMinute] = value.defaultAllDayReminderMinute.coerceIn(0, 1_439)
-            preferences[Keys.defaultReminderOffsetsMinutes] = value.defaultReminderOffsetsMinutes
-                .asSequence()
-                .filter { it >= 0 }
-                .distinct()
-                .sorted()
-                .map(Long::toString)
-                .toSet()
-            preferences[Keys.todoQuickAddFields] = value.todoQuickAddFields
-                .mapTo(mutableSetOf()) { it.name }
-            preferences[Keys.lastDestination] = value.lastDestination.name
+            preferences.replaceBackedUpSettings(value)
         }
+    }
+
+    /** Compare-and-replace prevents a cloud restore from overwriting a concurrent settings edit. */
+    suspend fun replaceIfUnchanged(expected: AppSettings, value: AppSettings): Boolean {
+        var replaced = false
+        dataStore.edit { preferences ->
+            val current = preferences.toAppSettings()
+            if (current.sameRestorableSettings(expected)) {
+                preferences.replaceBackedUpSettings(value)
+                replaced = true
+            }
+        }
+        return replaced
+    }
+
+    private fun MutablePreferences.replaceBackedUpSettings(value: AppSettings) {
+        this[Keys.theme] = value.themeMode.name
+        this[Keys.accentColor] = value.accentColor.name
+        // UI language remains a device preference.
+        this[Keys.weekStart] = value.weekStart.name
+        this[Keys.timeFormat] = value.timeFormat.name
+        this[Keys.dateFormat] = value.dateFormat.name
+        this[Keys.notificationsEnabled] = value.notificationsEnabled
+        this[Keys.allDayReminderMinute] = value.defaultAllDayReminderMinute.coerceIn(0, 1_439)
+        this[Keys.defaultReminderOffsetsMinutes] = value.defaultReminderOffsetsMinutes
+            .asSequence()
+            .filter { it >= 0 }
+            .distinct()
+            .sorted()
+            .map(Long::toString)
+            .toSet()
+        this[Keys.todoQuickAddFields] = value.todoQuickAddFields.mapTo(mutableSetOf()) { it.name }
+        this[Keys.lastDestination] = value.lastDestination.name
     }
 
     private suspend fun <T> edit(key: androidx.datastore.preferences.core.Preferences.Key<T>, value: T) {
         dataStore.edit { it[key] = value }
     }
 }
+
+private fun AppSettings.sameRestorableSettings(other: AppSettings): Boolean = copy(
+    uiLanguage = other.uiLanguage,
+    lastDestination = other.lastDestination,
+) == other
 
 private inline fun <reified T : Enum<T>> String?.enumOrDefault(default: T): T =
     this?.let { value -> enumValues<T>().firstOrNull { it.name == value } } ?: default

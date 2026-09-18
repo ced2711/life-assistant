@@ -15,11 +15,14 @@ import java.io.File
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
+import java.security.MessageDigest
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 data class BackupPreview(
@@ -48,6 +51,7 @@ data class BackupRestoreResult(
     val preview: BackupPreview,
     val warnings: List<String>,
     val rebuildHints: Set<BackupRebuildHint> = BackupRebuildHint.entries.toSet(),
+    val appliedSyncFingerprint: String? = null,
 )
 
 data class BackupRecoveryResult(
@@ -135,6 +139,7 @@ class BackupRepository(
     private val now: () -> Long = System::currentTimeMillis,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
+    private val operationMutex = Mutex()
     private val filesRoot = requireNotNull(attachmentDirectory.parentFile).absoluteFile
     private val restoreJournal = BackupRestoreJournal(
         journalFile = File(filesRoot, RESTORE_JOURNAL_FILE),
@@ -163,7 +168,7 @@ class BackupRepository(
         destination: OutputStream,
         password: CharArray,
         vaultSession: VaultSession? = null,
-    ): BackupExportResult = withContext(ioDispatcher) {
+    ): BackupExportResult = operationMutex.withLock { withContext(ioDispatcher) {
         try {
             validateBackupPassword(password)
             val plan = createExportPlan(vaultSession)
@@ -175,6 +180,43 @@ class BackupRepository(
         } finally {
             password.fill('\u0000')
         }
+    } }
+
+    /** Canonical fingerprint used only for cloud conflict detection; it contains no user text. */
+    suspend fun syncFingerprint(): String = withContext(ioDispatcher) {
+        retryStableCapture(MAX_SNAPSHOT_ATTEMPTS) {
+            val settingsBefore = settingsRepository.snapshot()
+            val stateBefore = backupDao.backupState()
+            val settingsAfter = settingsRepository.snapshot()
+            val stateAfter = backupDao.backupState()
+            if (
+                settingsBefore == settingsAfter &&
+                fullDatabaseFingerprint(stateBefore) == fullDatabaseFingerprint(stateAfter)
+            ) {
+                cloudSyncFingerprint(stateBefore, settingsBefore)
+            } else {
+                null
+            }
+        } ?: throw BackupDataChangedException()
+    }
+
+    suspend fun isUserDataEmpty(): Boolean = withContext(ioDispatcher) {
+        val state = backupDao.backupState()
+        val settings = settingsRepository.snapshot().toBackupSettings()
+        val defaultSettings = AppSettings().toBackupSettings()
+        val syncedSettingsAreDefault = settings.copy(
+            lastDestination = defaultSettings.lastDestination,
+        ) == defaultSettings
+        syncedSettingsAreDefault &&
+            state.categories.isEmpty() &&
+            state.todoSeries.isEmpty() &&
+            state.todos.isEmpty() &&
+            state.ledgerSeries.isEmpty() &&
+            state.ledgerEntries.isEmpty() &&
+            state.noteFolders.isEmpty() &&
+            state.notes.isEmpty() &&
+            state.attachments.isEmpty() &&
+            state.vaultEntries.isEmpty()
     }
 
     /**
@@ -218,12 +260,20 @@ class BackupRepository(
     suspend fun restore(
         prepared: PreparedBackupRestore,
         vaultSession: VaultSession? = null,
-    ): BackupRestoreResult = withContext(ioDispatcher) {
+        expectedLocalSyncFingerprint: String? = null,
+    ): BackupRestoreResult = operationMutex.withLock { withContext(ioDispatcher) {
+        if (
+            expectedLocalSyncFingerprint != null &&
+            syncFingerprint() != expectedLocalSyncFingerprint
+        ) {
+            throw BackupDataChangedException()
+        }
         prepared.beginCommit()
         var succeeded = false
         var settingsApplied = false
         var roomCommitted = false
         var oldSettings: AppSettings? = null
+        var appliedSettings: AppSettings? = null
         var journalWritten = false
         try {
             if (restoreJournal.read() != null) {
@@ -249,13 +299,27 @@ class BackupRepository(
             ) {
                 throw InvalidBackupException("Data changed while the restore was being prepared. Please try again.")
             }
+            if (
+                expectedLocalSyncFingerprint != null &&
+                cloudSyncFingerprint(oldState, oldSettings) != expectedLocalSyncFingerprint
+            ) {
+                throw BackupDataChangedException()
+            }
 
             val oldAttachments = oldState.attachments
             ensureAttachmentDirectory()
             val currentStage = prepared.requireAttachmentStage()
             val restoredEntities = currentStage.attachments.entities(snapshot)
+            val appliedSyncFingerprint = cloudSyncFingerprint(
+                databaseFingerprint = expectedDatabaseFingerprint(
+                    snapshot,
+                    restoredEntities.map { it.copy(privatePath = "") },
+                ),
+                settings = snapshot.settings.toAppSettings(),
+            )
             val restoredPaths = restoredEntities.mapTo(HashSet(), AttachmentEntity::privatePath)
             val importedSettings = snapshot.settings.toAppSettings()
+            appliedSettings = importedSettings
             val encryptedVault = if (snapshot.vaultEntries.isEmpty()) {
                 emptyList()
             } else {
@@ -282,13 +346,17 @@ class BackupRepository(
             withContext(NonCancellable) {
                 // Once persistence starts, cancellation must not strand Room rows pointing at
                 // attachment files that the finally block would otherwise discard.
-                settingsApplied = true
-                settingsRepository.replace(importedSettings)
+                settingsApplied = settingsRepository.replaceIfUnchanged(
+                    expected = requireNotNull(oldSettings),
+                    value = importedSettings,
+                )
+                if (!settingsApplied) throw BackupDataChangedException()
                 backupDao.replaceSnapshot(
                     snapshot,
                     encryptedVault,
                     currentStage.attachments,
                     restoreToken,
+                    expectedDatabaseFingerprint = fullDatabaseFingerprint(oldState),
                 )
                 roomCommitted = true
                 prepared.completeCommit()
@@ -308,14 +376,21 @@ class BackupRepository(
                     runCatching { backupDao.clearRestoreCommitToken(restoreToken) }
                         .onFailure { warnings += "Restore recovery metadata will be cleaned on next launch." }
                 }
-                BackupRestoreResult(prepared.preview, warnings)
+                BackupRestoreResult(
+                    preview = prepared.preview,
+                    warnings = warnings,
+                    appliedSyncFingerprint = appliedSyncFingerprint,
+                )
             }
         } catch (failure: Throwable) {
             if (settingsApplied && !roomCommitted && oldSettings != null) {
                 val settingsToRestore = requireNotNull(oldSettings)
                 withContext(NonCancellable) {
                     val settingsRollback = runCatching {
-                        settingsRepository.replace(settingsToRestore)
+                        settingsRepository.replaceIfUnchanged(
+                            expected = requireNotNull(appliedSettings),
+                            value = settingsToRestore,
+                        )
                     }.onFailure(failure::addSuppressed)
                     if (journalWritten && settingsRollback.isSuccess) {
                         runCatching { restoreJournal.clear() }
@@ -331,7 +406,7 @@ class BackupRepository(
         } finally {
             if (!succeeded) prepared.releaseAfterFailure()
         }
-    }
+    } }
 
     /**
      * Resolves a process-death window before normal scheduling starts. It is idempotent: the
@@ -457,6 +532,31 @@ class BackupRepository(
         const val RESTORE_JOURNAL_FILE = "taskledger-restore.journal"
         const val MAX_SNAPSHOT_ATTEMPTS = 3
     }
+}
+
+private fun cloudSyncFingerprint(state: BackupDatabaseState, settings: AppSettings): String {
+    val portableState = state.copy(
+        attachments = state.attachments.map { it.copy(privatePath = "") },
+    )
+    return cloudSyncFingerprint(semanticDatabaseFingerprint(portableState), settings)
+}
+
+private fun cloudSyncFingerprint(databaseFingerprint: String, settings: AppSettings): String {
+    val backupSettings = settings.toBackupSettings()
+    val canonicalSettings = buildString {
+        append(backupSettings.themeMode.name).append('|')
+        append(backupSettings.accentColor.name).append('|')
+        append(backupSettings.weekStart.name).append('|')
+        append(backupSettings.timeFormat.name).append('|')
+        append(backupSettings.dateFormat.name).append('|')
+        append(backupSettings.notificationsEnabled).append('|')
+        append(backupSettings.defaultAllDayReminderMinute).append('|')
+        append(backupSettings.defaultReminderOffsetsMinutes.sorted().joinToString(",")).append('|')
+        append(backupSettings.todoQuickAddFields.map { it.name }.sorted().joinToString(","))
+    }
+    return MessageDigest.getInstance("SHA-256")
+        .digest("$databaseFingerprint|$canonicalSettings".encodeToByteArray())
+        .joinToString("") { "%02x".format(it) }
 }
 
 internal suspend fun <T> retryStableCapture(

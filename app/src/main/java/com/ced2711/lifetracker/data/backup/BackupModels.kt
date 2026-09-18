@@ -119,6 +119,9 @@ data class BackupSnapshot(
 sealed class BackupException(message: String, cause: Throwable? = null) : Exception(message, cause)
 class InvalidBackupException(message: String, cause: Throwable? = null) :
     BackupException(message, cause)
+class BackupDataChangedException : BackupException(
+    "Local data changed while the cloud backup was being prepared.",
+)
 class BackupAuthenticationException(cause: Throwable? = null) :
     BackupException("The backup password is incorrect or the backup was modified.", cause)
 class UnsupportedBackupException(message: String) : BackupException(message)

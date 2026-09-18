@@ -45,6 +45,7 @@ import kotlinx.coroutines.launch
 enum class BackupAuthenticationPurpose {
     EXPORT,
     RESTORE,
+    CLOUD_SYNC,
 }
 
 enum class BackupAuthenticationStatus {

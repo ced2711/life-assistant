@@ -108,6 +108,33 @@ class BackupDaoInstrumentedTest {
         assertEquals(emptyList<Long>(), dao.backupTodos().map { it.id })
     }
 
+    @Test fun changedLiveDataRejectsCloudRestoreInsideRoomTransaction() = runBlocking {
+        val dao = database.backupDao()
+        dao.insertCategories(listOf(CategoryEntity(98, "captured")))
+        val expectedFingerprint = fullDatabaseFingerprint(dao.backupState())
+        dao.insertCategories(listOf(CategoryEntity(99, "changed later")))
+        val stage = AttachmentRestoreStage.create(File(context.cacheDir, "backup-race-guard-test"))
+        try {
+            assertThrows(BackupDataChangedException::class.java) {
+                runBlocking {
+                    dao.replaceSnapshot(
+                        minimalSnapshot(),
+                        null,
+                        stage.attachments,
+                        RESTORE_TOKEN,
+                        expectedDatabaseFingerprint = expectedFingerprint,
+                    )
+                }
+            }
+        } finally {
+            stage.close()
+        }
+
+        assertEquals(listOf(98L, 99L), dao.backupCategories().map { it.id })
+        assertEquals(emptyList<Long>(), dao.backupTodos().map { it.id })
+        assertEquals(null, dao.restoreCommitToken())
+    }
+
     @Test fun vaultEntriesAreReencryptedForTheTargetSession() = runBlocking {
         val snapshot = minimalSnapshot().copy(vaultEntries = listOf(vaultEntry()))
         val stage = AttachmentRestoreStage.create(File(context.cacheDir, "backup-vault-reencrypt-test"))

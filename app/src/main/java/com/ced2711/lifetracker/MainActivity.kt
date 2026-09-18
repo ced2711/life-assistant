@@ -51,6 +51,7 @@ import com.ced2711.lifetracker.ui.backup.BackupAuthenticationStatus
 import com.ced2711.lifetracker.ui.backup.BackupRestoreScreen
 import com.ced2711.lifetracker.ui.backup.BackupRestoreTask
 import com.ced2711.lifetracker.ui.backup.BackupRestoreViewModel
+import com.ced2711.lifetracker.ui.backup.CloudSyncViewModel
 import com.ced2711.lifetracker.ui.calendar.CalendarScreen
 import com.ced2711.lifetracker.ui.ledger.LedgerScreen
 import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
@@ -86,9 +87,13 @@ class MainActivity : FragmentActivity() {
     private val backupRestoreViewModel: BackupRestoreViewModel by viewModels {
         BackupRestoreViewModel.Factory((application as TaskLedgerApplication).container)
     }
+    private val cloudSyncViewModel: CloudSyncViewModel by viewModels {
+        CloudSyncViewModel.Factory((application as TaskLedgerApplication).container)
+    }
     private var pendingReminderTodoId by mutableStateOf<Long?>(null)
     private var pendingWidgetQuickAddAction by mutableStateOf<String?>(null)
     private var pendingWidgetQuickAddToken by mutableStateOf<String?>(null)
+    private var pendingCloudSyncOpen by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -110,6 +115,7 @@ class MainActivity : FragmentActivity() {
             pendingWidgetQuickAddAction != null -> newWidgetRequestToken()
             else -> null
         }
+        pendingCloudSyncOpen = savedInstanceState == null && intent.action == ACTION_OPEN_CLOUD_SYNC
         applyEdgeToEdgeStyle(darkTheme = true)
         setContent {
             val startupRecoveryState by
@@ -133,6 +139,9 @@ class MainActivity : FragmentActivity() {
             val backupUiState by backupRestoreViewModel.uiState.collectAsStateWithLifecycle()
             val backupAuthentication by
                 backupRestoreViewModel.authenticationRequest.collectAsStateWithLifecycle()
+            val cloudSyncUiState by cloudSyncViewModel.uiState.collectAsStateWithLifecycle()
+            val cloudAuthentication by
+                cloudSyncViewModel.authenticationRequest.collectAsStateWithLifecycle()
             val vaultUiState by vaultViewModel.uiState.collectAsStateWithLifecycle()
             val context = LocalContext.current
             val darkTheme = isTaskLedgerDarkTheme(settings.themeMode)
@@ -156,7 +165,7 @@ class MainActivity : FragmentActivity() {
                 ?.let { name -> AuxiliaryScreen.entries.firstOrNull { it.name == name } }
             val auxiliary = requestedAuxiliary.takeIf {
                 (it == AuxiliaryScreen.BACKUP &&
-                    backupUiState.task != BackupRestoreTask.NONE) ||
+                    (backupUiState.task != BackupRestoreTask.NONE || cloudSyncUiState.busy)) ||
                     (reminderTodoId == null && widgetQuickAddAction == null)
             }
             val showVault = auxiliary == AuxiliaryScreen.VAULT
@@ -174,8 +183,17 @@ class MainActivity : FragmentActivity() {
             }
             val foldingFeature by collectFoldingFeature(this)
 
+            LaunchedEffect(pendingCloudSyncOpen) {
+                if (pendingCloudSyncOpen) {
+                    auxiliaryName = AuxiliaryScreen.BACKUP.name
+                    pendingCloudSyncOpen = false
+                }
+            }
+
             BackHandler(enabled = auxiliary != null) {
-                if (showBackup && backupUiState.task != BackupRestoreTask.NONE) {
+                if (showBackup &&
+                    (backupUiState.task != BackupRestoreTask.NONE || cloudSyncUiState.busy)
+                ) {
                     return@BackHandler
                 }
                 auxiliaryName = when (auxiliary) {
@@ -198,7 +216,9 @@ class MainActivity : FragmentActivity() {
             }
 
             val protectWindow = showVault ||
-                (showBackup && (backupSensitive || backupAuthentication != null))
+                (showBackup && (
+                    backupSensitive || backupAuthentication != null || cloudAuthentication != null
+                ))
             DisposableEffect(protectWindow) {
                 if (protectWindow) {
                     window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
@@ -237,6 +257,15 @@ class MainActivity : FragmentActivity() {
                         backupRestoreViewModel.markAuthenticationInProgress(request.nonce)
                     }
                 }
+                LaunchedEffect(cloudAuthentication?.nonce) {
+                    val request = cloudAuthentication ?: return@LaunchedEffect
+                    if (cloudSyncViewModel.markAuthenticationDispatched(request.nonce)) {
+                        vaultViewModel.requestFreshBackupAuthentication(
+                            context.canUseStrongBiometric(),
+                        )
+                        cloudSyncViewModel.markAuthenticationInProgress(request.nonce)
+                    }
+                }
                 LaunchedEffect(
                     backupAuthentication?.nonce,
                     backupAuthentication?.status,
@@ -265,6 +294,34 @@ class MainActivity : FragmentActivity() {
                         }
                     }
                 }
+                LaunchedEffect(
+                    cloudAuthentication?.nonce,
+                    cloudAuthentication?.status,
+                    vaultUiState.access,
+                    vaultUiState.authenticationRequest?.id,
+                ) {
+                    val request = cloudAuthentication ?: return@LaunchedEffect
+                    when (vaultUiState.access) {
+                        VaultAccessState.Unlocking ->
+                            cloudSyncViewModel.markAuthenticationInProgress(request.nonce)
+                        VaultAccessState.Unlocked -> {
+                            val lease = vaultViewModel.acquireBackupSessionLease()
+                            if (lease != null) {
+                                cloudSyncViewModel.provideAuthenticatedLease(request.nonce, lease)
+                                vaultViewModel.lock(clearOwnedClipboard = false)
+                            }
+                        }
+                        VaultAccessState.Locked -> if (
+                            request.status == BackupAuthenticationStatus.AUTHENTICATING
+                        ) {
+                            cloudSyncViewModel.authenticationReturnedLocked(request.nonce)
+                        }
+                        is VaultAccessState.Error -> {
+                            cloudSyncViewModel.authenticationCancelled(request.nonce)
+                            vaultViewModel.lock(clearOwnedClipboard = false)
+                        }
+                    }
+                }
             }
 
             SideEffect {
@@ -280,7 +337,9 @@ class MainActivity : FragmentActivity() {
                     AdaptiveTaskLedgerScaffold(
                     selected = selected,
                     onSelected = { destination ->
-                        if (!showBackup || backupUiState.task == BackupRestoreTask.NONE) {
+                        if (!showBackup ||
+                            (backupUiState.task == BackupRestoreTask.NONE && !cloudSyncUiState.busy)
+                        ) {
                             if (showVault) vaultViewModel.lock()
                             selectedOverride = destination.name
                             auxiliaryName = null
@@ -288,7 +347,9 @@ class MainActivity : FragmentActivity() {
                         }
                     },
                     onSettings = {
-                        if (!showBackup || backupUiState.task == BackupRestoreTask.NONE) {
+                        if (!showBackup ||
+                            (backupUiState.task == BackupRestoreTask.NONE && !cloudSyncUiState.busy)
+                        ) {
                             if (showVault) vaultViewModel.lock()
                             auxiliaryName = if (auxiliary == AuxiliaryScreen.SETTINGS) {
                                 null
@@ -301,7 +362,7 @@ class MainActivity : FragmentActivity() {
                     auxiliaryTitle = when (auxiliary) {
                         AuxiliaryScreen.SETTINGS -> "Settings"
                         AuxiliaryScreen.VAULT -> "Vault"
-                        AuxiliaryScreen.BACKUP -> "Backup & restore"
+                        AuxiliaryScreen.BACKUP -> "Backup & sync"
                         null -> null
                     },
                     foldingFeature = foldingFeature,
@@ -347,6 +408,7 @@ class MainActivity : FragmentActivity() {
                             AuxiliaryScreen.BACKUP -> BackupRestoreScreen(
                                 uiState = backupUiState,
                                 actions = backupRestoreViewModel,
+                                cloudViewModel = cloudSyncViewModel,
                                 onSensitiveContentChanged = { backupSensitive = it },
                                 modifier = Modifier.fillMaxSize(),
                                 defaultExportFileName = defaultBackupFileName(),
@@ -431,6 +493,10 @@ class MainActivity : FragmentActivity() {
         setIntent(intent)
         val reminderId = reminderTodoId(intent)
         val widgetAction = widgetQuickAddAction(intent)
+        if (intent.action == ACTION_OPEN_CLOUD_SYNC) {
+            pendingCloudSyncOpen = true
+            return
+        }
         when {
             reminderId != null -> {
                 pendingReminderTodoId = reminderId
@@ -490,6 +556,8 @@ class MainActivity : FragmentActivity() {
 
     companion object {
         internal const val ACTION_OPEN_TODO = "com.ced2711.lifetracker.action.OPEN_TODO"
+        internal const val ACTION_OPEN_CLOUD_SYNC =
+            "com.ced2711.lifetracker.action.OPEN_CLOUD_SYNC"
         internal const val EXTRA_TODO_ID = "com.ced2711.lifetracker.extra.TODO_ID"
         private const val STATE_PENDING_TODO_ID = "pending_reminder_todo_id"
         private const val STATE_PENDING_WIDGET_ACTION = "pending_widget_quick_add_action"

@@ -25,6 +25,7 @@ private fun translateDynamicChinese(text: String): String {
     fun match(pattern: String): MatchResult? = Regex(pattern).matchEntire(text)
 
     match("Version (.+) • Private and offline")?.let { return "版本 ${it.groupValues[1]} • 私密离线" }
+    match("Last sync: (.+)")?.let { return "上次同步：${it.groupValues[1]}" }
     match("Active \\((\\d+)\\)")?.let { return "待完成（${it.groupValues[1]}）" }
     match("Completed \\((\\d+)\\)")?.let { return "已完成（${it.groupValues[1]}）" }
     match("(\\d+) notes")?.let { return "${it.groupValues[1]} 条笔记" }
@@ -134,6 +135,7 @@ private val zhHans = mapOf(
     "Settings" to "设置",
     "Vault" to "密码库",
     "Backup & restore" to "备份与恢复",
+    "Backup & sync" to "备份与同步",
     "Back" to "返回",
     "Add" to "添加",
     "New" to "新建",
@@ -240,6 +242,74 @@ private val zhHans = mapOf(
     "Encrypted on this device" to "已在本机加密",
     "Encrypted backup" to "加密备份",
     "Local .tlb file" to "本地 .tlb 文件",
+    "Google Drive sync" to "Google Drive 同步",
+    "Connected" to "已连接",
+    "Not connected" to "未连接",
+    "Sync password-encrypted snapshots through Life Tracker's private app folder. The app cannot see other files in your Google Drive." to
+        "通过 Life Tracker 的专用应用文件夹同步密码加密的快照。应用无法查看 Google Drive 中的其他文件。",
+    "The 30 most recent versions are kept. Competing versions are kept until you resolve the conflict." to
+        "保留最近 30 个版本；存在冲突的版本会一直保留，直到你解决冲突。",
+    "When Vault contains entries, background sync pauses until you unlock it in Life Tracker. This keeps Vault keys protected by Android." to
+        "密码库中有条目时，后台同步会暂停，直到你在 Life Tracker 中解锁密码库，以便继续由 Android 保护密码库密钥。",
+    "Automatic sync" to "自动同步",
+    "Runs periodically when a network is available" to "有网络时定期运行",
+    "Syncing…" to "正在同步…",
+    "Sync now" to "立即同步",
+    "Disconnect" to "断开连接",
+    "Connecting…" to "正在连接…",
+    "Connect Google Drive" to "连接 Google Drive",
+    "Choose a sync password. You will enter the same password on Windows or a new device. Google cannot recover it." to
+        "设置同步密码。在 Windows 或新设备上需要输入同一密码，Google 无法帮你找回。",
+    "Sync password" to "同步密码",
+    "Connect" to "连接",
+    "Reconnect" to "重新连接",
+    "Sync conflict" to "同步冲突",
+    "This device and Google Drive both changed since the last sync. Use cloud replaces all local data. Keep this device uploads the current local data as the next encrypted snapshot." to
+        "自上次同步后，本机和 Google Drive 都发生了更改。“使用云端”会替换全部本机数据；“保留本机”会将当前本机数据上传为下一个加密快照。",
+    "Use cloud" to "使用云端",
+    "Keep this device" to "保留本机",
+    "Unknown" to "未知",
+    "Google Drive connection failed." to "Google Drive 连接失败。",
+    "Google Drive connection was cancelled." to "已取消 Google Drive 连接。",
+    "Vault authentication was cancelled." to "已取消密码库身份验证。",
+    "Google Drive disconnected. Local data was kept." to "已断开 Google Drive，本机数据已保留。",
+    "Google Drive connected." to "已连接 Google Drive。",
+    "Google Drive reconnected." to "已重新连接 Google Drive。",
+    "Google Drive sync failed." to "Google Drive 同步失败。",
+    "Google Drive sync is disabled." to "Google Drive 同步已关闭。",
+    "Already up to date." to "已经是最新状态。",
+    "Encrypted backup uploaded." to "加密备份已上传。",
+    "Cloud changes restored." to "已恢复云端更改。",
+    "Both this device and Google Drive changed." to "本机和 Google Drive 都发生了更改。",
+    "Reconnect Google Drive to continue." to "请重新连接 Google Drive 后继续。",
+    "The saved sync password is unavailable." to "已保存的同步密码不可用。",
+    "Data kept changing while cloud backup was created." to "创建云端备份时数据持续变化，请重试。",
+    "Google Drive could not be reached." to "无法连接 Google Drive。",
+    "Google Drive timed out." to "Google Drive 连接超时。",
+    "The backup password is incorrect or the backup was modified." to "备份密码错误或备份已被修改。",
+    "The linked cloud backup is missing. Reconnect to initialize a new backup." to
+        "已连接的云备份不存在。请断开后重新连接以创建新备份。",
+    "Cloud revision history is invalid." to "云端版本历史无效。",
+    "Cloud history is too large to sync safely." to "云端版本历史过大，无法安全同步。",
+    "The cloud backup exceeds available local storage." to "本机可用空间不足，无法下载云备份。",
+    "Google Drive returned an empty backup." to "Google Drive 返回了空备份。",
+    "The downloaded backup size did not match Google Drive metadata." to
+        "下载的备份大小与 Google Drive 元数据不一致。",
+    "Could not reach Google Drive." to "无法连接 Google Drive。",
+    "Google Drive authorization expired or was revoked." to "Google Drive 授权已过期或被撤销。",
+    "Unlock Vault in Life Tracker to finish the encrypted cloud sync." to
+        "请在 Life Tracker 中解锁密码库，以完成加密云同步。",
+    "Open Life Tracker to reconnect Google Drive." to "请打开 Life Tracker 重新连接 Google Drive。",
+    "Google Drive has conflicting changes. Open Backup & sync to choose a version." to
+        "Google Drive 中存在冲突更改。请打开“备份与同步”选择版本。",
+    "Life Tracker cloud sync" to "Life Tracker 云同步",
+    "Cloud sync" to "云同步",
+    "Google Drive sync needs attention" to "Google Drive 同步需要处理",
+    "Cloud changes need review. Sync now to choose which version to keep." to
+        "云端更改需要检查。请立即同步并选择要保留的版本。",
+    "Automatic sync is waiting for Vault authentication." to "自动同步正在等待密码库身份验证。",
+    "Google Drive permission needs to be renewed." to "需要重新授予 Google Drive 权限。",
+    "The last automatic sync failed. Try syncing again." to "上次自动同步失败，请重试。",
 
     // Notes
     "Long-term writing and private files" to "长期记录与私密文件",

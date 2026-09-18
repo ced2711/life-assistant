@@ -6,8 +6,10 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import com.ced2711.lifetracker.data.backup.BackupSnapshot
+import com.ced2711.lifetracker.data.backup.BackupDataChangedException
 import com.ced2711.lifetracker.data.backup.InvalidBackupException
 import com.ced2711.lifetracker.data.backup.StagedAttachments
+import com.ced2711.lifetracker.data.backup.fullDatabaseFingerprint
 import com.ced2711.lifetracker.data.backup.validate
 import com.ced2711.lifetracker.data.vault.VaultBackupCipher
 import com.ced2711.lifetracker.data.vault.VaultSession
@@ -66,6 +68,7 @@ interface BackupDao {
         vaultSession: VaultSession?,
         stagedAttachments: StagedAttachments,
         restoreToken: String,
+        expectedDatabaseFingerprint: String? = null,
     ) {
         requireCanonicalRestoreToken(restoreToken)
         snapshot.validate()
@@ -77,7 +80,13 @@ interface BackupDao {
             snapshot.vaultEntries.map { VaultBackupCipher.encrypt(it, session) }
         }
 
-        replaceSnapshot(snapshot, encryptedVault, stagedAttachments, restoreToken)
+        replaceSnapshot(
+            snapshot,
+            encryptedVault,
+            stagedAttachments,
+            restoreToken,
+            expectedDatabaseFingerprint,
+        )
     }
 
     /** Uses the exact pre-encrypted Vault rows validated before the durable restore commit. */
@@ -87,6 +96,7 @@ interface BackupDao {
         encryptedVault: List<VaultEntryEntity>,
         stagedAttachments: StagedAttachments,
         restoreToken: String,
+        expectedDatabaseFingerprint: String? = null,
     ) {
         requireCanonicalRestoreToken(restoreToken)
         snapshot.validate()
@@ -99,6 +109,12 @@ interface BackupDao {
             }
         ) {
             throw InvalidBackupException("Prepared vault entries do not match the restore snapshot.")
+        }
+        if (
+            expectedDatabaseFingerprint != null &&
+            fullDatabaseFingerprint(backupState()) != expectedDatabaseFingerprint
+        ) {
+            throw BackupDataChangedException()
         }
 
         deleteAllAttachments()

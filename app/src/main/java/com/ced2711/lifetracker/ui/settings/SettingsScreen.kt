@@ -153,8 +153,8 @@ fun SettingsScreen(
 
                 SettingsSectionTitle("Data")
                 SettingsValueRow(
-                    title = "Encrypted backup",
-                    value = "Local .tlb file",
+                    title = "Backup & sync",
+                    value = "Local .tlb or Google Drive",
                     onClick = onOpenBackup,
                 )
 

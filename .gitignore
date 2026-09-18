@@ -7,6 +7,7 @@ local.properties
 
 # Gradle and Kotlin build state
 .gradle/
+.gradle-user/
 .kotlin/
 **/build/
 
@@ -15,6 +16,13 @@ local.properties
 *.aab
 *.apks
 *.idsig
+*.msi
+*.exe
+
+# Per-developer Google OAuth configuration and local desktop data
+google-oauth*.json
+client_secret*.json
+desktop-local-data/
 
 # Signing material and credentials must never enter source control
 *.jks

@@ -32,8 +32,8 @@ android {
         applicationId = "com.ced2711.lifetracker"
         minSdk = 26
         targetSdk = 36
-        versionCode = 11
-        versionName = "1.5.2"
+        versionCode = 12
+        versionName = "1.6.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -110,6 +110,7 @@ kapt {
 }
 
 dependencies {
+    implementation(project(":cloudsync"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -127,6 +128,8 @@ dependencies {
     implementation(libs.androidx.fragment)
     implementation(libs.androidx.glance.appwidget)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.coroutines.play.services)
+    implementation(libs.play.services.auth)
 
     implementation(platform(libs.compose.bom))
     androidTestImplementation(platform(libs.compose.bom))

@@ -1,6 +1,8 @@
 # Security policy
 
-Life Tracker is local-only and deliberately requests no network access. Sensitive Vault values are encrypted at rest and access is gated by Android system authentication.
+Life Tracker works offline. Optional Google Drive sync uses Google's OAuth authorization and uploads password-encrypted snapshots to the user's app-specific Drive storage. Android now requests network access for this optional feature. Sensitive Android Vault values remain encrypted at rest and access is gated by Android system authentication. Windows stores its local dataset in an encrypted `.tlb` file and protects remembered credentials using Windows DPAPI; extracted working attachments remain in the current Windows user's application-data directory.
+
+Cloud revisions expose timestamps, sizes, device IDs and change fingerprints to Google, but not plaintext backup content. OAuth tokens, remembered passwords, local credentials, and device-bound Vault keys must never be logged or included in backups. Sync is opt-in and full-dataset conflicts require explicit user resolution. See [Google Drive setup](docs/GOOGLE_DRIVE_SETUP.md).
 
 Never commit or upload any of the following:
 
