@@ -1,5 +1,6 @@
 package com.ced2711.lifetracker.ui.adaptive
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -11,14 +12,10 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clipToBounds
@@ -38,6 +35,7 @@ import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.material3.Text
 import com.ced2711.lifetracker.ui.localization.localizedText
 import androidx.compose.runtime.Composable
@@ -70,8 +68,6 @@ private val RailWidth = 80.dp
 private val CompactRailWidth = 64.dp
 private val MinimumSplitRailWidth = 48.dp
 private val MinimumHorizontalChromeHeight = 96.dp
-private val StatusBarVisualOverlap = 12.dp
-private val MinimumStatusBarClearance = 24.dp
 
 /**
  * Responsive root scaffold for TaskLedger.
@@ -108,12 +104,19 @@ fun AdaptiveTaskLedgerScaffold(
             }
         }
     }
-    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-        val safePaneLayout = calculateSafePaneLayout(
+    BoxWithConstraints(
+        modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface),
+    ) {
+        val density = LocalDensity.current
+        val geometricPaneLayout = calculateSafePaneLayout(
             availableWidth = maxWidth,
             availableHeight = maxHeight,
             foldingFeature = foldingFeature,
-            density = LocalDensity.current,
+            density = density,
+        )
+        val safePaneLayout = keyboardAwarePaneLayout(
+            geometricPaneLayout,
+            with(density) { appImeInsets().getBottom(density).toDp() },
         )
 
         CompositionLocalProvider(
@@ -144,7 +147,11 @@ private fun FoldAwareScaffold(
     val secondaryPane = safePaneLayout.secondaryPane
     val density = LocalDensity.current
     val layoutDirection = LocalLayoutDirection.current
-    val safeDrawingInsets = WindowInsets.safeDrawing
+    val safeDrawingInsets = paneSafeDrawingInsets(
+        secondaryPane ?: safePaneLayout.primaryPane,
+        safePaneLayout.windowWidth,
+        safePaneLayout.windowHeight,
+    )
     val horizontalSafeDrawing = with(density) {
         (
             safeDrawingInsets.getLeft(density, layoutDirection) +
@@ -187,7 +194,6 @@ private fun FoldAwareScaffold(
 
         else -> PaneHost(
             pane = safePaneLayout.primaryPane,
-            includeIme = true,
         ) {
             StandardAdaptiveScaffold(
                 selected = selected,
@@ -248,7 +254,6 @@ private fun VerticalFoldScaffold(
             navigationPane.width < RailWidth
     PaneHost(
         pane = navigationPane,
-        includeIme = navigationPane.touchesWindowBottom(safePaneLayout),
     ) {
         Surface(
             modifier = Modifier.fillMaxSize(),
@@ -278,7 +283,6 @@ private fun VerticalFoldScaffold(
 
     PaneHost(
         pane = contentPane,
-        includeIme = contentPane.touchesWindowBottom(safePaneLayout),
     ) {
         Scaffold(
             contentWindowInsets = NoInsets,
@@ -311,7 +315,6 @@ private fun HorizontalFoldScaffold(
 
     PaneHost(
         pane = chromePane,
-        includeIme = chromePane.touchesWindowBottom(safePaneLayout),
     ) {
         Surface(
             modifier = Modifier.fillMaxSize(),
@@ -348,7 +351,6 @@ private fun HorizontalFoldScaffold(
 
     PaneHost(
         pane = contentPane,
-        includeIme = contentPane.touchesWindowBottom(safePaneLayout),
     ) {
         Scaffold(
             contentWindowInsets = NoInsets,
@@ -360,48 +362,21 @@ private fun HorizontalFoldScaffold(
 @Composable
 private fun PaneHost(
     pane: SafePaneBounds,
-    includeIme: Boolean,
     content: @Composable () -> Unit,
 ) {
-    val density = LocalDensity.current
-    val layoutDirection = LocalLayoutDirection.current
-    val safeDrawing = WindowInsets.safeDrawing
-    val compactTopSafeDrawing = WindowInsets(
-        left = safeDrawing.getLeft(density, layoutDirection),
-        top = reducedStatusBarTopInset(
-            safeTopPx = safeDrawing.getTop(density),
-            desiredOverlapPx = with(density) { StatusBarVisualOverlap.roundToPx() },
-            minimumClearancePx = with(density) { MinimumStatusBarClearance.roundToPx() },
-        ),
-        right = safeDrawing.getRight(density, layoutDirection),
-        bottom = safeDrawing.getBottom(density),
-    )
+    val layout = requireNotNull(LocalSafePaneLayout.current)
     Box(
         modifier = Modifier
             .offset(x = pane.left, y = pane.top)
             .width(pane.width)
             .height(pane.height)
             .clipToBounds()
-            .windowInsetsPadding(
-                if (includeIme) {
-                    compactTopSafeDrawing.union(WindowInsets.ime)
-                } else {
-                    compactTopSafeDrawing
-                },
-            ),
+            // Paint behind the camera safety area with the same surface as the app header.
+            .background(MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp))
+            .paneSafeDrawingPadding(pane, layout.windowWidth, layout.windowHeight),
     ) {
         content()
     }
-}
-
-internal fun reducedStatusBarTopInset(
-    safeTopPx: Int,
-    desiredOverlapPx: Int,
-    minimumClearancePx: Int,
-): Int {
-    val safeTop = safeTopPx.coerceAtLeast(0)
-    val minimumClearance = minimumClearancePx.coerceIn(0, safeTop)
-    return (safeTop - desiredOverlapPx.coerceAtLeast(0)).coerceAtLeast(minimumClearance)
 }
 
 @Composable
@@ -657,9 +632,6 @@ private fun PixelPaneBounds.toDpBounds(density: Density): SafePaneBounds = with(
         bottom = bottom.toDp(),
     )
 }
-
-private fun SafePaneBounds.touchesWindowBottom(layout: SafePaneLayout): Boolean =
-    bottom >= layout.windowHeight
 
 private val TopLevelDestination.label: String
     get() = when (this) {

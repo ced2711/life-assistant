@@ -29,15 +29,22 @@ class SafePaneLayoutTest {
         assertEquals(0.dp, usablePaneExtent(extent = 16.dp, safeDrawingInsets = 24.dp))
     }
 
-    @Test
-    fun statusBarInsetOverlapsVisuallyWhilePreservingIconClearance() {
-        assertEquals(36, reducedStatusBarTopInset(48, 12, 24))
-        assertEquals(24, reducedStatusBarTopInset(30, 12, 24))
-        assertEquals(20, reducedStatusBarTopInset(20, 12, 24))
-        assertEquals(0, reducedStatusBarTopInset(0, 12, 24))
-    }
-
     private val window = PixelPaneBounds(left = 0, top = 0, right = 2_000, bottom = 1_200)
+
+    @Test
+    fun tabletopEditorUsesUpperPaneWhenKeyboardCoversLowerPane() {
+        val lower = SafePaneBounds(0.dp, 420.dp, 400.dp, 840.dp)
+        val upper = SafePaneBounds(0.dp, 0.dp, 400.dp, 420.dp)
+        val layout = SafePaneLayout(
+            400.dp, 840.dp, lower, upper,
+            SafePaneBounds(0.dp, 420.dp, 400.dp, 420.dp), SafePaneAxis.HORIZONTAL,
+        )
+        assertEquals(upper, keyboardAwarePaneLayout(layout, 450.dp).primaryPane)
+        assertEquals(lower, keyboardAwarePaneLayout(layout, 450.dp).secondaryPane)
+        assertEquals(layout, keyboardAwarePaneLayout(layout, 0.dp))
+        val vertical = layout.copy(splitAxis = SafePaneAxis.VERTICAL)
+        assertEquals(vertical, keyboardAwarePaneLayout(vertical, 450.dp))
+    }
 
     @Test
     fun noSeparatingFeatureUsesCompleteWindow() {

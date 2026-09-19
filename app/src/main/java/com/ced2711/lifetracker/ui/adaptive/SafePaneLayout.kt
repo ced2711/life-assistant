@@ -74,6 +74,35 @@ internal fun usesWideFeatureLayout(
 internal fun usablePaneExtent(extent: Dp, safeDrawingInsets: Dp): Dp =
     (extent - safeDrawingInsets).coerceAtLeast(0.dp)
 
+/** In tabletop posture a keyboard can cover the entire lower pane. Keep editing above it. */
+internal fun keyboardAwarePaneLayout(layout: SafePaneLayout, keyboardBottom: Dp): SafePaneLayout {
+    val secondary = layout.secondaryPane ?: return layout
+    if (layout.splitAxis != SafePaneAxis.HORIZONTAL || keyboardBottom <= 0.dp) return layout
+    val keyboardTop = (layout.windowHeight - keyboardBottom).coerceAtLeast(0.dp)
+    fun visibleHeight(pane: SafePaneBounds) =
+        (minOf(pane.bottom, keyboardTop) - pane.top).coerceAtLeast(0.dp)
+    return if (visibleHeight(secondary) > visibleHeight(layout.primaryPane)) {
+        layout.copy(primaryPane = secondary, secondaryPane = layout.primaryPane)
+    } else {
+        layout
+    }
+}
+
+internal data class PaneEdgeInsets(val left: Int, val top: Int, val right: Int, val bottom: Int)
+
+/** Window insets are edge obstructions, not padding to duplicate in every folded pane. */
+internal fun projectWindowInsetsIntoPane(
+    pane: PixelPaneBounds,
+    windowWidth: Int,
+    windowHeight: Int,
+    insets: PaneEdgeInsets,
+): PaneEdgeInsets = PaneEdgeInsets(
+    left = (insets.left.coerceAtLeast(0) - pane.left).coerceIn(0, pane.width),
+    top = (insets.top.coerceAtLeast(0) - pane.top).coerceIn(0, pane.height),
+    right = (insets.right.coerceAtLeast(0) - (windowWidth - pane.right)).coerceIn(0, pane.width),
+    bottom = (insets.bottom.coerceAtLeast(0) - (windowHeight - pane.bottom)).coerceIn(0, pane.height),
+)
+
 /**
  * The safe-pane geometry for the current app window.
  *

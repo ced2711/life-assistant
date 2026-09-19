@@ -19,6 +19,7 @@
         android:theme="@style/Theme.TaskLedger">
         <activity
             android:name=".MainActivity"
+            android:windowSoftInputMode="adjustResize"
             android:exported="true" />
         <activity-alias
             android:name=".launcher.LifeTrackerQuiet"

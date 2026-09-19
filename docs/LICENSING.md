@@ -48,7 +48,7 @@ in the binaries they actually distribute.
 ## Corresponding source and building a fork
 
 The source accompanying a binary must match that binary's version, including
-local patches. Release 1.7.0 uses the `v1.7.0` tag in
+local patches. Release 1.7.1 uses the `v1.7.1` tag in
 <https://github.com/ced2711/life-assistant>. Follow the repository's build
 instructions; use your own Android signing key and your own OAuth application
 registration for a separately distributed fork. The author's private signing

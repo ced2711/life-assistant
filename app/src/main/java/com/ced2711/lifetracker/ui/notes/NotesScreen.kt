@@ -37,7 +37,7 @@ import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.UnfoldMore
-import androidx.compose.material3.AlertDialog
+import com.ced2711.lifetracker.ui.adaptive.HingeSafeAlertDialog as AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card

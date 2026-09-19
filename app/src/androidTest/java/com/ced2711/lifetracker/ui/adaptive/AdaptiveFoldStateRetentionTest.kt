@@ -59,6 +59,39 @@ class AdaptiveFoldStateRetentionTest {
         composeRule.onNode(hasSetTextAction() and hasText(DRAFT_TEXT)).assertExists()
     }
 
+    @Test
+    fun draftSurvivesSwitchFromSingleWindowToHalfOpenedHorizontalFold() {
+        lateinit var foldingFeature: MutableState<FoldingFeature?>
+        composeRule.setContent {
+            foldingFeature = remember { mutableStateOf(null) }
+            MaterialTheme {
+                AdaptiveTaskLedgerScaffold(
+                    selected = TopLevelDestination.TODO,
+                    onSelected = {},
+                    onSettings = {},
+                    isSettings = false,
+                    modifier = Modifier.fillMaxSize(),
+                    foldingFeature = foldingFeature.value,
+                ) {
+                    var description by rememberSaveable { mutableStateOf("") }
+                    OutlinedTextField(
+                        value = description,
+                        onValueChange = { description = it },
+                        label = { Text("Description *") },
+                    )
+                }
+            }
+        }
+
+        composeRule.onNodeWithText("Description *").performTextInput(DRAFT_TEXT)
+        composeRule.runOnIdle {
+            foldingFeature.value = HalfOpenedHorizontalFold
+        }
+
+        composeRule.onNodeWithText("Description *").assertExists()
+        composeRule.onNode(hasSetTextAction() and hasText(DRAFT_TEXT)).assertExists()
+    }
+
     private companion object {
         const val DRAFT_TEXT = "fold transition draft"
     }
@@ -68,6 +101,14 @@ private object HalfOpenedVerticalFold : FoldingFeature {
     override val bounds = Rect(200, 0, 200, 10_000)
     override val state = FoldingFeature.State.HALF_OPENED
     override val orientation = FoldingFeature.Orientation.VERTICAL
+    override val occlusionType = FoldingFeature.OcclusionType.NONE
+    override val isSeparating = true
+}
+
+private object HalfOpenedHorizontalFold : FoldingFeature {
+    override val bounds = Rect(0, 200, 10_000, 200)
+    override val state = FoldingFeature.State.HALF_OPENED
+    override val orientation = FoldingFeature.Orientation.HORIZONTAL
     override val occlusionType = FoldingFeature.OcclusionType.NONE
     override val isSeparating = true
 }

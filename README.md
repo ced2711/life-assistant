@@ -1,6 +1,6 @@
 # Life Assistant
 
-Life Assistant is an open-source, offline-first personal organizer for Android and Windows. It combines Todo, Ledger, Calendar, and Notes, with encrypted backup and optional Google Drive synchronization. The Android interface adapts to phones, tablets and foldables such as the Samsung Galaxy Z Fold series. The Windows app is a native desktop application with its own bundled Java runtime; no browser or separate Java installation is required.
+Life Assistant is an open-source, offline-first personal organizer for Android and Windows. It combines Todo, Ledger, Calendar, and Notes, with encrypted backup and optional Google Drive synchronization. The Android interface uses device-independent sizing for phones, tablets and foldables, including narrow clamshell layouts such as the Samsung Galaxy Z Flip series. The Windows app is a native desktop application with its own bundled Java runtime; no browser or separate Java installation is required.
 
 By **ced2711** · 中文名：**生活助手** · [Source](https://github.com/ced2711/life-assistant)
 
@@ -14,6 +14,7 @@ By **ced2711** · 中文名：**生活助手** · [Source](https://github.com/ce
 - Password-encrypted `.tlb` backup and full-replacement restore with validation and preview.
 - Responsive Today Todo widget, including wide horizontal layouts.
 - Six selectable accent palettes with light, dark, and system themes.
+- Fullscreen Android status-bar policy, camera-cutout and keyboard avoidance, and tabletop-pane handling without brand-specific device lists.
 - Optional Google Drive authorization and automatic encrypted snapshot sync, with explicit conflict resolution and retained cloud history.
 - Offline use without accounts; no analytics or advertising. Google authorization is required only when enabling Drive sync.
 
@@ -48,7 +49,7 @@ Use JDK 17 and the included Gradle wrapper.
 
 There are two distribution flavors:
 
-- `standard`: normal Android install/update build; version code 14 for the 1.7.0 release.
+- `standard`: normal Android install/update build; version code 15 for the 1.7.1 release.
 - `personal`: one-off migration build; version code 5 so the standard APK can update it afterward.
 
 The personal flavor intentionally requires a local `app/src/personal/assets/personal-backup.tlb`. That encrypted user backup, its password, APK outputs, release keystore, and signing credentials are excluded from Git and must never be committed, even to a private repository.
@@ -57,7 +58,9 @@ Windows distributions are written to `desktopApp/build/compose/binaries/main/exe
 
 ## Verification
 
-The project includes JVM, Android instrumentation, sync transport/branch-conflict, Windows encrypted-store/attachment, and Windows DPAPI tests. See the [1.7.0 release notes](docs/RELEASE_1.7.0.md) and the historical [1.6.0 verification report](docs/RELEASE_1.6.0.md) for completed checks and remaining limitations. The cloud tests use a local HTTP fixture; a real OAuth end-to-end check additionally requires the developer's configured Google Cloud project and interactive consent. Unit tests alone do not establish that live Google authorization is configured.
+The project includes JVM, Android instrumentation, sync transport/branch-conflict, Windows encrypted-store/attachment, and Windows DPAPI tests. See the [1.7.1 fullscreen and compatibility report](docs/RELEASE_1.7.1.md), [1.7.0 release notes](docs/RELEASE_1.7.0.md) and historical [1.6.0 verification report](docs/RELEASE_1.6.0.md). The cloud tests use a local HTTP fixture; a real OAuth end-to-end check additionally requires the developer's configured Google Cloud project and interactive consent. Unit tests alone do not establish that live Google authorization is configured.
+
+Android support remains **Android 8.0 (API 26) and newer**, for phone/tablet app environments. There is no Samsung-only restriction. Tests on Android 8 and Android 16 emulators and resized/folded layouts do not prove compatibility with every OEM, keyboard, or future OS release. Camera hardware cannot be removed; system-owned authentication, permission or external-app screens control their own bars. Flip cover-screen launch access is controlled by Samsung/One UI (and may require its supported launcher/settings); adapting the app's small-window layout does not bypass those restrictions.
 
 ## Privacy
 
@@ -73,4 +76,4 @@ You may use the app, including commercially. Distributing covered binaries requi
 
 Earlier Apache-2.0 releases retain their original licensing; those grants are not retroactively revoked. Third-party components retain their own terms and notices. This software comes without warranty.
 
-Source for each binary release is identified by its matching version tag, for example [`v1.7.0`](https://github.com/ced2711/life-assistant/tree/v1.7.0). Both apps provide an offline license viewer and a source-code link in Settings. Build instructions above apply to the corresponding source; supply your own signing key for a fork rather than requesting the author's private release key.
+Source for each binary release is identified by its matching version tag, for example [`v1.7.1`](https://github.com/ced2711/life-assistant/tree/v1.7.1). Both apps provide an offline license viewer and a source-code link in Settings. Build instructions above apply to the corresponding source; supply your own signing key for a fork rather than requesting the author's private release key.

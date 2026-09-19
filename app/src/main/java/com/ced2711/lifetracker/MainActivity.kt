@@ -46,6 +46,7 @@ import com.ced2711.lifetracker.ui.TaskLedgerViewModel
 import com.ced2711.lifetracker.ui.adaptive.AdaptiveTaskLedgerScaffold
 import com.ced2711.lifetracker.ui.adaptive.LocalSafePaneLayout
 import com.ced2711.lifetracker.ui.adaptive.collectFoldingFeature
+import com.ced2711.lifetracker.ui.adaptive.hideAppStatusBar
 import com.ced2711.lifetracker.ui.adaptive.usesWideFeatureLayout
 import com.ced2711.lifetracker.ui.backup.BackupAuthenticationStatus
 import com.ced2711.lifetracker.ui.backup.BackupRestoreScreen
@@ -513,6 +514,8 @@ class MainActivity : FragmentActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
+        // System pickers, authentication and fold/rotation transitions can restore system chrome.
+        if (hasFocus) hideAppStatusBar(window)
         (application as TaskLedgerApplication).container.vaultClipboard
             .onHostWindowFocusChanged(hasFocus)
     }
@@ -549,9 +552,14 @@ class MainActivity : FragmentActivity() {
             SystemBarStyle.light(background, DARK_SYSTEM_BAR_COLOR)
         }
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(Color.BLACK),
+            statusBarStyle = if (darkTheme) {
+                SystemBarStyle.dark(Color.TRANSPARENT)
+            } else {
+                SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+            },
             navigationBarStyle = navigationStyle,
         )
+        hideAppStatusBar(window)
     }
 
     companion object {

@@ -60,6 +60,8 @@ private class HingeSafePlatformDialogController {
 
         if (!dialog.isShowing) dialog.show()
         val window = dialog.window ?: return
+        // Floating system-style pickers keep their normal bounds, but not the status strip.
+        hideAppStatusBar(window, drawIntoDisplayCutout = false)
         val session = ActivePlatformDialogSession(
             dialog = dialog,
             window = window,
