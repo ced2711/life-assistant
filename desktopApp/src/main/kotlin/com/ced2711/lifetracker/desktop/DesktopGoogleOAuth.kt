@@ -2,6 +2,7 @@ package com.ced2711.lifetracker.desktop
 
 import com.ced2711.lifetracker.cloudsync.AccessTokenProvider
 import com.ced2711.lifetracker.cloudsync.CloudAuthorizationException
+import com.ced2711.lifetracker.domain.model.AppIdentity
 import com.sun.net.httpserver.HttpServer
 import java.awt.Desktop
 import java.net.InetAddress
@@ -86,7 +87,7 @@ class DesktopGoogleOAuth(
             val body = when (callback) {
                 is OAuthCallbackResult.Code -> {
                     codeFuture.complete(callback.code)
-                    "Authorization received. Life Tracker is verifying Google Drive access. You can close this window."
+                    "Authorization received. ${AppIdentity.NAME} is verifying Google Drive access. You can close this window."
                 }
                 is OAuthCallbackResult.Failure -> {
                     codeFuture.completeExceptionally(CloudAuthorizationException(callback.message))

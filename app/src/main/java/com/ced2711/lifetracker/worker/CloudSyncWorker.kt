@@ -48,12 +48,12 @@ class CloudSyncWorker(
             }
             is AndroidCloudSyncResult.NeedsVaultUnlock -> {
                 container.cloudSyncPreferences.setAttention(CloudSyncAttention.VAULT_UNLOCK)
-                notifyAttention("Unlock Vault in Life Tracker to finish the encrypted cloud sync.")
+                notifyAttention("Unlock Vault in Life Assistant to finish the encrypted cloud sync.")
                 Result.success()
             }
             AndroidCloudSyncResult.NeedsGoogleConsent -> {
                 container.cloudSyncPreferences.setAttention(CloudSyncAttention.GOOGLE_CONSENT)
-                notifyAttention("Open Life Tracker to reconnect Google Drive.")
+                notifyAttention("Open Life Assistant to reconnect Google Drive.")
                 Result.success()
             }
             is AndroidCloudSyncResult.Failed -> {
@@ -100,7 +100,7 @@ class CloudSyncWorker(
         )
         val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(translateUiText("Life Tracker cloud sync", appSettings.uiLanguage))
+            .setContentTitle(translateUiText("Life Assistant cloud sync", appSettings.uiLanguage))
             .setContentText(localizedMessage)
             .setStyle(NotificationCompat.BigTextStyle().bigText(localizedMessage))
             .setContentIntent(pendingIntent)

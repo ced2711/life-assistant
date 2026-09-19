@@ -24,6 +24,34 @@ import org.junit.Test
 
 class DesktopParityStoreTest {
     @Test
+    fun rebrandKeepsLegacyStorageDirectoryAndReadsExistingDataAndConfig() = runBlocking {
+        assertEquals("Life Tracker", DesktopDataStore.defaultAppDirectory().name)
+        val root = Files.createTempDirectory("life-assistant-rebrand-compatibility").toFile()
+        val legacyDirectory = root.resolve("Life Tracker")
+        try {
+            val store = DesktopDataStore(legacyDirectory)
+            assertTrue(store.open(password()))
+            assertTrue(store.upsertTodo(null, "Legacy record", "Still readable", null, TodoPriority.NONE, null, "", false))
+            store.close()
+
+            val configFile = legacyDirectory.resolve("desktop.properties")
+            val config = DesktopConfigStore(configFile)
+            config.setClientId("legacy-client")
+            config.setUiLanguage(UiLanguage.SIMPLIFIED_CHINESE)
+
+            val reopened = DesktopDataStore(legacyDirectory)
+            assertTrue(reopened.open(password()))
+            assertEquals("Legacy record", reopened.currentSnapshot()!!.todos.single().title)
+            reopened.close()
+            val persistedConfig = DesktopConfigStore(configFile).read()
+            assertEquals("legacy-client", persistedConfig.clientId)
+            assertEquals(UiLanguage.SIMPLIFIED_CHINESE, persistedConfig.uiLanguage)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun configDefaultsOfflineAndDeviceLocalSettingsSurviveDisconnect() {
         val root = Files.createTempDirectory("life-tracker-desktop-config-test").toFile()
         try {

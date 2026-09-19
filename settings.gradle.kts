@@ -14,7 +14,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "LifeTracker"
+rootProject.name = "LifeAssistant"
 include(":app")
 include(":cloudsync")
 include(":desktopApp")

@@ -96,7 +96,7 @@ fun BackupRestoreScreen(
     cloudViewModel: CloudSyncViewModel,
     onSensitiveContentChanged: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
-    defaultExportFileName: String = "LifeTracker-backup.tlb",
+    defaultExportFileName: String = "LifeAssistant-backup.tlb",
     hasIncludedPersonalBackup: Boolean = false,
 ) {
     var exportDestination by remember { mutableStateOf<Uri?>(null) }
@@ -413,7 +413,7 @@ private fun CloudSyncCard(
             }
             Text(
                 localizedText(
-                    "Sync password-encrypted snapshots through Life Tracker's private app folder. " +
+                    "Sync password-encrypted snapshots through Life Assistant's private app folder. " +
                         "The app cannot see other files in your Google Drive.",
                 ),
                 style = MaterialTheme.typography.bodyMedium,
@@ -429,7 +429,7 @@ private fun CloudSyncCard(
             )
             Text(
                 localizedText(
-                    "Google Drive is optional. Life Tracker works offline by default; enable Drive " +
+                    "Google Drive is optional. Life Assistant works offline by default; enable Drive " +
                         "only when you want encrypted backups shared between Android and Windows.",
                 ),
                 style = MaterialTheme.typography.bodySmall,
@@ -455,7 +455,7 @@ private fun CloudSyncCard(
                 Text(
                     localizedText(
                         "When Vault contains entries, background sync pauses until you unlock it " +
-                            "in Life Tracker. This keeps Vault keys protected by Android.",
+                            "in Life Assistant. This keeps Vault keys protected by Android.",
                     ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -550,7 +550,7 @@ private fun CloudRecoveryCard(files: List<String>, enabled: Boolean, onExport: (
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(localizedText("Local sync recovery"), style = MaterialTheme.typography.titleMedium)
             Text(
-                localizedText("Before using a cloud version, Life Tracker keeps an encrypted local recovery copy. Export a copy and use Restore backup to recover it with its original sync password. Copies are not deleted automatically."),
+                localizedText("Before using a cloud version, Life Assistant keeps an encrypted local recovery copy. Export a copy and use Restore backup to recover it with its original sync password. Copies are not deleted automatically."),
                 style = MaterialTheme.typography.bodySmall,
             )
             TextButton(onClick = { expanded = !expanded }) {
@@ -677,7 +677,7 @@ private fun IncludedPersonalBackupCard(
     onRestore: () -> Unit,
 ) {
     BackupActionCard(
-        title = "Restore your previous Life Tracker data",
+        title = "Restore your previous data",
         description = "This personal migration build contains your original encrypted backup. " +
             "Enter its password to validate it, review the contents, and restore. The password " +
             "and decrypted data are not built into the app.",
@@ -1102,7 +1102,7 @@ private fun RestoreReplacementConfirmationDialog(
 private fun BlockingBackupDialog(task: BackupRestoreTask) {
     val (title, message) = when (task) {
         BackupRestoreTask.EXPORTING ->
-            "Creating encrypted backup" to "Keep Life Tracker open while the file is written."
+            "Creating encrypted backup" to "Keep Life Assistant open while the file is written."
         BackupRestoreTask.VALIDATING_RESTORE ->
             "Checking backup" to "Decrypting and validating everything before making changes."
         BackupRestoreTask.COMMITTING_RESTORE ->
@@ -1125,6 +1125,6 @@ private fun BlockingBackupDialog(task: BackupRestoreTask) {
 }
 
 internal fun ensureBackupExtension(fileName: String): String {
-    val trimmed = fileName.trim().ifEmpty { "LifeTracker-backup" }
+    val trimmed = fileName.trim().ifEmpty { "LifeAssistant-backup" }
     return if (trimmed.endsWith(".tlb", ignoreCase = true)) trimmed else "$trimmed.tlb"
 }

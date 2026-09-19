@@ -99,7 +99,7 @@ class BackupRestoreContractTest {
     fun exportFileNameAlwaysUsesTaskLedgerExtension() {
         assertEquals("TaskLedger-backup.tlb", ensureBackupExtension("TaskLedger-backup"))
         assertEquals("archive.TLB", ensureBackupExtension(" archive.TLB "))
-        assertEquals("LifeTracker-backup.tlb", ensureBackupExtension("   "))
+        assertEquals("LifeAssistant-backup.tlb", ensureBackupExtension("   "))
     }
 
     @Test

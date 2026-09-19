@@ -8,7 +8,7 @@ This is a one-time developer setup for the application, not a requirement for ea
 
 1. Create or select a project in [Google Cloud Console](https://console.cloud.google.com/).
 2. Enable **Google Drive API** in APIs & Services.
-3. Configure Google Auth Platform / OAuth consent: application name **Life Tracker**, your support email, and your audience. For personal testing, choose External/Testing and add your own Google account as a test user. Do not publish real user data in screenshots or project descriptions.
+3. Configure Google Auth Platform / OAuth consent: application name **Life Assistant**, your support email, and your audience. For personal testing, choose External/Testing and add your own Google account as a test user. Do not publish real user data in screenshots or project descriptions.
 4. Request only `https://www.googleapis.com/auth/drive.appdata`. This gives access to the app's hidden data folder, not the rest of the user's Drive.
 5. Create an **Android** OAuth client with package `com.ced2711.lifetracker` and the SHA-1 fingerprint of the APK signing certificate. Use the release certificate for release APKs; a debug certificate requires a separate Android client. A future Google Play build needs its Play App Signing certificate registered too.
 6. Create a **Desktop app** OAuth client in the **same project**. Enter that client ID and, if supplied by Google's Desktop client configuration, its client secret in Windows Settings. Do not create a Web application client for Windows. Native Desktop client secrets are not confidential server secrets; PKCE and system-browser consent protect authorization. This app keeps the local value in Windows DPAPI rather than source control.
@@ -25,7 +25,7 @@ An OAuth project left in Testing can require reauthorization when Google's test 
 4. An empty Windows dataset can download the cloud snapshot. If both sides already have data, the app asks which complete dataset to keep. Choosing a side replaces the other dataset; it is not a record-by-record merge. Every upload creates a new encrypted file. Previous snapshots are retained indefinitely, including resolved branches, so Drive storage usage grows over time. There is currently no in-app history browser or automatic cleanup.
 5. Changes are uploaded/downloaded while the app is running, or by Android scheduled work when Android allows it. A 15-minute background interval is a scheduling request, not a guaranteed delivery time. Windows must be running and unlocked to sync.
 
-The password is for Life Tracker encryption, **not** your Google password. Losing it can make the encrypted cloud backup unreadable. Google authorization tokens and encryption keys are never included in `.tlb` backups.
+The password is for Life Assistant encryption, **not** your Google password. Losing it can make the encrypted cloud backup unreadable. Google authorization tokens and encryption keys are never included in `.tlb` backups.
 
 ## Security and behavior
 
@@ -47,8 +47,12 @@ The password is for Life Tracker encryption, **not** your Google password. Losin
 - **Windows denied / blocked / timeout:** the message now distinguishes denied consent, organization restrictions, client configuration and timeout. Cancelled or failed reconnection keeps an existing working connection; retry after checking the indicated cause.
 - **Access blocked / test user:** add the selected account to the consent screen's test users, or complete production publishing requirements.
 - **Empty cloud on the other device:** verify both OAuth clients are in the same Cloud project and both devices selected the same account.
-- **Wrong password / damaged backup:** use the same Life Tracker sync password on both devices. Do not choose a destructive overwrite to work around a password mismatch.
-- **Waiting for unlock:** open Android Life Tracker and authenticate its Vault, then sync.
+- **Wrong password / damaged backup:** use the same Life Assistant sync password on both devices. Do not choose a destructive overwrite to work around a password mismatch.
+- **Waiting for unlock:** open Android Life Assistant and authenticate its Vault, then sync.
 - **Cloud history missing:** reconnect only after verifying the Google account and project; local data remains available.
 
 Official references: [Drive app data](https://developers.google.com/workspace/drive/api/guides/appdata), [Android authorization](https://developers.google.com/identity/authorization/android), [OAuth for installed apps](https://developers.google.com/identity/protocols/oauth2/native-app).
+
+## Branding update in 1.7.0
+
+The application is now called Life Assistant (生活助手). Rename an existing Google OAuth consent-screen display name if desired, but **reuse the existing Google Cloud project, Android package, signing certificate and OAuth clients**. Creating a different project can isolate its Drive app-data folder and make old cloud backups appear missing. The retained `life-tracker-sync-v1` protocol, `life-tracker-sync-` filename prefix and legacy environment-variable names are intentional. Changing the GitHub repository name does not change Google's consent-screen name automatically.

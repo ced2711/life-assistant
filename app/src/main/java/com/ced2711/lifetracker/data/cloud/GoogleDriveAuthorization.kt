@@ -179,5 +179,5 @@ private fun authorizationFailure(
 }
 
 class CloudConsentRequiredException : CloudAuthorizationException(
-    "Open Life Tracker to finish connecting Google Drive.",
+    "Open Life Assistant to finish connecting Google Drive.",
 )

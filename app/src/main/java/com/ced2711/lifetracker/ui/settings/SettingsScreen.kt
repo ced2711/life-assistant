@@ -2,7 +2,11 @@ package com.ced2711.lifetracker.ui.settings
 
 import android.Manifest
 import android.app.TimePickerDialog
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.text.format.DateFormat
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -63,6 +67,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ced2711.lifetracker.BuildConfig
+import com.ced2711.lifetracker.domain.model.AppIdentity
 import com.ced2711.lifetracker.domain.format.UserFormatting
 import com.ced2711.lifetracker.domain.model.AccentColor
 import com.ced2711.lifetracker.domain.model.DateFormatOption
@@ -99,6 +104,8 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
     val uiLanguage = LocalUiLanguage.current
     var choiceDialog by rememberSettingsDialogState()
+    val noBrowserMessage = localizedText("No browser is available to open the source link.")
+    val sourceLinkErrorMessage = localizedText("The source link could not be opened.")
 
     LaunchedEffect(viewModel, uiLanguage) {
         viewModel.errors.collect { message ->
@@ -242,13 +249,24 @@ fun SettingsScreen(
 
                 SettingsSectionTitle("About")
                 Column(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { choiceDialog = SettingsDialog.About }
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Text(localizedText("Life Tracker by ced2711"), style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        localizedText("${AppIdentity.NAME} by ${AppIdentity.AUTHOR}"),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
                     Text(
                         text = localizedText("Version ${BuildConfig.VERSION_NAME} • Private and offline"),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        text = localizedText("View license, notices, and source"),
+                        color = MaterialTheme.colorScheme.primary,
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
@@ -344,9 +362,87 @@ fun SettingsScreen(
             )
         }
 
+        SettingsDialog.About -> AboutDialog(
+            onDismiss = { choiceDialog = null },
+            onOpenSource = {
+                try {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(AppIdentity.SOURCE_URL)))
+                } catch (_: ActivityNotFoundException) {
+                    scope.launch {
+                        snackbarHostState.showSnackbar(noBrowserMessage)
+                    }
+                } catch (_: SecurityException) {
+                    scope.launch {
+                        snackbarHostState.showSnackbar(sourceLinkErrorMessage)
+                    }
+                }
+            },
+        )
+
         null -> Unit
     }
 }
+
+@Composable
+private fun AboutDialog(
+    onDismiss: () -> Unit,
+    onOpenSource: () -> Unit,
+) {
+    val context = LocalContext.current
+    val licenseText = remember(context) {
+        readBundledLegalText(context, AppIdentity.LICENSE_RESOURCE)
+    }
+    val permissionText = remember(context) {
+        readBundledLegalText(context, AppIdentity.PERMISSION_RESOURCE)
+    }
+    val noticeText = remember(context) {
+        readBundledLegalText(context, AppIdentity.NOTICE_RESOURCE)
+    }
+    HingeSafeAlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(localizedText("About ${AppIdentity.NAME}")) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "${AppIdentity.COPYRIGHT} • v${AppIdentity.VERSION}",
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Text(
+                    text = AppIdentity.LICENSE_LABEL,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Text(
+                    text = localizedText(
+                        "This software is provided as-is, without warranty of any kind. Use it at your own risk.",
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                // Keep the source offer visible without scrolling through the full license first.
+                TextButton(onClick = onOpenSource) { Text(localizedText("View source")) }
+                Text(localizedText("License"), style = MaterialTheme.typography.titleSmall)
+                Text(licenseText, style = MaterialTheme.typography.bodySmall)
+                Text(localizedText("Additional permissions"), style = MaterialTheme.typography.titleSmall)
+                Text(permissionText, style = MaterialTheme.typography.bodySmall)
+                Text(localizedText("Notices"), style = MaterialTheme.typography.titleSmall)
+                Text(noticeText, style = MaterialTheme.typography.bodySmall)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(localizedText("Close")) }
+        },
+        confirmButton = {
+            TextButton(onClick = onOpenSource) { Text(localizedText("View source")) }
+        },
+    )
+}
+
+private fun readBundledLegalText(context: Context, path: String): String =
+    runCatching {
+        context.assets.open(path).bufferedReader().use { it.readText() }
+    }.getOrElse {
+        "${AppIdentity.NAME}: this legal document is unavailable in this build."
+    }
 
 @Composable
 private fun SettingsSectionTitle(title: String) {
@@ -740,6 +836,7 @@ internal enum class SettingsDialog {
     TodoQuickAddFields,
     DefaultReminders,
     AllDayReminderTime,
+    About,
 }
 
 private val UiLanguage.label: String

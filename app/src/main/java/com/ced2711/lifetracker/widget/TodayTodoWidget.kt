@@ -213,7 +213,7 @@ private fun WideTodayTodoContent(
         ) {
             when {
                 !recoveryReady -> Text(
-                    text = translateUiText("Open Life Tracker to recover data", uiLanguage),
+                    text = translateUiText("Open Life Assistant to recover data", uiLanguage),
                     style = TextStyle(color = GlanceTheme.colors.secondary, fontSize = 12.sp),
                     maxLines = 2,
                 )
@@ -296,7 +296,7 @@ private fun StandardTodayTodoContent(
         Column(modifier = GlanceModifier.defaultWeight().fillMaxWidth()) {
             if (!recoveryReady) {
                 Text(
-                    text = translateUiText("Open Life Tracker to finish data recovery", uiLanguage),
+                    text = translateUiText("Open Life Assistant to finish data recovery", uiLanguage),
                     style = TextStyle(color = GlanceTheme.colors.secondary, fontSize = 13.sp),
                     maxLines = 2,
                 )

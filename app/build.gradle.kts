@@ -32,8 +32,8 @@ android {
         applicationId = "com.ced2711.lifetracker"
         minSdk = 26
         targetSdk = 36
-        versionCode = 13
-        versionName = "1.6.1"
+        versionCode = 14
+        versionName = "1.7.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -90,7 +90,7 @@ android {
     }
 
     packaging {
-        resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        resources.merges += "/META-INF/{AL2.0,LGPL2.1}"
     }
 
     testOptions {
@@ -98,6 +98,7 @@ android {
     }
 
     sourceSets {
+        getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/legal-assets"))
         getByName("androidTest").assets.srcDir("$projectDir/schemas")
     }
 }
@@ -148,9 +149,15 @@ dependencies {
     androidTestImplementation(libs.compose.ui.test.junit4)
 }
 
+val prepareLegalAssets by tasks.registering(Sync::class) {
+    from(rootProject.file("LICENSE"), rootProject.file("ADDITIONAL_PERMISSIONS.md"), rootProject.file("NOTICE"))
+    into(layout.buildDirectory.dir("generated/legal-assets/legal"))
+}
+
 // A personal build without its encrypted migration payload would be misleading. Standard builds,
 // including CI, remain fully reproducible without any private user material.
 tasks.configureEach {
+    if (name == "preBuild") dependsOn(prepareLegalAssets)
     if (name == "mergePersonalDebugAssets" || name == "mergePersonalReleaseAssets") {
         doFirst {
             check(file("src/personal/assets/personal-backup.tlb").isFile) {

@@ -7,6 +7,19 @@ import org.junit.Test
 
 class UiLocalizationTest {
     @Test
+    fun `new branding and legal access are localized without changing source URLs`() {
+        val chinese = UiLanguage.SIMPLIFIED_CHINESE
+        assertEquals("生活助手", translateUiText("Life Assistant", chinese))
+        assertEquals("生活助手 · ced2711", translateUiText("Life Assistant by ced2711", chinese))
+        assertEquals("关于生活助手", translateUiText("About Life Assistant", chinese))
+        assertEquals("查看许可证、声明与源码", translateUiText("View license, notices, and source", chinese))
+        assertEquals("生活助手 云同步", translateUiText("Life Assistant cloud sync", chinese))
+        val source = "https://github.com/ced2711/life-assistant/tree/v1.7.0"
+        assertEquals(source, translateUiText(source, chinese))
+        assertEquals("Life Assistant", translateUiText("Life Assistant", UiLanguage.ENGLISH))
+    }
+
+    @Test
     fun `Google authorization diagnostics preserve codes in Chinese`() {
         val chinese = UiLanguage.SIMPLIFIED_CHINESE
         assertEquals(

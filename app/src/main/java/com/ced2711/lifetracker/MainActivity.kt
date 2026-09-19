@@ -622,7 +622,7 @@ private fun StartupRecoveryGate(
                     )
                     Text(
                         text = localizedText(
-                            "Life Tracker has kept your data closed to avoid conflicting changes. " +
+                            "Life Assistant has kept your data closed to avoid conflicting changes. " +
                                 "Try again before using the app.",
                         ),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -646,4 +646,4 @@ private enum class AuxiliaryScreen {
 }
 
 private fun defaultBackupFileName(): String =
-    "LifeTracker-backup-${LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)}.tlb"
+    "LifeAssistant-backup-${LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)}.tlb"

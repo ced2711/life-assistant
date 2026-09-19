@@ -101,7 +101,7 @@ class DesktopConfigStore(
         file.parentFile?.mkdirs()
         val temporary = File(file.parentFile, "${file.name}.part")
         try {
-            temporary.outputStream().use { properties.store(it, "Life Tracker desktop settings") }
+            temporary.outputStream().use { properties.store(it, "Life Assistant desktop settings") }
             try {
                 Files.move(
                     temporary.toPath(),

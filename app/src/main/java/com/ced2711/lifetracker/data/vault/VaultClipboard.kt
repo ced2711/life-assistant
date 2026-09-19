@@ -250,7 +250,7 @@ class VaultClipboard(
     private companion object {
         const val CLEAR_DELAY_MILLIS = 30_000L
         const val FOREGROUND_RETRY_DELAY_MILLIS = 250L
-        const val CLIP_LABEL = "Life Tracker"
+        const val CLIP_LABEL = "Life Assistant"
         const val EMPTY_CLIP_LABEL = ""
         const val EMPTY_CLIP_TEXT = ""
         const val OWNER_TOKEN_EXTRA = "com.ced2711.lifetracker.vault.CLIP_OWNER_TOKEN"

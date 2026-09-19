@@ -15,6 +15,7 @@ import com.ced2711.lifetracker.data.local.NoteEntity
 import com.ced2711.lifetracker.data.local.NoteFolderEntity
 import com.ced2711.lifetracker.data.local.TodoEntity
 import com.ced2711.lifetracker.domain.model.AccentColor
+import com.ced2711.lifetracker.domain.model.AppIdentity
 import com.ced2711.lifetracker.domain.model.AttachmentOwnerType
 import com.ced2711.lifetracker.domain.model.DateFormatOption
 import com.ced2711.lifetracker.domain.model.LedgerType
@@ -87,7 +88,7 @@ class DesktopDataStore(
             try {
                 appDirectory.mkdirs()
                 if (!acquireInstanceLock()) {
-                    _state.value = DesktopStoreState.Error("Life Tracker is already open on this Windows account.")
+                    _state.value = DesktopStoreState.Error("${AppIdentity.NAME} is already open on this Windows account.")
                     return@withContext false
                 }
                 cleanupStaleWorkingFiles()

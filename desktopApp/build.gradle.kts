@@ -25,6 +25,7 @@ sourceSets {
             srcDirs("src/main/kotlin", "../app/src/main/java")
             include("com/ced2711/lifetracker/desktop/**")
             include("com/ced2711/lifetracker/domain/model/AppModels.kt")
+            include("com/ced2711/lifetracker/domain/model/AppIdentity.kt")
             include("com/ced2711/lifetracker/domain/model/TodoOrganization.kt")
             include("com/ced2711/lifetracker/domain/model/VaultModels.kt")
             include("com/ced2711/lifetracker/domain/date/SmartDateParser.kt")
@@ -38,6 +39,7 @@ sourceSets {
             include("com/ced2711/lifetracker/data/backup/BackupCrypto.kt")
             include("com/ced2711/lifetracker/data/backup/AttachmentStager.kt")
         }
+        resources.srcDir(layout.buildDirectory.dir("generated/legal-resources"))
     }
 }
 
@@ -55,7 +57,13 @@ dependencies {
     testImplementation(libs.junit)
 }
 
-val windowsIconFile = layout.buildDirectory.file("generated/icons/life-tracker.ico")
+val prepareLegalResources by tasks.registering(Sync::class) {
+    from(rootProject.file("LICENSE"), rootProject.file("ADDITIONAL_PERMISSIONS.md"), rootProject.file("NOTICE"))
+    into(layout.buildDirectory.dir("generated/legal-resources/legal"))
+}
+tasks.named("processResources") { dependsOn(prepareLegalResources) }
+
+val windowsIconFile = layout.buildDirectory.file("generated/icons/life-assistant.ico")
 val generateWindowsIcon by tasks.registering {
     outputs.file(windowsIconFile)
     doLast {
@@ -117,10 +125,12 @@ compose.desktop {
         mainClass = "com.ced2711.lifetracker.desktop.MainKt"
         nativeDistributions {
             targetFormats(TargetFormat.Exe, TargetFormat.Msi)
-            packageName = "Life Tracker"
-            packageVersion = "1.6.1"
+            packageName = "Life Assistant"
+            packageVersion = "1.7.0"
             description = "Private life planning, ledger, calendar, notes, and vault"
             vendor = "ced2711"
+            copyright = "Copyright 2026 ced2711"
+            licenseFile.set(rootProject.file("LICENSE"))
             modules("java.net.http", "jdk.httpserver")
             windows {
                 iconFile.set(windowsIconFile)
@@ -128,6 +138,8 @@ compose.desktop {
                 shortcut = true
                 dirChooser = true
                 perUserInstall = true
+                // Preserve the default install location and upgrade family of Life Tracker.
+                installationPath = "Life Tracker"
                 upgradeUuid = "4f5dcd57-85a1-4cb5-9e14-a0d5c8b8940b"
             }
         }

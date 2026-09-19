@@ -13,12 +13,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.application
+import com.ced2711.lifetracker.domain.model.AppIdentity
 
 fun main() = application {
     val windowIcon = remember { LifeTrackerWindowIcon() }
     Window(
         onCloseRequest = ::exitApplication,
-        title = "Life Tracker",
+        title = AppIdentity.NAME,
         icon = windowIcon,
         state = WindowState(size = DpSize(1280.dp, 800.dp)),
     ) {

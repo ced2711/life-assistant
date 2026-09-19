@@ -1,6 +1,7 @@
 package com.ced2711.lifetracker.desktop
 
 import androidx.compose.runtime.Composable
+import com.ced2711.lifetracker.domain.model.AppIdentity
 import com.ced2711.lifetracker.domain.model.UiLanguage
 import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
 import com.ced2711.lifetracker.ui.localization.translateUiText
@@ -35,7 +36,7 @@ private val desktopSimplifiedChinese = mapOf(
     "Unfiled" to "未归档",
     "Operation failed" to "操作失败",
     "OK" to "确定",
-    "Life Tracker" to "Life Tracker",
+    AppIdentity.NAME to "生活助手",
     "Unlock your encrypted local data." to "解锁已加密的本地数据。",
     "Create an encrypted local data file. Use this same password for Google Drive sync." to "创建加密的本地数据文件。Google Drive 同步时使用相同的密码。",
     "Data password" to "数据密码",
@@ -82,7 +83,6 @@ private val desktopSimplifiedChinese = mapOf(
     "Todos" to "待办",
     "No todos" to "没有待办",
     "No ledger entries" to "没有流水",
-    "Close" to "关闭",
     "Hide folders" to "隐藏文件夹",
     "New note" to "新建笔记",
     "Edit note" to "编辑笔记",
@@ -100,10 +100,10 @@ private val desktopSimplifiedChinese = mapOf(
     "Google Drive sync" to "Google Drive 同步",
     "Connected" to "已连接",
     "Not connected" to "未连接",
-    "Encrypted snapshots are stored in Life Tracker's private Google Drive app folder. Other Drive files are not accessible." to "加密快照保存在 Life Tracker 的 Google Drive 私有应用文件夹中，无法访问 Drive 中的其他文件。",
+    "Encrypted snapshots are stored in Life Assistant's private Google Drive app folder. Other Drive files are not accessible." to "加密快照保存在生活助手的 Google Drive 私有应用文件夹中，无法访问 Drive 中的其他文件。",
     "Each upload creates a new encrypted version. Previous versions are kept; conflicts pause sync until you resolve them." to "每次上传都会创建新的加密版本。旧版本会保留；发生冲突时同步会暂停，直到你解决冲突。",
     "Automatic sync" to "自动同步",
-    "Off by default. When enabled, checks every 15 minutes while Life Tracker is running" to "默认关闭。开启后，Life Tracker 运行期间每 15 分钟检查一次",
+    "Off by default. When enabled, checks every 15 minutes while Life Assistant is running" to "默认关闭。开启后，生活助手运行期间每 15 分钟检查一次",
     "Syncing…" to "同步中…",
     "Sync now" to "立即同步",
     "Disconnect / switch account" to "断开连接 / 切换账号",
@@ -125,7 +125,7 @@ private val desktopSimplifiedChinese = mapOf(
     "Encrypted backup exported." to "加密备份已导出。",
     "Export backup" to "导出备份",
     "Import backup" to "导入备份",
-    "Life Tracker Desktop 1.6.1 • Data format compatible with Android" to "Life Tracker Desktop 1.6.1 • 数据格式兼容 Android",
+    "Life Assistant Desktop 1.7.0 • Data format compatible with Android" to "生活助手桌面版 1.7.0 • 数据格式兼容 Android",
     "Import encrypted backup?" to "导入加密备份？",
     "Enter the password used when this backup was created. After validation, its contents will be encrypted with this PC's current data password." to "输入创建此备份时使用的密码。验证后，内容会使用此电脑当前的数据密码重新加密。",
     "Source backup password" to "源备份密码",
@@ -146,7 +146,7 @@ private val desktopSimplifiedChinese = mapOf(
     "The file operation could not be completed. Check available storage and file access, then try again." to "文件操作无法完成。请检查存储空间和文件访问权限后重试。",
     "One of the entered values is invalid." to "输入的值无效。",
     "The operation could not be completed. Your last saved data was kept." to "操作无法完成。上次保存的数据已保留。",
-    "Life Tracker is already open on this Windows account." to "此 Windows 账户中已经打开了 Life Tracker。",
+    "Life Assistant is already open on this Windows account." to "此 Windows 账户中已经打开了生活助手。",
     "The local data password is incorrect or the file is damaged." to "本地数据密码不正确或文件已损坏。",
     "Google Drive connected." to "Google Drive 已连接。",
     "Google Drive disconnected. Local data was kept." to "Google Drive 已断开连接。本地数据已保留。",
@@ -179,7 +179,15 @@ private val desktopSimplifiedChinese = mapOf(
     "Google rejected this OAuth client. Check the Desktop OAuth client ID/secret and that the client is enabled." to "Google 拒绝了此 OAuth 客户端。请检查 Desktop OAuth 客户端 ID/密钥并确认客户端已启用。",
     "Google rejected the authorization code or refresh token. Reconnect Google Drive." to "Google 拒绝了授权码或刷新令牌。请重新连接 Google Drive。",
     "Google denied Drive access. Choose an account that can use this app and try again." to "Google 拒绝了 Drive 访问。请选择可使用此应用的账号后重试。",
-    "Before using a cloud version, Life Tracker keeps an encrypted local recovery copy. Import a copy to recover earlier local data. Recovery copies are not deleted automatically." to "使用云端版本前，Life Tracker 会保留一份加密的本地恢复副本。导入副本即可恢复之前的本地数据。恢复副本不会自动删除。",
+    "Before using a cloud version, Life Assistant keeps an encrypted local recovery copy. Import a copy to recover earlier local data. Recovery copies are not deleted automatically." to "使用云端版本前，生活助手会保留一份加密的本地恢复副本。导入副本即可恢复之前的本地数据。恢复副本不会自动删除。",
+    "About" to "关于",
+    "View license" to "查看许可证",
+    "Source code" to "源代码",
+    "License" to "许可证",
+    "Version" to "版本",
+    "This software is provided without warranty." to "本软件不提供任何保证。",
+    "The full license and additional permissions are available offline." to "完整许可证和附加权限可离线查看。",
+    "Close" to "关闭",
     "Open sync recovery folder" to "打开同步恢复文件夹",
 )
 
@@ -221,6 +229,11 @@ fun desktopRange(value: String, language: UiLanguage): String = when (language) 
 fun desktopLastSync(value: String, language: UiLanguage): String = when (language) {
     UiLanguage.ENGLISH -> "Last sync: $value"
     UiLanguage.SIMPLIFIED_CHINESE -> "上次同步：$value"
+}
+
+fun desktopAppVersion(language: UiLanguage): String = when (language) {
+    UiLanguage.ENGLISH -> "${AppIdentity.NAME} Desktop ${AppIdentity.VERSION} • Data format compatible with Android"
+    UiLanguage.SIMPLIFIED_CHINESE -> "生活助手桌面版 ${AppIdentity.VERSION} • 数据格式兼容 Android"
 }
 
 @Composable

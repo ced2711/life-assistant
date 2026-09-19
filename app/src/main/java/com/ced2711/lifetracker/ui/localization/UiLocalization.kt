@@ -177,8 +177,8 @@ private val zhHans = mapOf(
     "Add todo" to "添加待办",
     "Unavailable" to "不可用",
     "Offline" to "离线",
-    "Open Life Tracker to recover data" to "打开 Life Tracker 以恢复数据",
-    "Open Life Tracker to finish data recovery" to "打开 Life Tracker 完成数据恢复",
+    "Open Life Assistant to recover data" to "打开 生活助手 以恢复数据",
+    "Open Life Assistant to finish data recovery" to "打开 生活助手 完成数据恢复",
     "All clear for today ✓" to "今天已全部完成 ✓",
     "+ Task" to "+ 待办",
     "Todo reminder" to "待办提醒",
@@ -199,10 +199,10 @@ private val zhHans = mapOf(
     "Finishing data recovery…" to "正在完成数据恢复…",
     "Your tasks, ledger, and vault will open when it is safe." to "安全检查完成后即可打开待办、流水和密码库。",
     "Data recovery couldn't finish" to "数据恢复未能完成",
-    "Life Tracker has kept your data closed to avoid conflicting changes. Try again before using the app." to
-        "Life Tracker 已暂时锁定数据以避免冲突，请重试后再使用。",
+    "Life Assistant has kept your data closed to avoid conflicting changes. Try again before using the app." to
+        "生活助手 已暂时锁定数据以避免冲突，请重试后再使用。",
     "Private, offline backup" to "私密离线备份",
-    "Restore your previous Life Tracker data" to "恢复以前的 Life Tracker 数据",
+    "Restore your previous data" to "恢复以前的数据",
     "This personal migration build contains your original encrypted backup. Enter its password to validate it, review the contents, and restore. The password and decrypted data are not built into the app." to
         "此个人迁移版本包含你原来的加密备份。请输入密码进行验证、查看内容并恢复；密码和解密后的数据并未内置在应用中。",
     "Export encrypted backup" to "导出加密备份",
@@ -246,7 +246,7 @@ private val zhHans = mapOf(
     "Back to preview" to "返回预览",
     "Replace & restore" to "替换并恢复",
     "Creating encrypted backup" to "正在创建加密备份",
-    "Keep Life Tracker open while the file is written." to "写入文件时请保持 Life Tracker 运行。",
+    "Keep Life Assistant open while the file is written." to "写入文件时请保持 生活助手 运行。",
     "Checking backup" to "正在检查备份",
     "Decrypting and validating everything before making changes." to "正在解密并验证全部内容，完成前不会更改数据。",
     "Restoring backup" to "正在恢复备份",
@@ -259,16 +259,16 @@ private val zhHans = mapOf(
     "Google Drive sync" to "Google Drive 同步",
     "Connected" to "已连接",
     "Not connected" to "未连接",
-    "Sync password-encrypted snapshots through Life Tracker's private app folder. The app cannot see other files in your Google Drive." to
-        "通过 Life Tracker 的专用应用文件夹同步密码加密的快照。应用无法查看 Google Drive 中的其他文件。",
+    "Sync password-encrypted snapshots through Life Assistant's private app folder. The app cannot see other files in your Google Drive." to
+        "通过 生活助手 的专用应用文件夹同步密码加密的快照。应用无法查看 Google Drive 中的其他文件。",
     "Each upload creates a new encrypted version. Previous versions are kept; conflicts pause sync." to
         "每次上传都会创建新的加密版本，之前的版本会保留；出现冲突时暂停同步。",
-    "Google Drive is optional. Life Tracker works offline by default; enable Drive only when you want encrypted backups shared between Android and Windows." to
-        "Google Drive 为可选功能，Life Tracker 默认离线使用。需要在 Android 和 Windows 之间共享加密备份时，再启用 Drive。",
+    "Google Drive is optional. Life Assistant works offline by default; enable Drive only when you want encrypted backups shared between Android and Windows." to
+        "Google Drive 为可选功能，生活助手 默认离线使用。需要在 Android 和 Windows 之间共享加密备份时，再启用 Drive。",
     "Setup requires Drive API access, package com.ced2711.lifetracker, and the release signing SHA-1 listed in the setup guide. Android and Windows must use the same Google Cloud project and account." to
         "配置需要启用 Drive API、注册包名 com.ced2711.lifetracker，以及配置指南中的发布签名 SHA-1。Android 和 Windows 必须使用同一 Google Cloud 项目和账号。",
-    "When Vault contains entries, background sync pauses until you unlock it in Life Tracker. This keeps Vault keys protected by Android." to
-        "密码库中有条目时，后台同步会暂停，直到你在 Life Tracker 中解锁密码库，以便继续由 Android 保护密码库密钥。",
+    "When Vault contains entries, background sync pauses until you unlock it in Life Assistant. This keeps Vault keys protected by Android." to
+        "密码库中有条目时，后台同步会暂停，直到你在 生活助手 中解锁密码库，以便继续由 Android 保护密码库密钥。",
     "Automatic sync" to "自动同步",
     "Runs periodically when a network is available" to "有网络时定期运行",
     "Syncing…" to "正在同步…",
@@ -291,8 +291,8 @@ private val zhHans = mapOf(
     "Local sync recovery" to "本机同步恢复副本",
     "Export" to "导出",
     "Could not create the cloud recovery directory." to "无法创建同步恢复副本目录，本机数据未被替换。",
-    "Before using a cloud version, Life Tracker keeps an encrypted local recovery copy. Export a copy and use Restore backup to recover it with its original sync password. Copies are not deleted automatically." to
-        "使用云端版本前，Life Tracker 会保留一份加密的本机恢复副本。导出副本后，可通过“恢复备份”输入创建时的同步密码找回数据。副本不会自动删除。",
+    "Before using a cloud version, Life Assistant keeps an encrypted local recovery copy. Export a copy and use Restore backup to recover it with its original sync password. Copies are not deleted automatically." to
+        "使用云端版本前，生活助手 会保留一份加密的本机恢复副本。导出副本后，可通过“恢复备份”输入创建时的同步密码找回数据。副本不会自动删除。",
     "Hide recovery copies" to "收起恢复副本",
     "Show recovery copies" to "显示恢复副本",
     "Encrypted recovery copy exported. Restore it with the sync password used when it was created." to "加密恢复副本已导出，请使用创建时的同步密码恢复。",
@@ -304,7 +304,7 @@ private val zhHans = mapOf(
     "Google account sign-in failed." to "Google 账号登录失败。",
     "Google Drive permission was not granted." to "未授予 Google Drive 权限。",
     "Google Drive app-data access was not granted." to "未授予 Google Drive 应用数据访问权限。",
-    "Open Life Tracker to finish connecting Google Drive." to "请打开 Life Tracker 完成 Google Drive 连接。",
+    "Open Life Assistant to finish connecting Google Drive." to "请打开 生活助手 完成 Google Drive 连接。",
     "Google Drive changed before upload. Sync again to review it." to "上传前 Google Drive 已发生变化，请重新同步并检查冲突。",
     "Google Drive connection was cancelled." to "已取消 Google Drive 连接。",
     "Vault authentication was cancelled." to "已取消密码库身份验证。",
@@ -333,12 +333,12 @@ private val zhHans = mapOf(
         "下载的备份大小与 Google Drive 元数据不一致。",
     "Could not reach Google Drive." to "无法连接 Google Drive。",
     "Google Drive authorization expired or was revoked." to "Google Drive 授权已过期或被撤销。",
-    "Unlock Vault in Life Tracker to finish the encrypted cloud sync." to
-        "请在 Life Tracker 中解锁密码库，以完成加密云同步。",
-    "Open Life Tracker to reconnect Google Drive." to "请打开 Life Tracker 重新连接 Google Drive。",
+    "Unlock Vault in Life Assistant to finish the encrypted cloud sync." to
+        "请在 生活助手 中解锁密码库，以完成加密云同步。",
+    "Open Life Assistant to reconnect Google Drive." to "请打开 生活助手 重新连接 Google Drive。",
     "Google Drive has conflicting changes. Open Backup & sync to choose a version." to
         "Google Drive 中存在冲突更改。请打开“备份与同步”选择版本。",
-    "Life Tracker cloud sync" to "Life Tracker 云同步",
+    "Life Assistant cloud sync" to "生活助手 云同步",
     "Cloud sync" to "云同步",
     "Google Drive sync needs attention" to "Google Drive 同步需要处理",
     "Cloud changes need review. Sync now to choose which version to keep." to
@@ -615,7 +615,17 @@ private val zhHans = mapOf(
     "Default reminders" to "默认提醒",
     "All-day reminder time" to "全天待办提醒时间",
     "About" to "关于",
-    "Life Tracker by ced2711" to "Life Tracker by ced2711",
+    "Life Assistant" to "生活助手",
+    "Life Assistant by ced2711" to "生活助手 · ced2711",
+    "View license, notices, and source" to "查看许可证、声明与源码",
+    "No browser is available to open the source link." to "没有可用于打开源码链接的浏览器。",
+    "The source link could not be opened." to "无法打开源码链接。",
+    "About Life Assistant" to "关于生活助手",
+    "This software is provided as-is, without warranty of any kind. Use it at your own risk." to "本软件按现状提供，不作任何担保。使用风险由使用者自行承担。",
+    "License" to "许可证",
+    "Additional permissions" to "附加许可",
+    "Notices" to "版权及第三方声明",
+    "View source" to "查看源码",
     "Automatically add these to new todos that have a deadline." to "自动为有截止日期的新待办添加这些提醒。",
     "Choose optional fields shown below the quick add description." to "选择快速添加说明下方显示的可选字段。",
     "At due time" to "到期时",

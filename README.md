@@ -1,6 +1,8 @@
-# Life Tracker
+# Life Assistant
 
-Life Tracker is an open-source, offline-first personal organizer for Android and Windows. It combines Todo, Ledger, Calendar, and Notes, with encrypted backup and optional Google Drive synchronization. The Android interface adapts to phones, tablets and foldables such as the Samsung Galaxy Z Fold series. The Windows app is a native desktop application with its own bundled Java runtime; no browser or separate Java installation is required.
+Life Assistant is an open-source, offline-first personal organizer for Android and Windows. It combines Todo, Ledger, Calendar, and Notes, with encrypted backup and optional Google Drive synchronization. The Android interface adapts to phones, tablets and foldables such as the Samsung Galaxy Z Fold series. The Windows app is a native desktop application with its own bundled Java runtime; no browser or separate Java installation is required.
+
+By **ced2711** · 中文名：**生活助手** · [Source](https://github.com/ced2711/life-assistant)
 
 ## Highlights
 
@@ -25,13 +27,15 @@ Sync transfers complete encrypted datasets. If both sides changed, choose which 
 
 ## Identity and compatibility
 
-- App label: `Life Tracker`
+- App label: `Life Assistant`
 - Package/application ID: `com.ced2711.lifetracker`
 - Minimum Android version: Android 8.0 / API 26
 - Target and compile SDK: API 36
 - Local database: Room schema 6, with migrations from schemas 1 through 6
 
-The package changed from the earlier private `com.taskledger.app` build. Android therefore treats Life Tracker as a new app; encrypted `.tlb` restore is the supported data migration bridge. Future Life Tracker updates preserve data when they retain the current package ID, release certificate, and compatible Room migrations.
+Life Assistant 1.7.0 is a display-name change from Life Tracker, not a new Android application. Install it over Life Tracker without uninstalling: the application ID, release certificate, launcher aliases, database, settings, Vault keys, and sync protocol remain unchanged. Windows retains the installer upgrade UUID and the `%APPDATA%/Life Tracker` data directory so existing encrypted data and remembered credentials remain available. The old name in internal paths is intentional compatibility, not unfinished branding.
+
+Only the much older private `com.taskledger.app` (TaskLedger) package requires migration through an encrypted `.tlb` export and restore. Existing `.tlb` files and Google Drive revisions remain compatible; only the suggested filename of new manual exports changes to `LifeAssistant-backup...tlb`.
 
 ## Build
 
@@ -44,7 +48,7 @@ Use JDK 17 and the included Gradle wrapper.
 
 There are two distribution flavors:
 
-- `standard`: normal Android install/update build; version code 13 for the 1.6.1 release.
+- `standard`: normal Android install/update build; version code 14 for the 1.7.0 release.
 - `personal`: one-off migration build; version code 5 so the standard APK can update it afterward.
 
 The personal flavor intentionally requires a local `app/src/personal/assets/personal-backup.tlb`. That encrypted user backup, its password, APK outputs, release keystore, and signing credentials are excluded from Git and must never be committed, even to a private repository.
@@ -53,7 +57,7 @@ Windows distributions are written to `desktopApp/build/compose/binaries/main/exe
 
 ## Verification
 
-The project includes JVM, Android instrumentation, sync transport/branch-conflict, Windows encrypted-store/attachment, and Windows DPAPI tests. See the [1.6.0 verification report](docs/RELEASE_1.6.0.md) for completed checks and remaining limitations. The cloud tests use a local HTTP fixture; a real OAuth end-to-end check additionally requires the developer's configured Google Cloud project and interactive consent. Unit tests alone do not establish that live Google authorization is configured.
+The project includes JVM, Android instrumentation, sync transport/branch-conflict, Windows encrypted-store/attachment, and Windows DPAPI tests. See the [1.7.0 release notes](docs/RELEASE_1.7.0.md) and the historical [1.6.0 verification report](docs/RELEASE_1.6.0.md) for completed checks and remaining limitations. The cloud tests use a local HTTP fixture; a real OAuth end-to-end check additionally requires the developer's configured Google Cloud project and interactive consent. Unit tests alone do not establish that live Google authorization is configured.
 
 ## Privacy
 
@@ -63,4 +67,10 @@ Application data stays on the device unless the user exports it or enables Googl
 
 Copyright 2026 ced2711.
 
-Life Tracker is licensed under the [Apache License 2.0](LICENSE). It may be used, modified, and distributed under the terms of that license, including its patent grant and notice requirements.
+Starting with 1.7.0, first-party Life Assistant code is licensed under **GNU Affero General Public License, version 3 only (AGPL-3.0-only)**, with a narrow [Google Play services linking permission](ADDITIONAL_PERMISSIONS.md). Read the full [LICENSE](LICENSE) and [licensing notes](docs/LICENSING.md).
+
+You may use the app, including commercially. Distributing covered binaries requires making their Corresponding Source available under the applicable license terms. If you modify a covered program and let people interact with it remotely over a network, AGPL section 13 requires offering those users its Corresponding Source. Ordinary use does not require publishing personal notes, financial records, files, credentials, or unrelated software. Purely private local modifications do not by themselves require publication.
+
+Earlier Apache-2.0 releases retain their original licensing; those grants are not retroactively revoked. Third-party components retain their own terms and notices. This software comes without warranty.
+
+Source for each binary release is identified by its matching version tag, for example [`v1.7.0`](https://github.com/ced2711/life-assistant/tree/v1.7.0). Both apps provide an offline license viewer and a source-code link in Settings. Build instructions above apply to the corresponding source; supply your own signing key for a fork rather than requesting the author's private release key.

@@ -1,0 +1,27 @@
+Life Assistant
+Copyright 2026 ced2711
+
+First-party application code is licensed under GNU AGPL version 3 only,
+with the narrowly scoped permission in ADDITIONAL_PERMISSIONS.md.
+It is provided WITHOUT ANY WARRANTY, including the implied warranties
+of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+You may redistribute and modify it under those license terms.
+See the accompanying LICENSE for the complete terms.
+
+Project and corresponding source:
+https://github.com/ced2711/life-assistant
+For release 1.7.0, use the v1.7.0 tag and its build instructions.
+
+Earlier versions distributed under Apache License 2.0 retain that license.
+This change does not revoke rights already granted for those versions.
+Third-party components retain their own licenses and copyright notices.
+
+The Gradle wrapper is Copyright 2015 the original author or authors and
+remains licensed under Apache License 2.0. Its original headers are intact.
+AndroidX, Kotlin, Compose, kotlinx.coroutines, kotlinx.serialization and
+OkHttp are used under their applicable Apache License 2.0 terms.
+JNA is used under its Apache License 2.0 option.
+Google Play services libraries remain subject to Google's Android SDK
+license terms; they are not relicensed under AGPL.
+The bundled OpenJDK runtime retains its own licenses, notices and exceptions
+in the distribution's runtime/legal directory.

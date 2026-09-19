@@ -50,6 +50,7 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.FilterAlt
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
@@ -108,6 +109,7 @@ import com.ced2711.lifetracker.data.local.NoteEntity
 import com.ced2711.lifetracker.data.local.TodoEntity
 import com.ced2711.lifetracker.domain.model.AttachmentOwnerType
 import com.ced2711.lifetracker.domain.model.AccentColor
+import com.ced2711.lifetracker.domain.model.AppIdentity
 import com.ced2711.lifetracker.domain.model.DateFormatOption
 import com.ced2711.lifetracker.domain.model.LedgerType
 import com.ced2711.lifetracker.domain.model.ThemeMode
@@ -125,6 +127,7 @@ import com.ced2711.lifetracker.ui.theme.TaskLedgerTheme
 import java.io.File
 import java.io.IOException
 import java.awt.Desktop
+import java.net.URI
 import java.text.NumberFormat
 import java.math.BigDecimal
 import java.time.DayOfWeek
@@ -285,7 +288,7 @@ private fun UnlockScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 Icon(Icons.Default.CheckCircle, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
-                Text(desktopText("Life Tracker"), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                Text(desktopText(AppIdentity.NAME), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 Text(
                     desktopText(if (existingData) "Unlock your encrypted local data." else
                         "Create an encrypted local data file. Use this same password for Google Drive sync."),
@@ -1175,15 +1178,16 @@ private fun SettingsPage(
     var importPassword by remember { mutableStateOf("") }
     var importPasswordVisible by remember { mutableStateOf(false) }
     var backupMessage by remember { mutableStateOf<String?>(null) }
+    var showLicenseDialog by remember { mutableStateOf(false) }
     val language = LocalUiLanguage.current
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         PageHeader("Settings")
         Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.Cloud, null); Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { Text(desktopText("Google Drive sync"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold); Text(desktopText(if (cloudState.connected) "Connected" else "Not connected"), color = MaterialTheme.colorScheme.onSurfaceVariant) } }
-            Text(desktopText("Encrypted snapshots are stored in Life Tracker's private Google Drive app folder. Other Drive files are not accessible."))
+            Text(desktopText("Encrypted snapshots are stored in Life Assistant's private Google Drive app folder. Other Drive files are not accessible."))
             Text(desktopText("Each upload creates a new encrypted version. Previous versions are kept; conflicts pause sync until you resolve them."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (cloudState.connected) {
-                Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(desktopText("Automatic sync")); Text(desktopText("Off by default. When enabled, checks every 15 minutes while Life Tracker is running"), style = MaterialTheme.typography.bodySmall) }; Switch(cloudState.automaticSync, cloud::setAutomaticSync) }
+                Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(desktopText("Automatic sync")); Text(desktopText("Off by default. When enabled, checks every 15 minutes while Life Assistant is running"), style = MaterialTheme.typography.bodySmall) }; Switch(cloudState.automaticSync, cloud::setAutomaticSync) }
                 cloudState.lastSyncAt?.let { Text(desktopLastSync(formatTimestamp(it), LocalUiLanguage.current), color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Button(enabled = !cloudState.syncing, onClick = { scope.launch { cloud.synchronize() } }) { Icon(Icons.Default.Refresh, null); Spacer(Modifier.width(8.dp)); Text(desktopText(if (cloudState.syncing) "Syncing…" else "Sync now")) }; TextButton(enabled = !cloudState.syncing, onClick = { scope.launch { cloud.disconnect() } }) { Text(desktopText("Disconnect / switch account")) } }
             } else Button(onClick = { connectDialog = true }) { Text(desktopText("Connect Google Drive")) }
@@ -1259,7 +1263,7 @@ private fun SettingsPage(
                 Text(desktopText("The .tlb file includes todos, ledger entries, notes, Vault entries, and attached files. Manual import can migrate an older Android backup password to this PC's current data password."))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = {
-                        val chooser = JFileChooser().apply { selectedFile = File("LifeTracker-backup.tlb") }
+                        val chooser = JFileChooser().apply { selectedFile = File("LifeAssistant-backup.tlb") }
                         val destination = chooser.takeIf {
                             it.showSaveDialog(null) == JFileChooser.APPROVE_OPTION
                         }?.selectedFile
@@ -1282,7 +1286,7 @@ private fun SettingsPage(
                     }) { Text(desktopText("Import backup")) }
                 }
                 Text(
-                    desktopText("Before using a cloud version, Life Tracker keeps an encrypted local recovery copy. Import a copy to recover earlier local data. Recovery copies are not deleted automatically."),
+                    desktopText("Before using a cloud version, Life Assistant keeps an encrypted local recovery copy. Import a copy to recover earlier local data. Recovery copies are not deleted automatically."),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1300,7 +1304,37 @@ private fun SettingsPage(
                 backupMessage?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
             }
         }
-        Text(desktopText("Life Tracker Desktop 1.6.1 • Data format compatible with Android"), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Info, null)
+                    Spacer(Modifier.width(10.dp))
+                    Text(desktopText("About"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                }
+                Text(desktopText(AppIdentity.NAME), style = MaterialTheme.typography.headlineSmall)
+                Text("${desktopText("Version")} ${AppIdentity.VERSION} • ${AppIdentity.AUTHOR}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(AppIdentity.COPYRIGHT, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(desktopText("License") + ": ${AppIdentity.LICENSE_LABEL}")
+                Text(desktopText("This software is provided without warranty."), style = MaterialTheme.typography.bodySmall)
+                Text(desktopText("The full license and additional permissions are available offline."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { showLicenseDialog = true }) { Text(desktopText("View license")) }
+                    OutlinedButton(
+                        enabled = Desktop.isDesktopSupported(),
+                        onClick = {
+                            if (Desktop.isDesktopSupported()) {
+                                runCatching { Desktop.getDesktop().browse(URI(AppIdentity.SOURCE_URL)) }
+                            }
+                        },
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.OpenInNew, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(desktopText("Source code"))
+                    }
+                }
+            }
+        }
+        Text(desktopAppVersion(language), color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
     if (connectDialog) GoogleConnectDialog(config.clientId, { connectDialog = false }) { clientId, clientSecret -> connectDialog = false; scope.launch { cloud.connect(clientId, clientSecret) } }
     importCandidate?.let { candidate ->
@@ -1348,7 +1382,32 @@ private fun SettingsPage(
             },
         )
     }
+    if (showLicenseDialog) {
+        val legalText = remember { loadLegalResource(AppIdentity.LICENSE_RESOURCE) }
+        val permissionText = remember { loadLegalResource(AppIdentity.PERMISSION_RESOURCE) }
+        val noticeText = remember { loadLegalResource(AppIdentity.NOTICE_RESOURCE) }
+        AlertDialog(
+            onDismissRequest = { showLicenseDialog = false },
+            title = { Text(desktopText("License")) },
+            text = {
+                Column(
+                    Modifier.widthIn(max = 760.dp).heightIn(max = 540.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    Text(AppIdentity.LICENSE_LABEL, style = MaterialTheme.typography.titleMedium)
+                    Text(legalText)
+                    Text(permissionText)
+                    Text(noticeText)
+                }
+            },
+            confirmButton = { TextButton(onClick = { showLicenseDialog = false }) { Text(desktopText("Close")) } },
+        )
+    }
 }
+
+private fun loadLegalResource(path: String): String =
+    Thread.currentThread().contextClassLoader.getResourceAsStream(path)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+        ?: "${path} is not available in this build."
 
 @Composable
 private fun GoogleConnectDialog(defaultClientId: String, onDismiss: () -> Unit, onConnect: (String, CharArray) -> Unit) {
