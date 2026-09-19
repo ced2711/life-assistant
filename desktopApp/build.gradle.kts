@@ -28,6 +28,9 @@ sourceSets {
             include("com/ced2711/lifetracker/domain/model/TodoOrganization.kt")
             include("com/ced2711/lifetracker/domain/model/VaultModels.kt")
             include("com/ced2711/lifetracker/domain/date/SmartDateParser.kt")
+            include("com/ced2711/lifetracker/domain/format/UserFormatting.kt")
+            include("com/ced2711/lifetracker/ui/theme/TaskLedgerTheme.kt")
+            include("com/ced2711/lifetracker/ui/localization/UiLocalization.kt")
             include("com/ced2711/lifetracker/data/MonotonicTimestamps.kt")
             include("com/ced2711/lifetracker/data/local/Entities.kt")
             include("com/ced2711/lifetracker/data/backup/BackupModels.kt")
@@ -115,7 +118,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Exe, TargetFormat.Msi)
             packageName = "Life Tracker"
-            packageVersion = "1.6.0"
+            packageVersion = "1.6.1"
             description = "Private life planning, ledger, calendar, notes, and vault"
             vendor = "ced2711"
             modules("java.net.http", "jdk.httpserver")

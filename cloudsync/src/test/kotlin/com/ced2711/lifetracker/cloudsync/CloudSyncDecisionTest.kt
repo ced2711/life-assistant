@@ -104,4 +104,13 @@ class CloudSyncDecisionTest {
         assertEquals(emptyList<CloudRevision>(), prunableCloudRevisions(
             listOf(newest, revision("fork").copy(baseRevisionId = "base"), middle, base), 2))
     }
+
+    @Test fun `head snapshot identifies every competing immutable branch`() {
+        val base = revision("base")
+        val first = revision("first").copy(baseRevisionId = "base")
+        val second = revision("second").copy(baseRevisionId = "base")
+
+        assertEquals(setOf("first", "second"), cloudRevisionHeadIds(listOf(first, second, base)))
+        assertEquals(emptySet<String>(), cloudRevisionHeadIds(emptyList()))
+    }
 }

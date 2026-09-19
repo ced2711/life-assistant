@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -58,6 +59,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -103,6 +105,7 @@ fun BackupRestoreScreen(
     var pendingSubmission by remember { mutableStateOf<BackupRestoreTask?>(null) }
     var reviewStep by remember { mutableStateOf(RestoreReviewStep.PREVIEW) }
     var connectCloudRequested by remember { mutableStateOf(false) }
+    var recoveryFileName by rememberSaveable { mutableStateOf<String?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     val uiLanguage = LocalUiLanguage.current
     val cloudState by cloudViewModel.uiState.collectAsStateWithLifecycle()
@@ -120,11 +123,23 @@ fun BackupRestoreScreen(
     }
     val cloudConsentLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartIntentSenderForResult(),
-    ) { result -> cloudViewModel.completeConsent(result.data) }
+    ) { result -> cloudViewModel.completeConsent(result.data, result.resultCode) }
+    val exportRecoveryLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument(TASK_LEDGER_BACKUP_MIME_TYPE),
+    ) { destination ->
+        val fileName = recoveryFileName
+        recoveryFileName = null
+        if (destination != null && fileName != null) cloudViewModel.exportRecovery(fileName, destination)
+    }
 
     LaunchedEffect(cloudConsent?.id) {
         val request = cloudConsent ?: return@LaunchedEffect
-        cloudConsentLauncher.launch(IntentSenderRequest.Builder(request.pendingIntent).build())
+        if (!cloudViewModel.markConsentDispatched(request.id)) return@LaunchedEffect
+        try {
+            cloudConsentLauncher.launch(IntentSenderRequest.Builder(request.pendingIntent).build())
+        } catch (error: Throwable) {
+            cloudViewModel.consentLaunchFailed(request.id, error)
+        }
     }
 
     LaunchedEffect(uiState.task) {
@@ -195,6 +210,17 @@ fun BackupRestoreScreen(
                     onDisconnect = cloudViewModel::disconnect,
                 )
                 Spacer(Modifier.height(16.dp))
+                if (cloudState.recoveryFiles.isNotEmpty()) {
+                    CloudRecoveryCard(
+                        files = cloudState.recoveryFiles,
+                        enabled = !isBlocked && uiState.restorePreview == null,
+                        onExport = { name ->
+                            recoveryFileName = name
+                            exportRecoveryLauncher.launch(name)
+                        },
+                    )
+                    Spacer(Modifier.height(16.dp))
+                }
                 OfflineEncryptionCard()
                 Spacer(Modifier.height(16.dp))
                 if (hasIncludedPersonalBackup) {
@@ -395,12 +421,36 @@ private fun CloudSyncCard(
             )
             Text(
                 localizedText(
-                    "The 30 most recent versions are kept. Competing versions are kept until " +
-                        "you resolve the conflict.",
+                    "Each upload creates a new encrypted version. Previous versions are kept; " +
+                        "conflicts pause sync.",
                 ),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Text(
+                localizedText(
+                    "Google Drive is optional. Life Tracker works offline by default; enable Drive " +
+                        "only when you want encrypted backups shared between Android and Windows.",
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                localizedText(
+                    "Setup requires Drive API access, package com.ced2711.lifetracker, and the " +
+                        "release signing SHA-1 listed in the setup guide. Android and Windows must " +
+                        "use the same Google Cloud project and account.",
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            state.connectionError?.let { error ->
+                Text(
+                    localizedText(error),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
             if (state.connected) {
                 Text(
                     localizedText(
@@ -487,6 +537,35 @@ private fun CloudSyncCard(
             } else {
                 Button(enabled = !state.busy, onClick = onConnect) {
                     Text(localizedText(if (state.busy) "Connecting…" else "Connect Google Drive"))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CloudRecoveryCard(files: List<String>, enabled: Boolean, onExport: (String) -> Unit) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(localizedText("Local sync recovery"), style = MaterialTheme.typography.titleMedium)
+            Text(
+                localizedText("Before using a cloud version, Life Tracker keeps an encrypted local recovery copy. Export a copy and use Restore backup to recover it with its original sync password. Copies are not deleted automatically."),
+                style = MaterialTheme.typography.bodySmall,
+            )
+            TextButton(onClick = { expanded = !expanded }) {
+                Text(localizedText(if (expanded) "Hide recovery copies" else "Show recovery copies"))
+            }
+            if (expanded) {
+                Column(Modifier.heightIn(max = 240.dp).verticalScroll(rememberScrollState())) {
+                    files.forEach { name ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                            TextButton(enabled = enabled, onClick = { onExport(name) }) {
+                                Text(localizedText("Export"))
+                            }
+                        }
+                    }
                 }
             }
         }

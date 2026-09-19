@@ -26,6 +26,20 @@ private fun translateDynamicChinese(text: String): String {
 
     match("Version (.+) • Private and offline")?.let { return "版本 ${it.groupValues[1]} • 私密离线" }
     match("Last sync: (.+)")?.let { return "上次同步：${it.groupValues[1]}" }
+    match("Google Drive authorization was cancelled or closed\\. If you did not cancel, check the app's Google Cloud setup(?: \\(code (-?\\d+)\\))?\\.")?.let {
+        val code = it.groupValues[1].takeIf(String::isNotEmpty)?.let { value -> "（代码 $value）" }.orEmpty()
+        return "Google Drive 授权已取消或关闭。如果你没有取消，请检查应用的 Google Cloud 配置$code。"
+    }
+    match("Google Drive setup is incomplete(?: \\(code (-?\\d+)\\))?\\. Check Drive API, package name, signing certificate SHA-1, and OAuth project\\.")?.let {
+        val code = it.groupValues[1].takeIf(String::isNotEmpty)?.let { value -> "（代码 $value）" }.orEmpty()
+        return "Google Drive 配置不完整$code。请检查 Drive API、包名、签名证书 SHA-1 和 OAuth 项目。"
+    }
+    match("Google Drive authorization failed \\(code (-?\\d+)\\)\\.")?.let {
+        return "Google Drive 授权失败（代码 ${it.groupValues[1]}）。"
+    }
+    match("Google Drive authorization returned no result \\(result code (-?\\d+)\\)\\.")?.let {
+        return "Google Drive 授权未返回结果（结果代码 ${it.groupValues[1]}）。"
+    }
     match("Active \\((\\d+)\\)")?.let { return "待完成（${it.groupValues[1]}）" }
     match("Completed \\((\\d+)\\)")?.let { return "已完成（${it.groupValues[1]}）" }
     match("(\\d+) notes")?.let { return "${it.groupValues[1]} 条笔记" }
@@ -247,8 +261,12 @@ private val zhHans = mapOf(
     "Not connected" to "未连接",
     "Sync password-encrypted snapshots through Life Tracker's private app folder. The app cannot see other files in your Google Drive." to
         "通过 Life Tracker 的专用应用文件夹同步密码加密的快照。应用无法查看 Google Drive 中的其他文件。",
-    "The 30 most recent versions are kept. Competing versions are kept until you resolve the conflict." to
-        "保留最近 30 个版本；存在冲突的版本会一直保留，直到你解决冲突。",
+    "Each upload creates a new encrypted version. Previous versions are kept; conflicts pause sync." to
+        "每次上传都会创建新的加密版本，之前的版本会保留；出现冲突时暂停同步。",
+    "Google Drive is optional. Life Tracker works offline by default; enable Drive only when you want encrypted backups shared between Android and Windows." to
+        "Google Drive 为可选功能，Life Tracker 默认离线使用。需要在 Android 和 Windows 之间共享加密备份时，再启用 Drive。",
+    "Setup requires Drive API access, package com.ced2711.lifetracker, and the release signing SHA-1 listed in the setup guide. Android and Windows must use the same Google Cloud project and account." to
+        "配置需要启用 Drive API、注册包名 com.ced2711.lifetracker，以及配置指南中的发布签名 SHA-1。Android 和 Windows 必须使用同一 Google Cloud 项目和账号。",
     "When Vault contains entries, background sync pauses until you unlock it in Life Tracker. This keeps Vault keys protected by Android." to
         "密码库中有条目时，后台同步会暂停，直到你在 Life Tracker 中解锁密码库，以便继续由 Android 保护密码库密钥。",
     "Automatic sync" to "自动同步",
@@ -270,6 +288,24 @@ private val zhHans = mapOf(
     "Keep this device" to "保留本机",
     "Unknown" to "未知",
     "Google Drive connection failed." to "Google Drive 连接失败。",
+    "Local sync recovery" to "本机同步恢复副本",
+    "Export" to "导出",
+    "Could not create the cloud recovery directory." to "无法创建同步恢复副本目录，本机数据未被替换。",
+    "Before using a cloud version, Life Tracker keeps an encrypted local recovery copy. Export a copy and use Restore backup to recover it with its original sync password. Copies are not deleted automatically." to
+        "使用云端版本前，Life Tracker 会保留一份加密的本机恢复副本。导出副本后，可通过“恢复备份”输入创建时的同步密码找回数据。副本不会自动删除。",
+    "Hide recovery copies" to "收起恢复副本",
+    "Show recovery copies" to "显示恢复副本",
+    "Encrypted recovery copy exported. Restore it with the sync password used when it was created." to "加密恢复副本已导出，请使用创建时的同步密码恢复。",
+    "Could not export the recovery copy. The private original was kept." to "无法导出恢复副本，应用内的原始副本仍已保留。",
+    "Google Drive authorization failed." to "Google Drive 授权失败。",
+    "Google Drive authorization returned no result." to "Google Drive 授权未返回结果。",
+    "Google Drive connection failed while saving local credentials." to "保存本机凭据时失败，未能完成 Google Drive 连接。",
+    "Google Drive could not reach the network." to "Google Drive 无法连接网络。",
+    "Google account sign-in failed." to "Google 账号登录失败。",
+    "Google Drive permission was not granted." to "未授予 Google Drive 权限。",
+    "Google Drive app-data access was not granted." to "未授予 Google Drive 应用数据访问权限。",
+    "Open Life Tracker to finish connecting Google Drive." to "请打开 Life Tracker 完成 Google Drive 连接。",
+    "Google Drive changed before upload. Sync again to review it." to "上传前 Google Drive 已发生变化，请重新同步并检查冲突。",
     "Google Drive connection was cancelled." to "已取消 Google Drive 连接。",
     "Vault authentication was cancelled." to "已取消密码库身份验证。",
     "Google Drive disconnected. Local data was kept." to "已断开 Google Drive，本机数据已保留。",

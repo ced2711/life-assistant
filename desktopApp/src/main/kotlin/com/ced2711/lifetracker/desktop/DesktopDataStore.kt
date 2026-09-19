@@ -68,6 +68,7 @@ class DesktopDataStore(
     private val localBackup = File(appDirectory, "life-tracker-local.tlb")
     private val attachmentsDirectory = File(appDirectory, "attachments")
     private val workDirectory = File(appDirectory, "work")
+    private val cloudRecovery = File(appDirectory, "cloud-recovery")
     private val _state = MutableStateFlow<DesktopStoreState>(DesktopStoreState.Locked)
     val state: StateFlow<DesktopStoreState> = _state.asStateFlow()
     private var password: CharArray? = null
@@ -77,6 +78,9 @@ class DesktopDataStore(
     private var instanceLock: FileLock? = null
 
     val encryptedFile: File get() = localBackup
+
+    /** Persistent USE_CLOUD recovery snapshots. Entries are intentionally never pruned here. */
+    val cloudRecoveryDirectory: File get() = cloudRecovery
 
     suspend fun open(password: CharArray, createIfMissing: Boolean = true): Boolean = mutex.withLock {
         withContext(ioDispatcher) {
@@ -274,6 +278,22 @@ class DesktopDataStore(
         snapshot.copy(settings = snapshot.settings.copy(accentColor = accentColor))
     }
 
+    suspend fun setThemeMode(themeMode: ThemeMode) = mutate { snapshot ->
+        snapshot.copy(settings = snapshot.settings.copy(themeMode = themeMode))
+    }
+
+    suspend fun setWeekStart(weekStart: WeekStart) = mutate { snapshot ->
+        snapshot.copy(settings = snapshot.settings.copy(weekStart = weekStart))
+    }
+
+    suspend fun setTimeFormat(timeFormat: TimeFormatOption) = mutate { snapshot ->
+        snapshot.copy(settings = snapshot.settings.copy(timeFormat = timeFormat))
+    }
+
+    suspend fun setDateFormat(dateFormat: DateFormatOption) = mutate { snapshot ->
+        snapshot.copy(settings = snapshot.settings.copy(dateFormat = dateFormat))
+    }
+
     suspend fun upsertLedger(
         id: Long?,
         type: LedgerType,
@@ -339,8 +359,48 @@ class DesktopDataStore(
     }
 
     suspend fun addNoteFolder(name: String, parentId: Long? = null) = mutate { snapshot ->
+        val normalizedName = normalizeNoteFolderName(name)
+        require(parentId == null || snapshot.noteFolders.any { it.id == parentId }) {
+            "The parent folder no longer exists"
+        }
+        require(snapshot.noteFolders.none {
+            it.parentId == parentId && it.name.equals(normalizedName, ignoreCase = true)
+        }) { "A folder with this name already exists here" }
         val id = snapshot.noteFolders.maxOfOrNull(NoteFolderEntity::id)?.plus(1) ?: 1L
-        snapshot.copy(noteFolders = snapshot.noteFolders + NoteFolderEntity(id = id, name = name.trim(), parentId = parentId))
+        snapshot.copy(noteFolders = snapshot.noteFolders + NoteFolderEntity(id = id, name = normalizedName, parentId = parentId))
+    }
+
+    suspend fun renameNoteFolder(id: Long, name: String) = mutate { snapshot ->
+        require(id > 0) { "Folder id is invalid" }
+        val folder = requireNotNull(snapshot.noteFolders.firstOrNull { it.id == id }) {
+            "Folder no longer exists"
+        }
+        val normalizedName = normalizeNoteFolderName(name)
+        require(snapshot.noteFolders.none {
+            it.id != id && it.parentId == folder.parentId &&
+                it.name.equals(normalizedName, ignoreCase = true)
+        }) { "A folder with this name already exists here" }
+        snapshot.copy(
+            noteFolders = snapshot.noteFolders.map { candidate ->
+                if (candidate.id == id) candidate.copy(name = normalizedName) else candidate
+            },
+        )
+    }
+
+    suspend fun deleteNoteFolder(id: Long) = mutate { snapshot ->
+        require(id > 0) { "Folder id is invalid" }
+        val folder = snapshot.noteFolders.firstOrNull { it.id == id }
+            ?: return@mutate snapshot
+        snapshot.copy(
+            noteFolders = snapshot.noteFolders
+                .filterNot { it.id == id }
+                .map { candidate ->
+                    if (candidate.parentId == id) candidate.copy(parentId = folder.parentId) else candidate
+                },
+            notes = snapshot.notes.map { note ->
+                if (note.folderId == id) note.copy(folderId = null) else note
+            },
+        )
     }
 
     suspend fun deleteNote(id: Long) = mutate { snapshot ->
@@ -459,6 +519,40 @@ class DesktopDataStore(
             val copy = File(workDirectory, "upload-${UUID.randomUUID()}.tlb")
             Files.copy(localBackup.toPath(), copy.toPath(), StandardCopyOption.REPLACE_EXISTING)
             DesktopUploadSnapshot(copy, fingerprint(copy))
+        }
+    }
+
+    /**
+     * Capture the current encrypted local file for USE_CLOUD recovery while holding the store
+     * lock. A null result means the local file changed since the caller's expected fingerprint.
+     * The returned snapshot is durable and is never removed by sync or store cleanup.
+     */
+    suspend fun captureCloudRecovery(expectedLocalFingerprint: String): File? = mutex.withLock {
+        withContext(ioDispatcher) {
+            if (password == null || !localBackup.isFile || fingerprintLocked() != expectedLocalFingerprint) {
+                return@withContext null
+            }
+            cloudRecovery.mkdirs()
+            val temporary = File(cloudRecovery, ".recovery-${UUID.randomUUID()}.part")
+            val recovery = File(
+                cloudRecovery,
+                "life-tracker-local-${System.currentTimeMillis()}-${UUID.randomUUID()}.tlb",
+            )
+            try {
+                Files.copy(localBackup.toPath(), temporary.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                try {
+                    Files.move(
+                        temporary.toPath(),
+                        recovery.toPath(),
+                        StandardCopyOption.ATOMIC_MOVE,
+                    )
+                } catch (_: Exception) {
+                    Files.move(temporary.toPath(), recovery.toPath())
+                }
+                recovery
+            } finally {
+                if (temporary.exists()) temporary.delete()
+            }
         }
     }
 
@@ -630,6 +724,11 @@ class DesktopDataStore(
         .filter(String::isNotEmpty)
         .distinctBy(String::lowercase)
         .joinToString(",")
+
+    private fun normalizeNoteFolderName(name: String): String = name.trim().also {
+        require(it.isNotEmpty()) { "Folder name is required" }
+        require(it.length <= 120) { "Folder name is too long" }
+    }
 
     private fun BackupSnapshot.validateForDesktop(): BackupSnapshot = validate()
 

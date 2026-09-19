@@ -1,14 +1,15 @@
 package com.ced2711.lifetracker.desktop
 
+import com.ced2711.lifetracker.cloudsync.CloudBackupStore
 import com.ced2711.lifetracker.cloudsync.CloudRevision
 import com.ced2711.lifetracker.cloudsync.ConflictResolution
 import com.ced2711.lifetracker.cloudsync.GoogleDriveBackupStore
 import com.ced2711.lifetracker.cloudsync.NewCloudRevision
 import com.ced2711.lifetracker.cloudsync.SyncDecision
+import com.ced2711.lifetracker.cloudsync.cloudRevisionHeadIds
 import com.ced2711.lifetracker.cloudsync.cloudRevisionHeads
 import com.ced2711.lifetracker.cloudsync.decideSyncAction
 import com.ced2711.lifetracker.cloudsync.latestCloudRevision
-import com.ced2711.lifetracker.cloudsync.prunableCloudRevisions
 import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
@@ -24,7 +25,7 @@ import kotlinx.coroutines.launch
 
 data class DesktopCloudUiState(
     val connected: Boolean = false,
-    val automaticSync: Boolean = true,
+    val automaticSync: Boolean = false,
     val syncing: Boolean = false,
     val lastSyncAt: Long? = null,
     val message: String? = null,
@@ -36,8 +37,10 @@ class DesktopCloudSyncController(
     private val configStore: DesktopConfigStore,
     private val oauth: DesktopGoogleOAuth,
     private val now: () -> Long = System::currentTimeMillis,
+    cloudStore: CloudBackupStore? = null,
+    private val connectionStatus: () -> Boolean = oauth::isConnected,
 ) {
-    private val drive = GoogleDriveBackupStore(oauth)
+    private val drive = cloudStore ?: GoogleDriveBackupStore(oauth)
     private val _state = MutableStateFlow(readState())
     val state: StateFlow<DesktopCloudUiState> = _state.asStateFlow()
     private var automaticJob: Job? = null
@@ -67,6 +70,7 @@ class DesktopCloudSyncController(
             _state.value = readState().copy(message = "Google Drive connected.")
             synchronize()
         } catch (cancelled: CancellationException) {
+            _state.update { it.copy(syncing = false) }
             throw cancelled
         } catch (error: Throwable) {
             _state.update { it.copy(syncing = false, message = error.safeMessage()) }
@@ -88,6 +92,7 @@ class DesktopCloudSyncController(
 
     suspend fun synchronize(resolution: ConflictResolution? = null) {
         if (!_state.value.connected || _state.value.syncing) return
+        val previousConflict = _state.value.conflict
         val approvedConflictId = resolution?.let { _state.value.conflict?.fileId } ?: run {
             if (resolution != null) return
             null
@@ -97,6 +102,7 @@ class DesktopCloudSyncController(
             val config = configStore.read()
             val revisions = drive.listRevisions(100)
             val heads = cloudRevisionHeads(revisions)
+            val observedHeadIds = cloudRevisionHeadIds(revisions)
             val remote = latestCloudRevision(revisions)
             if (resolution != null && remote?.fileId != approvedConflictId) {
                 _state.value = readState().copy(
@@ -132,18 +138,17 @@ class DesktopCloudSyncController(
                     )
                 }
                 decision == SyncDecision.Conflict && resolution == ConflictResolution.KEEP_LOCAL ->
-                    upload(remote, heads.map(CloudRevision::fileId))
+                    upload(remote, heads.map(CloudRevision::fileId), observedHeadIds)
                 decision == SyncDecision.Conflict && resolution == ConflictResolution.USE_CLOUD -> {
                     val chosen = requireNotNull(remote)
-                    if (download(chosen, localFingerprint)) {
-                        upload(chosen, heads.map(CloudRevision::fileId))
-                    }
+                    useCloud(chosen, observedHeadIds, localFingerprint)
                 }
-                decision == SyncDecision.Upload -> upload(remote, emptyList())
+                decision == SyncDecision.Upload -> upload(remote, emptyList(), observedHeadIds)
                 decision == SyncDecision.Download -> download(requireNotNull(remote), localFingerprint)
                 else -> _state.value = readState().copy(message = "Already up to date.")
             }
         } catch (cancelled: CancellationException) {
+            _state.value = readState().copy(conflict = previousConflict)
             throw cancelled
         } catch (error: Throwable) {
             _state.value = readState().copy(message = error.safeMessage())
@@ -158,29 +163,122 @@ class DesktopCloudSyncController(
         _state.update { it.copy(message = null) }
     }
 
-    private suspend fun upload(remote: CloudRevision?, mergedRevisionIds: List<String>) {
+    private suspend fun upload(
+        remote: CloudRevision?,
+        mergedRevisionIds: List<String>,
+        expectedHeadIds: Set<String>,
+    ) {
         val upload = dataStore.createUploadSnapshot()
         try {
-            val config = configStore.read()
-            val revision = drive.uploadRevision(
-                upload.file,
-                NewCloudRevision(
-                    createdAt = now(),
-                    deviceId = config.syncState.deviceId,
-                    baseRevisionId = remote?.fileId,
-                    contentFingerprint = upload.fingerprint,
-                    mergedRevisionIds = mergedRevisionIds,
-                ),
+            uploadFile(
+                source = upload.file,
+                fingerprint = upload.fingerprint,
+                remote = remote,
+                mergedRevisionIds = mergedRevisionIds,
+                expectedHeadIds = expectedHeadIds,
+                successMessage = "Encrypted backup uploaded.",
             )
-            configStore.recordSync(revision.fileId, upload.fingerprint, now())
-            val refreshed = drive.listRevisions(100)
-            prunableCloudRevisions(refreshed, keepCount = 30).forEach { oldRevision ->
-                drive.deleteRevision(oldRevision.fileId)
-            }
-            _state.value = readState().copy(message = "Encrypted backup uploaded.")
         } finally {
             upload.file.delete()
         }
+    }
+
+    /**
+     * Resolve USE_CLOUD without replacing local data until the new cloud lineage is settled.
+     * The selected remote bytes remain temporary throughout download, validation, upload, and
+     * postflight verification. A conditional replacement then protects any local edit made while
+     * the cloud operation was in flight.
+     */
+    private suspend fun useCloud(
+        remote: CloudRevision,
+        expectedHeadIds: Set<String>,
+        expectedLocalFingerprint: String,
+    ) {
+        val temporary = File(dataStore.appDirectory, "cloud-use-${UUID.randomUUID()}.tlb.part")
+        try {
+            drive.downloadRevision(remote, temporary)
+            if (!dataStore.verifyEncrypted(temporary)) {
+                throw IllegalArgumentException("The cloud backup uses a different data password or is damaged.")
+            }
+            val uploaded = uploadFile(
+                    source = temporary,
+                    fingerprint = remote.contentFingerprint,
+                    remote = remote,
+                    mergedRevisionIds = expectedHeadIds.toList(),
+                    expectedHeadIds = expectedHeadIds,
+                    successMessage = null,
+                    recordBaseline = false,
+                ) ?: return
+
+            if (dataStore.captureCloudRecovery(expectedLocalFingerprint) == null) {
+                _state.value = readState().copy(
+                    conflict = uploaded,
+                    message = "Local data changed before the cloud choice could be applied. Review the conflict.",
+                )
+                return
+            }
+            when (val result = dataStore.replaceFromEncrypted(temporary, expectedLocalFingerprint)) {
+                is DesktopReplaceResult.Applied -> {
+                    configStore.recordSync(uploaded.fileId, result.fingerprint, now())
+                    _state.value = readState().copy(message = "Cloud changes restored.")
+                }
+                DesktopReplaceResult.LocalChanged -> {
+                    _state.value = readState().copy(
+                        conflict = uploaded,
+                        message = "Local data changed before the cloud choice could be applied. Review the conflict.",
+                    )
+                }
+                DesktopReplaceResult.Invalid -> throw IllegalArgumentException(
+                    "The cloud backup uses a different data password or is damaged.",
+                )
+            }
+        } finally {
+            temporary.delete()
+        }
+    }
+
+    /** Upload one immutable revision and record a baseline only after postflight succeeds. */
+    private suspend fun uploadFile(
+        source: File,
+        fingerprint: String,
+        remote: CloudRevision?,
+        mergedRevisionIds: List<String>,
+        expectedHeadIds: Set<String>,
+        successMessage: String?,
+        recordBaseline: Boolean = true,
+    ): CloudRevision? {
+        val config = configStore.read()
+        val preflightRevisions = drive.listRevisions(100)
+        if (cloudRevisionHeadIds(preflightRevisions) != expectedHeadIds) {
+            _state.value = readState().copy(
+                conflict = latestCloudRevision(preflightRevisions) ?: remote,
+                message = "Google Drive changed before upload. Review the refreshed conflict.",
+            )
+            return null
+        }
+        val revision = drive.uploadRevision(
+            source,
+            NewCloudRevision(
+                createdAt = now(),
+                deviceId = config.syncState.deviceId,
+                baseRevisionId = remote?.fileId,
+                contentFingerprint = fingerprint,
+                mergedRevisionIds = mergedRevisionIds,
+            ),
+        )
+        val refreshed = drive.listRevisions(100)
+        if (cloudRevisionHeadIds(refreshed) != setOf(revision.fileId)) {
+            _state.value = readState().copy(
+                conflict = latestCloudRevision(refreshed) ?: revision,
+                message = "Another device uploaded at the same time. Both encrypted versions were kept; review the conflict.",
+            )
+            return null
+        }
+        if (recordBaseline) configStore.recordSync(revision.fileId, fingerprint, now())
+        if (successMessage != null) {
+            _state.value = readState().copy(message = successMessage)
+        }
+        return revision
     }
 
     private suspend fun download(remote: CloudRevision, expectedLocalFingerprint: String): Boolean {
@@ -225,7 +323,7 @@ class DesktopCloudSyncController(
     private fun readState(): DesktopCloudUiState {
         val config = configStore.read()
         return DesktopCloudUiState(
-            connected = oauth.isConnected(),
+            connected = connectionStatus(),
             automaticSync = config.automaticSync,
             lastSyncAt = config.syncState.lastSyncAt,
         )

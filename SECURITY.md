@@ -4,6 +4,10 @@ Life Tracker works offline. Optional Google Drive sync uses Google's OAuth autho
 
 Cloud revisions expose timestamps, sizes, device IDs and change fingerprints to Google, but not plaintext backup content. OAuth tokens, remembered passwords, local credentials, and device-bound Vault keys must never be logged or included in backups. Sync is opt-in and full-dataset conflicts require explicit user resolution. See [Google Drive setup](docs/GOOGLE_DRIVE_SETUP.md).
 
+Uploads create new encrypted files and do not automatically delete earlier revisions, including resolved branches. Cloud head checks before and after upload detect competing changes, but cannot make Google Drive's separate file operations atomic. Concurrent branches remain available for explicit resolution. Retained history consumes Drive storage; disconnecting does not erase it.
+
+Before an explicit Use cloud replacement, each platform keeps an encrypted local recovery copy in its private application-data directory. These copies use the sync/data password in effect when created, are not automatically deleted, and remain after disconnect. Android provides an export action and Windows an open-folder action. Recovery copies are not recursively included in subsequent `.tlb` backups. Uninstalling or clearing application data can remove them, so users should export important copies separately.
+
 Never commit or upload any of the following:
 
 - release keystores or signing passwords;

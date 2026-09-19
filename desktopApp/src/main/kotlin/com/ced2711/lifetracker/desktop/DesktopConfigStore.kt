@@ -1,6 +1,8 @@
 package com.ced2711.lifetracker.desktop
 
 import com.ced2711.lifetracker.cloudsync.LocalCloudSyncState
+import com.ced2711.lifetracker.domain.model.TopLevelDestination
+import com.ced2711.lifetracker.domain.model.UiLanguage
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -11,6 +13,8 @@ data class DesktopCloudConfig(
     val clientId: String,
     val automaticSync: Boolean,
     val syncState: LocalCloudSyncState,
+    val uiLanguage: UiLanguage = UiLanguage.ENGLISH,
+    val lastDestination: TopLevelDestination = TopLevelDestination.TODO,
 )
 
 class DesktopConfigStore(
@@ -27,13 +31,19 @@ class DesktopConfigStore(
         return DesktopCloudConfig(
             clientId = properties.getProperty(KEY_CLIENT_ID)
                 ?: System.getenv("LIFE_TRACKER_GOOGLE_DESKTOP_CLIENT_ID").orEmpty(),
-            automaticSync = properties.getProperty(KEY_AUTOMATIC)?.toBooleanStrictOrNull() ?: true,
+            automaticSync = properties.getProperty(KEY_AUTOMATIC)?.toBooleanStrictOrNull() ?: false,
             syncState = LocalCloudSyncState(
                 deviceId = deviceId,
                 lastRevisionId = properties.getProperty(KEY_LAST_REVISION),
                 lastContentFingerprint = properties.getProperty(KEY_LAST_FINGERPRINT),
                 lastSyncAt = properties.getProperty(KEY_LAST_SYNC_AT)?.toLongOrNull(),
             ),
+            uiLanguage = properties.getProperty(KEY_UI_LANGUAGE)
+                ?.let { value -> runCatching { UiLanguage.valueOf(value) }.getOrNull() }
+                ?: UiLanguage.ENGLISH,
+            lastDestination = properties.getProperty(KEY_LAST_DESTINATION)
+                ?.let { value -> runCatching { TopLevelDestination.valueOf(value) }.getOrNull() }
+                ?: TopLevelDestination.TODO,
         )
     }
 
@@ -48,6 +58,20 @@ class DesktopConfigStore(
     fun setAutomaticSync(enabled: Boolean) {
         val properties = load()
         properties.setProperty(KEY_AUTOMATIC, enabled.toString())
+        save(properties)
+    }
+
+    @Synchronized
+    fun setUiLanguage(value: UiLanguage) {
+        val properties = load()
+        properties.setProperty(KEY_UI_LANGUAGE, value.name)
+        save(properties)
+    }
+
+    @Synchronized
+    fun setLastDestination(value: TopLevelDestination) {
+        val properties = load()
+        properties.setProperty(KEY_LAST_DESTINATION, value.name)
         save(properties)
     }
 
@@ -100,5 +124,7 @@ class DesktopConfigStore(
         const val KEY_LAST_REVISION = "cloud.lastRevision"
         const val KEY_LAST_FINGERPRINT = "cloud.lastFingerprint"
         const val KEY_LAST_SYNC_AT = "cloud.lastSyncAt"
+        const val KEY_UI_LANGUAGE = "ui.language"
+        const val KEY_LAST_DESTINATION = "ui.lastDestination"
     }
 }

@@ -2,6 +2,9 @@ package com.ced2711.lifetracker.ui.backup
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.content.ContentResolver
+import android.net.Uri
+import android.provider.DocumentsContract
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -14,11 +17,13 @@ import com.ced2711.lifetracker.data.cloud.CloudSyncPreferences
 import com.ced2711.lifetracker.data.cloud.CloudSyncAttention
 import com.ced2711.lifetracker.data.cloud.CloudSyncSecretStore
 import com.ced2711.lifetracker.data.cloud.GoogleDriveAuthorization
+import com.ced2711.lifetracker.data.cloud.GoogleDriveAuthorizationFailure
 import com.ced2711.lifetracker.data.cloud.GoogleDriveAuthorizationResult
 import com.ced2711.lifetracker.data.vault.VaultSession
 import com.ced2711.lifetracker.worker.CloudSyncScheduler
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,12 +34,34 @@ enum class CloudSyncTask {
     NONE,
     CONNECTING,
     SYNCING,
+    EXPORTING_RECOVERY,
 }
 
 data class CloudConsentRequest(
     val id: Long,
     val pendingIntent: PendingIntent,
+    val dispatched: Boolean = false,
 )
+
+internal fun shouldDispatchCloudConsent(
+    requestId: Long?,
+    expectedRequestId: Long,
+    alreadyDispatched: Boolean,
+): Boolean = requestId == expectedRequestId && !alreadyDispatched
+
+internal fun cloudConnectionFailureMessage(
+    error: Throwable,
+    authorizationComplete: Boolean,
+): String {
+    val authorizationFailure = error as? GoogleDriveAuthorizationFailure
+    return when {
+        authorizationFailure != null ->
+            authorizationFailure.message ?: "Google Drive authorization failed."
+        authorizationComplete ->
+            "Google Drive connection failed while saving local credentials."
+        else -> "Google Drive connection failed."
+    }
+}
 
 data class CloudSyncUiState(
     val connected: Boolean = false,
@@ -43,7 +70,10 @@ data class CloudSyncUiState(
     val lastSyncAt: Long? = null,
     val attention: CloudSyncAttention? = null,
     val message: String? = null,
+    /** Persistent connection/setup error; unlike [message], this is not dismissed by the snackbar. */
+    val connectionError: String? = null,
     val conflict: CloudRevision? = null,
+    val recoveryFiles: List<String> = emptyList(),
 ) {
     val busy: Boolean get() = task != CloudSyncTask.NONE
 }
@@ -54,6 +84,7 @@ class CloudSyncViewModel internal constructor(
     private val secretStore: CloudSyncSecretStore,
     private val authorization: GoogleDriveAuthorization,
     private val scheduleAutomaticSync: (Boolean) -> Unit,
+    private val contentResolver: ContentResolver,
 ) : ViewModel() {
     private val nonce = AtomicLong(System.nanoTime())
     private val _uiState = MutableStateFlow(readState())
@@ -69,6 +100,33 @@ class CloudSyncViewModel internal constructor(
     private var pendingExpectedRemoteRevisionId: String? = null
     private var pendingReconnect = false
 
+    /** Copies already-encrypted bytes only; the original private recovery file is never removed. */
+    fun exportRecovery(fileName: String, destination: Uri) {
+        if (_uiState.value.busy) return
+        _uiState.update { it.copy(task = CloudSyncTask.EXPORTING_RECOVERY, message = null) }
+        viewModelScope.launch(Dispatchers.IO) {
+            var completed = false
+            try {
+                val source = engine.recoveryFiles().singleOrNull { it.name == fileName }
+                    ?: error("Recovery copy is unavailable")
+                source.inputStream().buffered().use { input ->
+                    val output = contentResolver.openOutputStream(destination, "wt")
+                        ?: error("Recovery export destination is unavailable")
+                    output.buffered().use { input.copyTo(it) }
+                }
+                completed = true
+                _uiState.update { it.copy(message = "Encrypted recovery copy exported. Restore it with the sync password used when it was created.") }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Throwable) {
+                _uiState.update { it.copy(message = "Could not export the recovery copy. The private original was kept.") }
+            } finally {
+                if (!completed) runCatching { DocumentsContract.deleteDocument(contentResolver, destination) }
+                _uiState.update { it.copy(task = CloudSyncTask.NONE) }
+            }
+        }
+    }
+
     fun connect(password: CharArray) {
         if (password.size < MINIMUM_BACKUP_PASSWORD_LENGTH || _uiState.value.busy) {
             password.fill('\u0000')
@@ -77,11 +135,17 @@ class CloudSyncViewModel internal constructor(
         pendingPassword?.fill('\u0000')
         pendingPassword = password
         pendingReconnect = false
-        _uiState.update { it.copy(task = CloudSyncTask.CONNECTING, message = null) }
+        _uiState.update {
+            it.copy(task = CloudSyncTask.CONNECTING, message = null, connectionError = null)
+        }
         viewModelScope.launch {
+            var authorizationComplete = false
             try {
                 when (val result = authorization.authorize()) {
-                    is GoogleDriveAuthorizationResult.Authorized -> finishConnection()
+                    is GoogleDriveAuthorizationResult.Authorized -> {
+                        authorizationComplete = true
+                        finishConnection()
+                    }
                     is GoogleDriveAuthorizationResult.NeedsConsent -> {
                         _consentRequest.value = CloudConsentRequest(
                             nonce.incrementAndGet(),
@@ -91,34 +155,42 @@ class CloudSyncViewModel internal constructor(
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (_: Throwable) {
-                clearPendingPassword()
-                _uiState.update {
-                    it.copy(task = CloudSyncTask.NONE, message = "Google Drive connection failed.")
-                }
+            } catch (error: Throwable) {
+                handleConnectionFailure(error, authorizationComplete)
             }
         }
     }
 
-    fun completeConsent(data: Intent?) {
+    fun markConsentDispatched(requestId: Long): Boolean {
+        val request = _consentRequest.value ?: return false
+        if (!shouldDispatchCloudConsent(request.id, requestId, request.dispatched)) return false
+        _consentRequest.value = request.copy(dispatched = true)
+        return true
+    }
+
+    fun consentLaunchFailed(requestId: Long, error: Throwable? = null) {
+        if (_consentRequest.value?.id != requestId) return
+        _consentRequest.value = null
+        handleConnectionFailure(error ?: IllegalStateException("Consent launch failed"), false)
+    }
+
+    fun completeConsent(data: Intent?, resultCode: Int = android.app.Activity.RESULT_OK) {
         if (_consentRequest.value == null) return
         _consentRequest.value = null
         viewModelScope.launch {
+            var authorizationComplete = false
             try {
-                when (authorization.completeConsent(data)) {
+                when (authorization.completeConsent(data, resultCode)) {
                     is GoogleDriveAuthorizationResult.Authorized -> {
+                        authorizationComplete = true
                         if (pendingReconnect) finishReconnect() else finishConnection()
                     }
                     is GoogleDriveAuthorizationResult.NeedsConsent -> error("Authorization did not complete")
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (_: Throwable) {
-                clearPendingPassword()
-                pendingReconnect = false
-                _uiState.update {
-                    it.copy(task = CloudSyncTask.NONE, message = "Google Drive connection was cancelled.")
-                }
+            } catch (error: Throwable) {
+                handleConnectionFailure(error, authorizationComplete)
             }
         }
     }
@@ -126,11 +198,17 @@ class CloudSyncViewModel internal constructor(
     fun reconnect() {
         if (!_uiState.value.connected || _uiState.value.busy) return
         pendingReconnect = true
-        _uiState.update { it.copy(task = CloudSyncTask.CONNECTING, message = null) }
+        _uiState.update {
+            it.copy(task = CloudSyncTask.CONNECTING, message = null, connectionError = null)
+        }
         viewModelScope.launch {
+            var authorizationComplete = false
             try {
                 when (val result = authorization.authorize()) {
-                    is GoogleDriveAuthorizationResult.Authorized -> finishReconnect()
+                    is GoogleDriveAuthorizationResult.Authorized -> {
+                        authorizationComplete = true
+                        finishReconnect()
+                    }
                     is GoogleDriveAuthorizationResult.NeedsConsent -> {
                         _consentRequest.value = CloudConsentRequest(
                             nonce.incrementAndGet(),
@@ -140,11 +218,8 @@ class CloudSyncViewModel internal constructor(
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (_: Throwable) {
-                pendingReconnect = false
-                _uiState.update {
-                    it.copy(task = CloudSyncTask.NONE, message = "Google Drive connection failed.")
-                }
+            } catch (error: Throwable) {
+                handleConnectionFailure(error, authorizationComplete)
             }
         }
     }
@@ -218,7 +293,10 @@ class CloudSyncViewModel internal constructor(
         secretStore.clear()
         preferences.clearConnection()
         scheduleAutomaticSync(false)
-        _uiState.value = readState().copy(message = "Google Drive disconnected. Local data was kept.")
+        _uiState.value = readState().copy(
+            message = "Google Drive disconnected. Local data was kept.",
+            connectionError = null,
+        )
     }
 
     fun acknowledgeMessage() {
@@ -341,12 +419,26 @@ class CloudSyncViewModel internal constructor(
             automaticSync = value.automaticSync,
             lastSyncAt = value.state.lastSyncAt,
             attention = value.attention,
+            recoveryFiles = engine.recoveryFiles().map { it.name },
         )
     }
 
     private fun clearPendingPassword() {
         pendingPassword?.fill('\u0000')
         pendingPassword = null
+    }
+
+    private fun handleConnectionFailure(error: Throwable, authorizationComplete: Boolean) {
+        clearPendingPassword()
+        pendingReconnect = false
+        val message = cloudConnectionFailureMessage(error, authorizationComplete)
+        _uiState.update {
+            it.copy(
+                task = CloudSyncTask.NONE,
+                message = message,
+                connectionError = message,
+            )
+        }
     }
 
     class Factory(private val container: AppContainer) : ViewModelProvider.Factory {
@@ -358,6 +450,7 @@ class CloudSyncViewModel internal constructor(
                 preferences = container.cloudSyncPreferences,
                 secretStore = container.cloudSyncSecretStore,
                 authorization = container.googleDriveAuthorization,
+                contentResolver = container.appContext.contentResolver,
                 scheduleAutomaticSync = { enabled ->
                     CloudSyncScheduler.update(container.appContext, enabled)
                 },

@@ -21,6 +21,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -36,10 +37,12 @@ class AndroidCloudSyncEngineInstrumentedTest {
     private lateinit var backupRepository: BackupRepository
     private lateinit var attachmentDirectory: File
     private lateinit var workDirectory: File
+    private lateinit var recoveryDirectory: File
 
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
+        recoveryDirectory = File(context.filesDir, "cloud-recovery").apply { deleteRecursively() }
         context.getSharedPreferences("life_tracker_cloud_sync", Context.MODE_PRIVATE)
             .edit().clear().commit()
         context.getSharedPreferences("life_tracker_cloud_sync_secret", Context.MODE_PRIVATE)
@@ -72,6 +75,7 @@ class AndroidCloudSyncEngineInstrumentedTest {
         database.close()
         attachmentDirectory.deleteRecursively()
         workDirectory.deleteRecursively()
+        recoveryDirectory.deleteRecursively()
     }
 
     @Test
@@ -166,6 +170,190 @@ class AndroidCloudSyncEngineInstrumentedTest {
     }
 
     @Test
+    fun firstUploadStopsWhenCloudBecomesNonEmptyDuringSnapshotCreation() = runBlocking {
+        database.backupDao().insertCategories(listOf(CategoryEntity(42, "Local")))
+        val store = FakeCloudStore(mutableListOf()) { call, revisions ->
+            if (call == 2) {
+                revisions.add(0, remoteRevision("b".repeat(64)).copy(fileId = "raced-remote"))
+            }
+        }
+
+        val result = engine(store).synchronize()
+
+        assertTrue(result is AndroidCloudSyncResult.Conflict)
+        assertEquals(0, store.uploadCount)
+        assertEquals(null, preferences.read().state.lastRevisionId)
+        assertEquals(0, store.deleteCount)
+    }
+
+    @Test
+    fun conflictResolutionStopsWhenHeadsChangeBeforeUpload() = runBlocking {
+        database.backupDao().insertCategories(listOf(CategoryEntity(42, "Local")))
+        val encryptedRemote = ByteArrayOutputStream().use { output ->
+            backupRepository.export(output, TEST_PASSWORD.toCharArray())
+            output.toByteArray()
+        }
+        val store = FakeCloudStore(
+            revisions = mutableListOf(remoteRevision("a".repeat(64))),
+            downloadBytes = encryptedRemote,
+            onList = { call, revisions ->
+                if (call == 2) {
+                    revisions.add(0, remoteRevision("b".repeat(64)).copy(fileId = "new-conflict-head"))
+                }
+            },
+        )
+
+        val result = engine(store).synchronize(
+            conflictResolution = ConflictResolution.KEEP_LOCAL,
+            expectedRemoteRevisionId = "remote-revision",
+        )
+
+        assertTrue(result is AndroidCloudSyncResult.Conflict)
+        assertEquals(0, store.uploadCount)
+        assertEquals(null, preferences.read().state.lastRevisionId)
+    }
+
+    @Test
+    fun simultaneousUploadKeepsBothBranchesAndDoesNotRecordFalseBaseline() = runBlocking {
+        database.backupDao().insertCategories(listOf(CategoryEntity(42, "Local")))
+        val store = FakeCloudStore(
+            revisions = mutableListOf(),
+            onList = { call, revisions ->
+                if (call == 3) {
+                    revisions.add(0, remoteRevision("c".repeat(64)).copy(fileId = "simultaneous-device"))
+                }
+            },
+        )
+
+        val result = engine(store).synchronize()
+
+        assertTrue(result is AndroidCloudSyncResult.Conflict)
+        assertEquals(1, store.uploadCount)
+        assertEquals(null, preferences.read().state.lastRevisionId)
+        assertEquals(0, store.deleteCount)
+    }
+
+    @Test
+    fun useCloudHeadAppearingDuringDownloadLeavesLocalDataAndBaselineUntouched() = runBlocking {
+        database.backupDao().insertCategories(listOf(CategoryEntity(42, "Local")))
+        val encryptedRemote = ByteArrayOutputStream().use { output ->
+            backupRepository.export(output, TEST_PASSWORD.toCharArray())
+            output.toByteArray()
+        }
+        val store = FakeCloudStore(
+            revisions = mutableListOf(remoteRevision("a".repeat(64))),
+            downloadBytes = encryptedRemote,
+            onDownload = { revisions ->
+                revisions.add(0, remoteRevision("b".repeat(64)).copy(fileId = "download-race"))
+            },
+        )
+        val engine = engine(store)
+
+        val result = engine.synchronize(
+            conflictResolution = ConflictResolution.USE_CLOUD,
+            expectedRemoteRevisionId = "remote-revision",
+        )
+
+        assertTrue(result is AndroidCloudSyncResult.Conflict)
+        assertEquals(listOf(42L), database.backupDao().backupCategories().map { it.id })
+        assertEquals(0, store.uploadCount)
+        assertEquals(null, preferences.read().state.lastRevisionId)
+    }
+
+    @Test
+    fun useCloudHeadAppearingDuringUploadLeavesLocalDataAndBaselineUntouched() = runBlocking {
+        database.backupDao().insertCategories(listOf(CategoryEntity(42, "Local")))
+        val encryptedRemote = ByteArrayOutputStream().use { output ->
+            backupRepository.export(output, TEST_PASSWORD.toCharArray())
+            output.toByteArray()
+        }
+        val store = FakeCloudStore(
+            revisions = mutableListOf(remoteRevision("a".repeat(64))),
+            downloadBytes = encryptedRemote,
+            onUpload = { revisions ->
+                revisions.add(0, remoteRevision("b".repeat(64)).copy(fileId = "upload-race"))
+            },
+        )
+        val engine = engine(store)
+
+        val result = engine.synchronize(
+            conflictResolution = ConflictResolution.USE_CLOUD,
+            expectedRemoteRevisionId = "remote-revision",
+        )
+
+        assertTrue(result is AndroidCloudSyncResult.Conflict)
+        assertEquals(listOf(42L), database.backupDao().backupCategories().map { it.id })
+        assertEquals(1, store.uploadCount)
+        assertEquals(null, preferences.read().state.lastRevisionId)
+    }
+
+    @Test
+    fun useCloudAcceptsDesktopEncryptedFingerprintAndRecordsAndroidBaselineAfterRestore() = runBlocking {
+        database.backupDao().insertCategories(listOf(CategoryEntity(42, "Local")))
+        val androidFingerprint = backupRepository.syncFingerprint()
+        val desktopEncryptedFingerprint = "d".repeat(64)
+        val encryptedRemote = ByteArrayOutputStream().use { output ->
+            backupRepository.export(output, TEST_PASSWORD.toCharArray())
+            output.toByteArray()
+        }
+        val store = FakeCloudStore(
+            revisions = mutableListOf(remoteRevision(desktopEncryptedFingerprint)),
+            downloadBytes = encryptedRemote,
+        )
+        val engine = engine(store)
+
+        val result = engine.synchronize(
+            conflictResolution = ConflictResolution.USE_CLOUD,
+            expectedRemoteRevisionId = "remote-revision",
+        )
+
+        assertTrue(result is AndroidCloudSyncResult.Downloaded)
+        assertEquals(1, store.uploadCount)
+        assertEquals(1, store.downloadCount)
+        assertArrayEquals(encryptedRemote, requireNotNull(store.uploadedBytes))
+        assertEquals("uploaded-1", preferences.read().state.lastRevisionId)
+        assertEquals(androidFingerprint, preferences.read().state.lastContentFingerprint)
+        assertEquals(desktopEncryptedFingerprint, store.uploadedRevision?.contentFingerprint)
+        assertEquals(listOf("remote-revision"), store.uploadedRevision?.mergedRevisionIds)
+
+        val recovery = requireNotNull(engine.recoveryFiles().singleOrNull())
+        assertTrue(recovery.isFile)
+        assertTrue(recovery.name.endsWith(".tlb"))
+        val preparedRecovery = recovery.inputStream().buffered().use { input ->
+            backupRepository.prepareRestore(input, TEST_PASSWORD.toCharArray())
+        }
+        backupRepository.restore(preparedRecovery)
+        assertEquals(listOf(42L), database.backupDao().backupCategories().map { it.id })
+    }
+
+    @Test
+    fun useCloudLocalEditDuringUploadLeavesEditedDataAndBaselineUntouched() = runBlocking {
+        database.backupDao().insertCategories(listOf(CategoryEntity(42, "Local")))
+        val encryptedRemote = ByteArrayOutputStream().use { output ->
+            backupRepository.export(output, TEST_PASSWORD.toCharArray())
+            output.toByteArray()
+        }
+        val store = FakeCloudStore(
+            revisions = mutableListOf(remoteRevision("d".repeat(64))),
+            downloadBytes = encryptedRemote,
+            onUpload = {
+                database.backupDao().insertCategories(listOf(CategoryEntity(43, "Edited during upload")))
+            },
+        )
+        val engine = engine(store)
+
+        val result = engine.synchronize(
+            conflictResolution = ConflictResolution.USE_CLOUD,
+            expectedRemoteRevisionId = "remote-revision",
+        )
+
+        assertTrue(result is AndroidCloudSyncResult.Conflict)
+        assertEquals(listOf(42L, 43L), database.backupDao().backupCategories().map { it.id })
+        assertEquals(1, store.uploadCount)
+        assertEquals(null, preferences.read().state.lastRevisionId)
+    }
+
+    @Test
     fun freshConnectionResetPreservesOptionsAndDeviceButClearsOldLineage() {
         val initial = preferences.read()
         preferences.setAutomaticSync(false)
@@ -210,6 +398,9 @@ class AndroidCloudSyncEngineInstrumentedTest {
         private val revisions: MutableList<CloudRevision>,
         private val listDelayMillis: Long = 0,
         private val downloadBytes: ByteArray? = null,
+        private val onDownload: (MutableList<CloudRevision>) -> Unit = {},
+        private val onUpload: suspend (MutableList<CloudRevision>) -> Unit = {},
+        private val onList: (Int, MutableList<CloudRevision>) -> Unit = { _, _ -> },
     ) : CloudBackupStore {
         val maximumConcurrentLists = AtomicInteger(0)
         private val activeLists = AtomicInteger(0)
@@ -217,12 +408,21 @@ class AndroidCloudSyncEngineInstrumentedTest {
             private set
         var downloadCount = 0
             private set
+        var deleteCount = 0
+            private set
+        var uploadedBytes: ByteArray? = null
+            private set
+        var uploadedRevision: CloudRevision? = null
+            private set
+        private var listCount = 0
 
         override suspend fun listRevisions(limit: Int): List<CloudRevision> {
             val active = activeLists.incrementAndGet()
             maximumConcurrentLists.updateAndGet { maxOf(it, active) }
             return try {
                 if (listDelayMillis > 0) delay(listDelayMillis)
+                listCount += 1
+                onList(listCount, revisions)
                 revisions.toList()
             } finally {
                 activeLists.decrementAndGet()
@@ -235,6 +435,8 @@ class AndroidCloudSyncEngineInstrumentedTest {
         ): CloudRevision {
             assertTrue(source.isFile && source.length() > 0)
             uploadCount += 1
+            uploadedBytes = source.readBytes()
+            onUpload(revisions)
             return CloudRevision(
                 fileId = "uploaded-$uploadCount",
                 fileName = revision.fileName,
@@ -246,16 +448,22 @@ class AndroidCloudSyncEngineInstrumentedTest {
                 modifiedTime = "2026-09-18T00:00:00Z",
                 sizeBytes = source.length(),
                 mergedRevisionIds = revision.mergedRevisionIds,
-            ).also { revisions.add(0, it) }
+            ).also {
+                uploadedRevision = it
+                revisions.add(0, it)
+            }
         }
 
         override suspend fun downloadRevision(revision: CloudRevision, destination: File) {
             downloadCount += 1
+            onDownload(revisions)
             val bytes = downloadBytes ?: error("This test must not download a cloud revision.")
             destination.writeBytes(bytes)
         }
 
-        override suspend fun deleteRevision(fileId: String) = Unit
+        override suspend fun deleteRevision(fileId: String) {
+            deleteCount += 1
+        }
     }
 
     private companion object {

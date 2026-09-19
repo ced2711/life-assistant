@@ -12,16 +12,16 @@ Life Tracker is an open-source, offline-first personal organizer for Android and
 - Password-encrypted `.tlb` backup and full-replacement restore with validation and preview.
 - Responsive Today Todo widget, including wide horizontal layouts.
 - Six selectable accent palettes with light, dark, and system themes.
-- Optional Google Drive authorization and automatic encrypted snapshot sync, with explicit conflict resolution and recent cloud history.
+- Optional Google Drive authorization and automatic encrypted snapshot sync, with explicit conflict resolution and retained cloud history.
 - Offline use without accounts; no analytics or advertising. Google authorization is required only when enabling Drive sync.
 
 ## Windows and Google Drive
 
-The Windows app supports local Todo, Ledger, Calendar, Notes, folders, attachments, Vault, and manual `.tlb` import/export. It uses the same backup codec and encryption as Android. The initial Windows release has English UI; Android retains English and Chinese. Advanced Android recurrence creation, reminder scheduling and widgets remain Android features; imported recurrence metadata is preserved when editing existing occurrences on Windows.
+The Windows app supports local Todo, Ledger, Calendar, Notes, folders, attachments, Vault, and manual `.tlb` import/export. It uses the same backup codec, encryption, theme palettes and formatting utilities as Android. Both offer English and Simplified Chinese UI, light/dark/system themes and six accent colors. Windows also supports multi-category Todo filtering and collapsible Notes folders/search. New Windows installations are offline by default, with automatic sync off; connect Drive explicitly in Settings. Advanced Android recurrence creation, reminder scheduling and widgets remain Android features; imported recurrence metadata is preserved when editing existing occurrences on Windows.
 
 **Google Cloud setup is required before live sign-in works.** This repository does not bundle production OAuth credentials. Register the Android package/signing certificate and a Desktop OAuth client in the same Google Cloud project, then authorize the same Google account on both devices. Follow [Google Drive setup](docs/GOOGLE_DRIVE_SETUP.md). Until configured, local use and encrypted file transfer work independently.
 
-Sync transfers complete encrypted datasets. If both sides changed, choose which version to use; it is not a record-by-record merge. Competing cloud branches are preserved until explicitly resolved. Password mismatches are rejected rather than treated as content conflicts. Android Vault authentication is still required for complete snapshots containing Vault entries, so unattended sync waits for unlock when necessary. Windows sync runs while the app is open and unlocked.
+Sync transfers complete encrypted datasets. If both sides changed, choose which version to use; it is not a record-by-record merge. Each upload creates a new encrypted file; older versions and competing branches are not automatically deleted. Cloud heads are checked before and after upload. Drive has no atomic cross-file compare-and-create, so simultaneous uploads can produce branches; both are preserved and sync asks for review. Password mismatches are rejected rather than treated as content conflicts. Android Vault authentication is still required for complete snapshots containing Vault entries, so unattended sync waits for unlock when necessary. Windows sync runs while the app is open and unlocked.
 
 ## Identity and compatibility
 
@@ -44,7 +44,7 @@ Use JDK 17 and the included Gradle wrapper.
 
 There are two distribution flavors:
 
-- `standard`: normal Android install/update build; version code 12 for the 1.6.0 release.
+- `standard`: normal Android install/update build; version code 13 for the 1.6.1 release.
 - `personal`: one-off migration build; version code 5 so the standard APK can update it afterward.
 
 The personal flavor intentionally requires a local `app/src/personal/assets/personal-backup.tlb`. That encrypted user backup, its password, APK outputs, release keystore, and signing credentials are excluded from Git and must never be committed, even to a private repository.

@@ -48,6 +48,10 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.TaskAlt
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.FilterAlt
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -104,10 +108,20 @@ import com.ced2711.lifetracker.data.local.NoteEntity
 import com.ced2711.lifetracker.data.local.TodoEntity
 import com.ced2711.lifetracker.domain.model.AttachmentOwnerType
 import com.ced2711.lifetracker.domain.model.AccentColor
+import com.ced2711.lifetracker.domain.model.DateFormatOption
 import com.ced2711.lifetracker.domain.model.LedgerType
+import com.ced2711.lifetracker.domain.model.ThemeMode
+import com.ced2711.lifetracker.domain.model.TimeFormatOption
+import com.ced2711.lifetracker.domain.model.TopLevelDestination
 import com.ced2711.lifetracker.domain.model.TodoPriority
+import com.ced2711.lifetracker.domain.model.UiLanguage
 import com.ced2711.lifetracker.domain.model.VaultEntry
+import com.ced2711.lifetracker.domain.model.WeekStart
 import com.ced2711.lifetracker.domain.date.SmartDateParser
+import com.ced2711.lifetracker.domain.format.UserFormatting
+import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
+import com.ced2711.lifetracker.ui.localization.uiLocale
+import com.ced2711.lifetracker.ui.theme.TaskLedgerTheme
 import java.io.File
 import java.io.IOException
 import java.awt.Desktop
@@ -167,9 +181,10 @@ fun LifeTrackerDesktopApp() {
     val oauth = remember { DesktopGoogleOAuth(config, credentials) }
     val cloud = remember { DesktopCloudSyncController(dataStore, config, oauth) }
     val storeState by dataStore.state.collectAsDesktopState()
+    var uiLanguage by remember { mutableStateOf(config.read().uiLanguage) }
     var appError by remember { mutableStateOf<String?>(null) }
-    val reportError: (Throwable) -> Unit = remember {
-        { error -> appError = desktopErrorMessage(error) }
+    val reportError: (Throwable) -> Unit = remember(uiLanguage) {
+        { error -> appError = desktopErrorMessage(error, uiLanguage) }
     }
     val rootHandler = remember(reportError) {
         CoroutineExceptionHandler { _, error -> reportError(error) }
@@ -188,8 +203,10 @@ fun LifeTrackerDesktopApp() {
     }
 
     val accent = (storeState as? DesktopStoreState.Open)?.snapshot?.settings?.accentColor ?: AccentColor.TEAL
+    val theme = (storeState as? DesktopStoreState.Open)?.snapshot?.settings?.themeMode ?: ThemeMode.DARK
     CompositionLocalProvider(LocalDesktopErrorReporter provides reportError) {
-        MaterialTheme(colorScheme = lifeTrackerColors(accent)) {
+        CompositionLocalProvider(LocalUiLanguage provides uiLanguage) {
+            TaskLedgerTheme(theme, accent) {
             Surface(Modifier.fillMaxSize()) {
                 when (val current = storeState) {
                 DesktopStoreState.Locked -> UnlockScreen(
@@ -235,17 +252,19 @@ fun LifeTrackerDesktopApp() {
                     cloud = cloud,
                     configStore = config,
                     credentials = credentials,
+                    onUiLanguageChanged = { uiLanguage = it },
                 )
                 }
             }
             appError?.let { message ->
                 AlertDialog(
                     onDismissRequest = { appError = null },
-                    title = { Text("Operation failed") },
+                    title = { Text(desktopText("Operation failed")) },
                     text = { Text(message) },
-                    confirmButton = { Button(onClick = { appError = null }) { Text("OK") } },
+                    confirmButton = { Button(onClick = { appError = null }) { Text(desktopText("OK")) } },
                 )
             }
+        }
         }
     }
 }
@@ -266,16 +285,16 @@ private fun UnlockScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 Icon(Icons.Default.CheckCircle, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
-                Text("Life Tracker", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                Text(desktopText("Life Tracker"), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    if (existingData) "Unlock your encrypted local data." else
-                        "Create an encrypted local data file. Use this same password for Google Drive sync.",
+                    desktopText(if (existingData) "Unlock your encrypted local data." else
+                        "Create an encrypted local data file. Use this same password for Google Drive sync."),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },
-                    label = { Text("Data password") },
+                    label = { Text(desktopText("Data password")) },
                     singleLine = true,
                     visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
                     trailingIcon = {
@@ -287,9 +306,9 @@ private fun UnlockScreen(
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(rememberOnPc, { rememberOnPc = it })
-                    Text("Remember securely with Windows")
+                    Text(desktopText("Remember securely with Windows"))
                 }
-                if (error != null) Text(error, color = MaterialTheme.colorScheme.error)
+                if (error != null) Text(desktopText(error), color = MaterialTheme.colorScheme.error)
                 Button(
                     enabled = password.length >= 8,
                     onClick = {
@@ -299,10 +318,10 @@ private fun UnlockScreen(
                     },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(if (existingData) "Unlock" else "Create local data")
+                    Text(desktopText(if (existingData) "Unlock" else "Create local data"))
                 }
                 Text(
-                    "Your password is never uploaded. If remembered, it is protected by Windows DPAPI for this Windows account.",
+                    desktopText("Your password is never uploaded. If remembered, it is protected by Windows DPAPI for this Windows account."),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -318,19 +337,27 @@ private fun DesktopHome(
     cloud: DesktopCloudSyncController,
     configStore: DesktopConfigStore,
     credentials: WindowsCredentialStore,
+    onUiLanguageChanged: (UiLanguage) -> Unit,
 ) {
-    var destination by remember { mutableStateOf(DesktopDestination.TODO) }
+    val configuredDestination = configStore.read().lastDestination.toDesktopDestination()
+    var destination by remember { mutableStateOf(configuredDestination) }
     val scope = rememberSafeCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
     val cloudState by cloud.state.collectAsDesktopState()
+    val language = LocalUiLanguage.current
 
     LaunchedEffect(cloudState.message) {
         cloudState.message?.let {
-            snackbar.showSnackbar(it)
+            snackbar.showSnackbar(desktopText(it, language))
             cloud.acknowledgeMessage()
         }
     }
 
+    val mainDestinations = remember { listOf(DesktopDestination.TODO, DesktopDestination.LEDGER, DesktopDestination.CALENDAR, DesktopDestination.NOTES) }
+    fun navigate(to: DesktopDestination) {
+        destination = to
+        if (to in mainDestinations) configStore.setLastDestination(to.toTopLevelDestination())
+    }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= 850.dp
         Scaffold(
@@ -338,12 +365,12 @@ private fun DesktopHome(
             bottomBar = {
                 if (!wide) {
                     NavigationBar {
-                        DesktopDestination.entries.forEach { item ->
+                        mainDestinations.forEach { item ->
                             NavigationBarItem(
                                 selected = item == destination,
-                                onClick = { destination = item },
-                                icon = { Icon(item.icon, item.label) },
-                                label = { Text(item.label) },
+                                onClick = { navigate(item) },
+                                icon = { Icon(item.icon, desktopText(item.label)) },
+                                label = { Text(desktopText(item.label)) },
                             )
                         }
                     }
@@ -354,29 +381,47 @@ private fun DesktopHome(
                 if (wide) {
                     NavigationRail {
                         Spacer(Modifier.height(12.dp))
-                        DesktopDestination.entries.forEach { item ->
+                        mainDestinations.forEach { item ->
                             NavigationRailItem(
                                 selected = item == destination,
-                                onClick = { destination = item },
-                                icon = { Icon(item.icon, item.label) },
-                                label = { Text(item.label) },
+                                onClick = { navigate(item) },
+                                icon = { Icon(item.icon, desktopText(item.label)) },
+                                label = { Text(desktopText(item.label)) },
                             )
                         }
                     }
                     HorizontalDivider(Modifier.fillMaxHeight().width(1.dp))
                 }
-                Box(Modifier.weight(1f).fillMaxHeight()) {
+                Column(Modifier.weight(1f).fillMaxHeight()) {
+                    Row(
+                        Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Spacer(Modifier.weight(1f))
+                        if (destination == DesktopDestination.SETTINGS || destination == DesktopDestination.VAULT) {
+                            IconButton(onClick = { navigate(DesktopDestination.NOTES) }) {
+                                Icon(Icons.Default.ChevronLeft, desktopText("Back"))
+                            }
+                        } else {
+                            IconButton(onClick = { destination = DesktopDestination.SETTINGS }) {
+                                Icon(Icons.Default.Settings, desktopText("Settings"))
+                            }
+                        }
+                    }
                     when (destination) {
                         DesktopDestination.TODO -> TodoPage(snapshot, dataStore)
                         DesktopDestination.LEDGER -> LedgerPage(snapshot, dataStore)
                         DesktopDestination.CALENDAR -> CalendarPage(snapshot, dataStore)
-                        DesktopDestination.NOTES -> NotesPage(snapshot, dataStore)
+                        DesktopDestination.NOTES -> NotesPage(snapshot, dataStore) { destination = DesktopDestination.VAULT }
                         DesktopDestination.VAULT -> VaultPage(snapshot, dataStore)
                         DesktopDestination.SETTINGS -> SettingsPage(
                             cloudState = cloudState,
                             cloud = cloud,
                             config = configStore.read(),
+                            configStore = configStore,
                             dataStore = dataStore,
+                            openVault = { destination = DesktopDestination.VAULT },
+                            onUiLanguageChanged = onUiLanguageChanged,
                             forgetLocalPassword = { credentials.delete(WindowsCredentialStore.LOCAL_PASSWORD) },
                         )
                     }
@@ -387,16 +432,16 @@ private fun DesktopHome(
         cloudState.conflict?.let {
             AlertDialog(
                 onDismissRequest = cloud::dismissConflict,
-                title = { Text("Sync conflict") },
-                text = { Text("This PC and Google Drive both changed. Life Tracker will keep the history and create a new merged cloud revision from your choice.") },
-                dismissButton = { TextButton(onClick = cloud::dismissConflict) { Text("Cancel") } },
+                title = { Text(desktopText("Sync conflict")) },
+                text = { Text(desktopText("Use newest cloud replaces this PC's data. Keep this PC publishes this PC's full dataset. Neither option merges individual records. Previous encrypted cloud versions are kept.")) },
+                dismissButton = { TextButton(onClick = cloud::dismissConflict) { Text(desktopText("Cancel")) } },
                 confirmButton = {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         TextButton(onClick = { scope.launch { cloud.synchronize(ConflictResolution.USE_CLOUD) } }) {
-                            Text("Use newest cloud")
+                            Text(desktopText("Use newest cloud"))
                         }
                         Button(onClick = { scope.launch { cloud.synchronize(ConflictResolution.KEEP_LOCAL) } }) {
-                            Text("Keep this PC")
+                            Text(desktopText("Keep this PC"))
                         }
                     }
                 },
@@ -408,7 +453,7 @@ private fun DesktopHome(
 @Composable
 private fun PageHeader(title: String, subtitle: String? = null) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 18.dp)) {
-        Text(title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Text(desktopText(title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         if (subtitle != null) Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
@@ -419,54 +464,86 @@ private fun TodoPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
     var editing by remember { mutableStateOf<TodoEntity?>(null) }
     var adding by remember { mutableStateOf(false) }
     var showCompleted by remember { mutableStateOf(false) }
+    var showFilters by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
-    var selectedCategory by remember { mutableStateOf<Long?>(null) }
+    var allCategories by remember { mutableStateOf(true) }
+    var selectedCategories by remember { mutableStateOf(emptySet<Long>()) }
+    var includeUncategorized by remember { mutableStateOf(false) }
+    var priorityFilter by remember { mutableStateOf<TodoPriority?>(null) }
+    var tagFilter by remember { mutableStateOf<String?>(null) }
+    var sortBy by remember { mutableStateOf(DesktopTodoSort.DEADLINE) }
     var newCategory by remember { mutableStateOf(false) }
-    val categoryParents = snapshot.categories.associate { it.id to it.parentId }
-    val includedCategoryIds = selectedCategory?.let { selected ->
-        snapshot.categories.mapNotNull { candidate ->
-            var cursor: Long? = candidate.id
-            val visited = mutableSetOf<Long>()
-            while (cursor != null && visited.add(cursor)) {
-                if (cursor == selected) return@mapNotNull candidate.id
-                cursor = categoryParents[cursor]
-            }
-            null
-        }.toSet()
-    }
+    val includedCategoryIds = descendantCategoryIds(snapshot.categories, selectedCategories)
+    val filter = DesktopTodoFilter(allCategories, selectedCategories, includeUncategorized, priorityFilter, tagFilter, showCompleted)
     val todos = snapshot.todos
-        .filter { it.deletedAt == null && (showCompleted || it.completedAt == null) }
-        .filter { includedCategoryIds == null || it.categoryId in includedCategoryIds }
+        .filter { it.deletedAt == null && (filter.showCompleted || it.completedAt == null) }
+        .filter { categoryMatches(it.categoryId, filter, includedCategoryIds) }
+        .filter { priorityFilter == null || it.priority == priorityFilter }
+        .filter { tagFilter == null || it.tagsCsv.split(',').any { tag -> tag.trim().equals(tagFilter, true) } }
         .filter { query.isBlank() || it.title.contains(query, true) || it.description.contains(query, true) }
-        .sortedWith(compareBy<TodoEntity> { it.completedAt != null }.thenBy { it.deadlineEpochDay ?: Long.MAX_VALUE })
+        .sortedWith(compareBy<TodoEntity> { it.completedAt != null }.let { comparator ->
+            when (sortBy) {
+                DesktopTodoSort.DEADLINE -> comparator.thenBy { it.deadlineEpochDay ?: Long.MAX_VALUE }
+                DesktopTodoSort.PRIORITY -> comparator.thenByDescending { it.priority.ordinal }
+                DesktopTodoSort.TITLE -> comparator.thenBy { it.title.lowercase() }
+            }
+        })
     Scaffold(
         floatingActionButton = { FloatingActionButton(onClick = { adding = true }) { Icon(Icons.Default.Add, null) } },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            PageHeader("Todo", "${todos.count { it.completedAt == null }} active tasks")
+            PageHeader("Todo", desktopActiveTasks(todos.count { it.completedAt == null }, LocalUiLanguage.current))
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                OutlinedTextField(query, { query = it }, label = { Text("Search") }, modifier = Modifier.weight(1f))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(showCompleted, { showCompleted = it })
-                    Text("Completed")
-                }
+                OutlinedTextField(query, { query = it }, label = { Text(desktopText("Search")) }, modifier = Modifier.weight(1f))
+                IconButton(onClick = { showFilters = !showFilters }) { Icon(Icons.Default.FilterAlt, desktopText("Filters")) }
             }
-            LazyRow(
-                Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                item { FilterChipSimple("All", selectedCategory == null) { selectedCategory = null } }
-                items(snapshot.categories, key = { it.id }) { category ->
-                    FilterChipSimple(
-                        categoryPath(category.id, snapshot),
-                        selectedCategory == category.id,
-                    ) { selectedCategory = category.id }
+            if (showFilters) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(showCompleted, { showCompleted = it })
+                    Text(desktopText("Completed"))
+                    Spacer(Modifier.width(12.dp))
+                    Text(desktopText("Sort"), style = MaterialTheme.typography.labelLarge)
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.weight(1f)) {
+                        items(DesktopTodoSort.entries.toList(), key = { it.name }) { item ->
+                            FilterChipSimple(desktopText(desktopSortLabel(item)), sortBy == item) { sortBy = item }
+                        }
+                    }
                 }
-                item { TextButton(onClick = { newCategory = true }) { Icon(Icons.Default.Add, null); Text("Category") } }
+                LazyRow(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item {
+                        FilterChipSimple(desktopText("All"), allCategories) {
+                            allCategories = true
+                            selectedCategories = emptySet()
+                            includeUncategorized = false
+                        }
+                    }
+                    item {
+                        FilterChipSimple(desktopText("Uncategorized"), !allCategories && includeUncategorized) {
+                            allCategories = false
+                            includeUncategorized = !includeUncategorized
+                        }
+                    }
+                    items(snapshot.categories, key = { it.id }) { category ->
+                        FilterChipSimple(categoryPath(category.id, snapshot), !allCategories && category.id in selectedCategories) {
+                            allCategories = false
+                            selectedCategories = if (category.id in selectedCategories) selectedCategories - category.id else selectedCategories + category.id
+                        }
+                    }
+                    item {
+                        FilterChipSimple(desktopText("Priority"), priorityFilter != null) {
+                            priorityFilter = if (priorityFilter == null) TodoPriority.MEDIUM else null
+                        }
+                    }
+                }
+                val tags = snapshot.todos.flatMap { it.tagsCsv.split(',') }.map(String::trim).filter(String::isNotBlank).distinct().sorted()
+                if (tags.isNotEmpty()) LazyRow(Modifier.fillMaxWidth().padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(tags) { tag -> FilterChipSimple("#${tag}", tagFilter == tag) { tagFilter = if (tagFilter == tag) null else tag } }
+                }
+                TextButton(onClick = { newCategory = true }, modifier = Modifier.padding(horizontal = 24.dp)) { Icon(Icons.Default.Add, null); Text(desktopText("Category")) }
             }
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp),
@@ -487,15 +564,15 @@ private fun TodoPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                                 todo.deadlineEpochDay?.let {
-                                    Text("Due ${LocalDate.ofEpochDay(it)}", style = MaterialTheme.typography.bodySmall)
+                                    Text(desktopDue(UserFormatting.formatDate(LocalDate.ofEpochDay(it), snapshot.settings.dateFormat, uiLocale(LocalUiLanguage.current)), LocalUiLanguage.current), style = MaterialTheme.typography.bodySmall)
                                 }
                                 AttachmentList(snapshot, AttachmentOwnerType.TODO, todo.id, store)
                             }
                             IconButton({ chooseAndAttach(scope, store, AttachmentOwnerType.TODO, todo.id) }) {
-                                Icon(Icons.Default.AttachFile, "Attach")
+                                Icon(Icons.Default.AttachFile, desktopText("Attach"))
                             }
-                            IconButton({ editing = todo }) { Icon(Icons.Default.Edit, "Edit") }
-                            IconButton({ scope.launch { store.deleteTodo(todo.id) } }) { Icon(Icons.Default.Delete, "Delete") }
+                            IconButton({ editing = todo }) { Icon(Icons.Default.Edit, desktopText("Edit")) }
+                            IconButton({ scope.launch { store.deleteTodo(todo.id) } }) { Icon(Icons.Default.Delete, desktopText("Delete")) }
                         }
                     }
                 }
@@ -526,8 +603,8 @@ private fun TodoPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
         )
     }
     if (newCategory) {
-        SimpleNameDialog("New category", { newCategory = false }) { name ->
-            scope.launch { store.addCategory(name, selectedCategory) }
+        SimpleNameDialog(desktopText("New category"), { newCategory = false }) { name ->
+            scope.launch { store.addCategory(name, selectedCategories.firstOrNull()) }
             newCategory = false
         }
     }
@@ -555,16 +632,16 @@ private fun TodoEditorDialog(
     var completed by remember { mutableStateOf(todo?.completedAt != null) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (todo == null) "New todo" else "Edit todo") },
+        title = { Text(desktopText(if (todo == null) "New todo" else "Edit todo")) },
         text = {
-            Column(Modifier.width(520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(description, { description = it }, label = { Text("Description") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
-                OutlinedTextField(title, { title = it }, label = { Text("Title (optional)") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(deadline, { deadline = it }, label = { Text("Deadline M/D/YYYY, M/D, or day (optional)") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(tags, { tags = it }, label = { Text("Tags, comma separated (optional)") }, modifier = Modifier.fillMaxWidth())
-                Text("Category")
+            Column(Modifier.widthIn(max = 520.dp).fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(description, { description = it }, label = { Text(desktopText("Description")) }, modifier = Modifier.fillMaxWidth(), minLines = 3)
+                OutlinedTextField(title, { title = it }, label = { Text(desktopText("Title (optional)")) }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(deadline, { deadline = it }, label = { Text(desktopText("Deadline M/D/YYYY, M/D, or day (optional)")) }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(tags, { tags = it }, label = { Text(desktopText("Tags, comma separated (optional)")) }, modifier = Modifier.fillMaxWidth())
+                Text(desktopText("Category"))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    item { FilterChipSimple("None", categoryId == null) { categoryId = null } }
+                    item { FilterChipSimple(desktopText("None"), categoryId == null) { categoryId = null } }
                     items(snapshot.categories, key = { it.id }) { category ->
                         FilterChipSimple(
                             categoryPath(category.id, snapshot),
@@ -572,7 +649,7 @@ private fun TodoEditorDialog(
                         ) { categoryId = category.id }
                     }
                 }
-                Text("Priority")
+                Text(desktopText("Priority"))
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     listOf(TodoPriority.NONE, TodoPriority.LOW, TodoPriority.MEDIUM, TodoPriority.HIGH).forEach { item ->
                         FilterChipSimple(item.name.lowercase().replaceFirstChar(Char::uppercase), item == priority) { priority = item }
@@ -580,16 +657,16 @@ private fun TodoEditorDialog(
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(completed, { completed = it })
-                    Text("Done")
+                    Text(desktopText("Done"))
                 }
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(desktopText("Cancel")) } },
         confirmButton = {
             val day = deadline.takeIf(String::isNotBlank)?.let { SmartDateParser.parse(it, LocalDate.now())?.toEpochDay() }
             Button(enabled = description.isNotBlank() && (deadline.isBlank() || day != null), onClick = {
                 onSave(title, description, day, priority, categoryId, tags, completed)
-            }) { Text("Save") }
+            }) { Text(desktopText("Save")) }
         },
     )
 }
@@ -613,19 +690,19 @@ private fun LedgerPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
     val expense = entries.filter { it.type == LedgerType.EXPENSE }.sumOf { it.amountCents }
     Scaffold(floatingActionButton = { FloatingActionButton({ adding = true }) { Icon(Icons.Default.Add, null) } }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            PageHeader("Ledger", "Net ${formatMoney(income - expense)}")
+            PageHeader("Ledger", desktopNet(formatMoney(income - expense), LocalUiLanguage.current))
             Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                SummaryCard("Income", formatMoney(income), Color(0xFF65D28A), Modifier.weight(1f))
-                SummaryCard("Expense", formatMoney(expense), Color(0xFFFF756B), Modifier.weight(1f))
+                SummaryCard(desktopText("Income"), formatMoney(income), Color(0xFF65D28A), Modifier.weight(1f))
+                SummaryCard(desktopText("Expense"), formatMoney(expense), Color(0xFFFF756B), Modifier.weight(1f))
             }
-            LedgerTrend(entries, Modifier.fillMaxWidth().height(200.dp).padding(horizontal = 24.dp, vertical = 12.dp))
+            LedgerTrend(entries, snapshot.settings.dateFormat, Modifier.fillMaxWidth().height(200.dp).padding(horizontal = 24.dp, vertical = 12.dp))
             LazyColumn(Modifier.fillMaxSize().padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(entries, key = { it.id }) { entry ->
                     Card(Modifier.fillMaxWidth()) {
                         Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(entry.merchant.ifBlank { entry.note.ifBlank { entry.type.name.lowercase().replaceFirstChar(Char::uppercase) } }, fontWeight = FontWeight.SemiBold)
-                                Text(LocalDate.ofEpochDay(entry.epochDay).toString(), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(UserFormatting.formatDate(LocalDate.ofEpochDay(entry.epochDay), snapshot.settings.dateFormat, uiLocale(LocalUiLanguage.current)), color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 AttachmentList(snapshot, AttachmentOwnerType.LEDGER, entry.id, store)
                             }
                             Text(
@@ -633,9 +710,9 @@ private fun LedgerPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
                                 color = if (entry.type == LedgerType.INCOME) Color(0xFF65D28A) else Color(0xFFFF756B),
                                 fontWeight = FontWeight.Bold,
                             )
-                            IconButton({ chooseAndAttach(scope, store, AttachmentOwnerType.LEDGER, entry.id) }) { Icon(Icons.Default.AttachFile, "Attach") }
-                            IconButton({ editing = entry }) { Icon(Icons.Default.Edit, "Edit") }
-                            IconButton({ scope.launch { store.deleteLedger(entry.id) } }) { Icon(Icons.Default.Delete, "Delete") }
+                            IconButton({ chooseAndAttach(scope, store, AttachmentOwnerType.LEDGER, entry.id) }) { Icon(Icons.Default.AttachFile, desktopText("Attach")) }
+                            IconButton({ editing = entry }) { Icon(Icons.Default.Edit, desktopText("Edit")) }
+                            IconButton({ scope.launch { store.deleteLedger(entry.id) } }) { Icon(Icons.Default.Delete, desktopText("Delete")) }
                         }
                     }
                 }
@@ -660,7 +737,7 @@ private fun SummaryCard(title: String, value: String, color: Color, modifier: Mo
 }
 
 @Composable
-private fun LedgerTrend(entries: List<LedgerEntryEntity>, modifier: Modifier) {
+private fun LedgerTrend(entries: List<LedgerEntryEntity>, dateFormat: DateFormatOption, modifier: Modifier) {
     val values = entries.groupBy { it.epochDay }.toSortedMap().entries.toList().takeLast(7).map { (day, rows) ->
         day to rows.sumOf { if (it.type == LedgerType.INCOME) it.amountCents else -it.amountCents }
     }
@@ -668,12 +745,12 @@ private fun LedgerTrend(entries: List<LedgerEntryEntity>, modifier: Modifier) {
     val scaleMaximum = ((maximum * 11L) + 9L) / 10L
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Daily net  •  green = net income  •  red = net expense", style = MaterialTheme.typography.bodySmall)
-            Text("Range ±${formatMoney(scaleMaximum)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(desktopText("Daily net  •  green = net income  •  red = net expense"), style = MaterialTheme.typography.bodySmall)
+            Text(desktopRange(formatMoney(scaleMaximum), LocalUiLanguage.current), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (values.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No ledger data yet", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(desktopText("No ledger data yet"), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             return@Column
         }
@@ -702,7 +779,7 @@ private fun LedgerTrend(entries: List<LedgerEntryEntity>, modifier: Modifier) {
                         maxLines = 1,
                     )
                     Text(
-                        LocalDate.ofEpochDay(day).format(DateTimeFormatter.ofPattern("M/d", Locale.US)),
+                        UserFormatting.formatDate(LocalDate.ofEpochDay(day), dateFormat, uiLocale(LocalUiLanguage.current)),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -731,22 +808,28 @@ private fun LedgerEditorDialog(
     var tags by remember { mutableStateOf(entry?.tagsCsv.orEmpty()) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (entry == null) "New ledger entry" else "Edit ledger entry") },
+        title = { Text(desktopText(if (entry == null) "New ledger entry" else "Edit ledger entry")) },
         text = {
-            Column(Modifier.width(480.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row { LedgerType.entries.forEach { item -> Row(verticalAlignment = Alignment.CenterVertically) { RadioButton(type == item, { type = item }); Text(item.name.lowercase().replaceFirstChar(Char::uppercase)) } } }
-                OutlinedTextField(amount, { amount = it.filter { ch -> ch.isDigit() || ch == '.' } }, label = { Text("Amount") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(date, { date = it }, label = { Text("Date M/D/YYYY, M/D, or day") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(merchant, { merchant = it }, label = { Text("Merchant / payer") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(note, { note = it }, label = { Text("Note") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(tags, { tags = it }, label = { Text("Tags, comma separated (optional)") }, modifier = Modifier.fillMaxWidth())
+            Column(Modifier.widthIn(max = 480.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row { LedgerType.entries.forEach { item -> Row(verticalAlignment = Alignment.CenterVertically) { RadioButton(type == item, { type = item }); Text(desktopText(item.name.lowercase().replaceFirstChar(Char::uppercase))) } } }
+                OutlinedTextField(
+                    amount,
+                    { next -> if (isValidDesktopAmountInput(next)) amount = next },
+                    label = { Text(desktopText("Amount")) },
+                    supportingText = { Text(desktopText("Positive amount, up to 2 decimal places")) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(date, { date = it }, label = { Text(desktopText("Date M/D/YYYY, M/D, or day")) }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(merchant, { merchant = it }, label = { Text(desktopText("Merchant / payer")) }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(note, { note = it }, label = { Text(desktopText("Note")) }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(tags, { tags = it }, label = { Text(desktopText("Tags, comma separated (optional)")) }, modifier = Modifier.fillMaxWidth())
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(desktopText("Cancel")) } },
         confirmButton = {
             val cents = parseAmountCents(amount)
             val day = SmartDateParser.parse(date, LocalDate.now())?.toEpochDay()
-            Button(enabled = cents != null && day != null, onClick = { onSave(type, requireNotNull(cents), requireNotNull(day), note, merchant, tags) }) { Text("Save") }
+            Button(enabled = cents != null && day != null, onClick = { onSave(type, requireNotNull(cents), requireNotNull(day), note, merchant, tags) }) { Text(desktopText("Save")) }
         },
     )
 }
@@ -759,16 +842,20 @@ private fun CalendarPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
     var editingTodo by remember { mutableStateOf<TodoEntity?>(null) }
     var editingLedger by remember { mutableStateOf<LedgerEntryEntity?>(null) }
     val first = month.atDay(1)
-    val offset = first.dayOfWeek.value % 7
+    val weekDays = UserFormatting.orderedDaysOfWeek(snapshot.settings.weekStart, uiLocale(LocalUiLanguage.current))
+    val firstDay = weekDays.first()
+    val offset = (first.dayOfWeek.value - firstDay.value + 7) % 7
     val days = List(offset) { null } + (1..month.lengthOfMonth()).map(month::atDay)
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            IconButton({ month = month.minusMonths(1) }) { Icon(Icons.Default.ChevronLeft, "Previous") }
+            IconButton({ month = month.minusMonths(1) }) { Icon(Icons.Default.ChevronLeft, desktopText("Previous")) }
             Text(month.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.US)), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            IconButton({ month = month.plusMonths(1) }) { Icon(Icons.Default.ChevronRight, "Next") }
+            IconButton({ month = month.plusMonths(1) }) { Icon(Icons.Default.ChevronRight, desktopText("Next")) }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-            listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat").forEach { Text(it, Modifier.weight(1f), textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            weekDays.forEach { day ->
+                Text(UserFormatting.formatWeekday(day, uiLocale(LocalUiLanguage.current)), Modifier.weight(1f), textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
         LazyVerticalGrid(GridCells.Fixed(7), Modifier.fillMaxSize().padding(16.dp)) {
             gridItems(days) { date ->
@@ -835,11 +922,11 @@ private fun CalendarPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
             title = { Text(date.format(DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.US))) },
             text = {
                 Column(
-                    Modifier.width(620.dp).heightIn(max = 520.dp).verticalScroll(rememberScrollState()),
+                    Modifier.widthIn(max = 620.dp).fillMaxWidth().heightIn(max = 520.dp).verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Text("Todos", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    if (todoRows.isEmpty()) Text("No todos", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(desktopText("Todos"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    if (todoRows.isEmpty()) Text(desktopText("No todos"), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     todoRows.forEach { todo ->
                         Card(Modifier.fillMaxWidth()) {
                             Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -852,14 +939,14 @@ private fun CalendarPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
                                     if (todo.description.isNotBlank()) Text(todo.description, style = MaterialTheme.typography.bodySmall, maxLines = 2)
                                 }
                                 IconButton(onClick = { selectedDate = null; editingTodo = todo }) {
-                                    Icon(Icons.Default.Edit, "Edit todo")
+                                    Icon(Icons.Default.Edit, desktopText("Edit todo"))
                                 }
                             }
                         }
                     }
                     HorizontalDivider()
-                    Text("Ledger", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    if (ledgerRows.isEmpty()) Text("No ledger entries", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(desktopText("Ledger"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    if (ledgerRows.isEmpty()) Text(desktopText("No ledger entries"), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     ledgerRows.forEach { entry ->
                         Card(Modifier.fillMaxWidth()) {
                             Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -869,14 +956,14 @@ private fun CalendarPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
                                     color = if (entry.type == LedgerType.INCOME) Color(0xFF65D28A) else Color(0xFFFF756B),
                                 )
                                 IconButton(onClick = { selectedDate = null; editingLedger = entry }) {
-                                    Icon(Icons.Default.Edit, "Edit ledger entry")
+                                    Icon(Icons.Default.Edit, desktopText("Edit ledger entry"))
                                 }
                             }
                         }
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { selectedDate = null }) { Text("Close") } },
+            confirmButton = { TextButton(onClick = { selectedDate = null }) { Text(desktopText("Close")) } },
         )
     }
     editingTodo?.let { todo ->
@@ -894,13 +981,18 @@ private fun CalendarPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
 }
 
 @Composable
-private fun NotesPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
+private fun NotesPage(snapshot: BackupSnapshot, store: DesktopDataStore, openVault: () -> Unit) {
     val scope = rememberSafeCoroutineScope()
     var query by remember { mutableStateOf("") }
+    var showSearch by remember { mutableStateOf(false) }
+    var showFolders by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<NoteEntity?>(null) }
     var adding by remember { mutableStateOf(false) }
     var selectedFolder by remember { mutableStateOf<Long?>(null) }
+    var unfiledOnly by remember { mutableStateOf(false) }
     var newFolder by remember { mutableStateOf(false) }
+    var renamingFolder by remember { mutableStateOf<Long?>(null) }
+    var deletingFolder by remember { mutableStateOf<Long?>(null) }
     val folderParents = snapshot.noteFolders.associate { it.id to it.parentId }
     val includedFolderIds = selectedFolder?.let { selected ->
         snapshot.noteFolders.mapNotNull { candidate ->
@@ -914,23 +1006,39 @@ private fun NotesPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
         }.toSet()
     }
     val notes = snapshot.notes.filter {
-        (includedFolderIds == null || it.folderId in includedFolderIds) &&
+        ((unfiledOnly && it.folderId == null) || (!unfiledOnly && (includedFolderIds == null || it.folderId in includedFolderIds))) &&
             (query.isBlank() || it.title.contains(query, true) || it.body.contains(query, true))
     }
         .sortedWith(compareByDescending<NoteEntity> { it.pinned }.thenByDescending { it.updatedAt })
     Row(Modifier.fillMaxSize()) {
-        Column(Modifier.width(220.dp).fillMaxHeight().background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .25f)).padding(12.dp)) {
-            Text("Folders", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            TextButton({ selectedFolder = null }) { Text("All notes") }
-            snapshot.noteFolders.forEach { folder ->
-                TextButton({ selectedFolder = folder.id }) { Text(noteFolderPath(folder.id, snapshot)) }
+        if (showFolders) Column(Modifier.width(250.dp).fillMaxHeight().background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .25f)).padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(desktopText("Folders"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                IconButton(onClick = { showFolders = false }) { Icon(Icons.Default.ChevronLeft, desktopText("Hide folders")) }
             }
-            TextButton({ newFolder = true }) { Icon(Icons.Default.Add, null); Text("Folder") }
+            TextButton({ selectedFolder = null; unfiledOnly = false }) { Text(desktopText("All notes")) }
+            TextButton({ selectedFolder = null; unfiledOnly = true }) { Text(desktopText("Unfiled")) }
+            snapshot.noteFolders.forEach { folder ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton({ selectedFolder = folder.id; unfiledOnly = false }, modifier = Modifier.weight(1f)) { Text(noteFolderPath(folder.id, snapshot)) }
+                    IconButton(onClick = { renamingFolder = folder.id }) { Icon(Icons.Default.Edit, desktopText("Rename folder")) }
+                    IconButton(onClick = { deletingFolder = folder.id }) { Icon(Icons.Default.Delete, desktopText("Delete folder")) }
+                }
+            }
+            TextButton({ newFolder = true }) { Icon(Icons.Default.Add, null); Text(desktopText("Folder")) }
         }
         Scaffold(floatingActionButton = { FloatingActionButton({ adding = true }) { Icon(Icons.Default.Add, null) } }, modifier = Modifier.weight(1f)) { padding ->
             Column(Modifier.fillMaxSize().padding(padding)) {
-                PageHeader("Notes", "${notes.size} notes")
-                OutlinedTextField(query, { query = it }, label = { Text("Search") }, modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp))
+                Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(desktopText("Notes"), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                        Text(desktopNotesCount(notes.size, LocalUiLanguage.current), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    IconButton(onClick = { showFolders = !showFolders }) { Icon(Icons.Default.Folder, desktopText("Folders")) }
+                    IconButton(onClick = { showSearch = !showSearch }) { Icon(Icons.Default.Search, desktopText("Search")) }
+                    IconButton(onClick = openVault) { Icon(Icons.Default.Lock, desktopText("Vault")) }
+                }
+                if (showSearch) OutlinedTextField(query, { query = it }, label = { Text(desktopText("Search")) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp))
                 LazyColumn(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(notes, key = { it.id }) { note ->
                         Card(Modifier.fillMaxWidth().clickable { editing = note }) {
@@ -940,8 +1048,8 @@ private fun NotesPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
                                     Text(note.body, maxLines = 3, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     AttachmentList(snapshot, AttachmentOwnerType.NOTE, note.id, store)
                                 }
-                                IconButton({ chooseAndAttach(scope, store, AttachmentOwnerType.NOTE, note.id) }) { Icon(Icons.Default.AttachFile, "Attach") }
-                                IconButton({ scope.launch { store.deleteNote(note.id) } }) { Icon(Icons.Default.Delete, "Delete") }
+                                IconButton({ chooseAndAttach(scope, store, AttachmentOwnerType.NOTE, note.id) }) { Icon(Icons.Default.AttachFile, desktopText("Attach")) }
+                                IconButton({ scope.launch { store.deleteNote(note.id) } }) { Icon(Icons.Default.Delete, desktopText("Delete")) }
                             }
                         }
                     }
@@ -958,7 +1066,22 @@ private fun NotesPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
         scope.launch { store.upsertNote(editing?.id, folder, title, body, pinned) }
         adding = false; editing = null
     }
-    if (newFolder) SimpleNameDialog("New folder", { newFolder = false }) { scope.launch { store.addNoteFolder(it, selectedFolder) }; newFolder = false }
+    if (newFolder) SimpleNameDialog(desktopText("New folder"), { newFolder = false }) { scope.launch { store.addNoteFolder(it, selectedFolder) }; newFolder = false }
+    renamingFolder?.let { folderId ->
+        SimpleNameDialog(desktopText("Rename folder"), { renamingFolder = null }, initial = snapshot.noteFolders.firstOrNull { it.id == folderId }?.name.orEmpty()) { name ->
+            scope.launch { store.renameNoteFolder(folderId, name) }
+            renamingFolder = null
+        }
+    }
+    deletingFolder?.let { folderId ->
+        AlertDialog(
+            onDismissRequest = { deletingFolder = null },
+            title = { Text(desktopText("Delete folder")) },
+            text = { Text(desktopText("Notes stay safe; the folder is removed and child folders move up one level.")) },
+            dismissButton = { TextButton(onClick = { deletingFolder = null }) { Text(desktopText("Cancel")) } },
+            confirmButton = { Button(onClick = { scope.launch { store.deleteNoteFolder(folderId) }; deletingFolder = null }) { Text(desktopText("Delete")) } },
+        )
+    }
 }
 
 @Composable
@@ -967,28 +1090,28 @@ private fun NoteEditorDialog(note: NoteEntity?, folders: List<Pair<Long, String>
     var body by remember { mutableStateOf(note?.body.orEmpty()) }
     var pinned by remember { mutableStateOf(note?.pinned ?: false) }
     var folder by remember { mutableStateOf(note?.folderId ?: defaultFolder) }
-    AlertDialog(onDismissRequest = onDismiss, title = { Text(if (note == null) "New note" else "Edit note") }, text = {
-        Column(Modifier.width(620.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedTextField(title, { title = it }, label = { Text("Title") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(body, { body = it }, label = { Text("Note") }, modifier = Modifier.fillMaxWidth(), minLines = 12)
-            Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(pinned, { pinned = it }); Text("Pinned") }
+    AlertDialog(onDismissRequest = onDismiss, title = { Text(desktopText(if (note == null) "New note" else "Edit note")) }, text = {
+        Column(Modifier.widthIn(max = 620.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedTextField(title, { title = it }, label = { Text(desktopText("Title")) }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(body, { body = it }, label = { Text(desktopText("Note")) }, modifier = Modifier.fillMaxWidth(), minLines = 12)
+            Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(pinned, { pinned = it }); Text(desktopText("Pinned")) }
             if (folders.isNotEmpty()) {
-                Text("Folder")
+                Text(desktopText("Folder"))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    item { FilterChipSimple("None", folder == null) { folder = null } }
+                    item { FilterChipSimple(desktopText("None"), folder == null) { folder = null } }
                     items(folders, key = { it.first }) { (id, name) ->
                         FilterChipSimple(name, folder == id) { folder = id }
                     }
                 }
             }
         }
-    }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }, confirmButton = { Button(enabled = title.isNotBlank() || body.isNotBlank(), onClick = { onSave(folder, title, body, pinned) }) { Text("Save") } })
+    }, dismissButton = { TextButton(onClick = onDismiss) { Text(desktopText("Cancel")) } }, confirmButton = { Button(enabled = title.isNotBlank() || body.isNotBlank(), onClick = { onSave(folder, title, body, pinned) }) { Text(desktopText("Save")) } })
 }
 
 @Composable
-private fun SimpleNameDialog(title: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
-    var value by remember { mutableStateOf("") }
-    AlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = { OutlinedTextField(value, { value = it }, label = { Text("Name") }) }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }, confirmButton = { Button(enabled = value.isNotBlank(), onClick = { onSave(value.trim()) }) { Text("Save") } })
+private fun SimpleNameDialog(title: String, onDismiss: () -> Unit, initial: String = "", onSave: (String) -> Unit) {
+    var value by remember { mutableStateOf(initial) }
+    AlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = { OutlinedTextField(value, { value = it }, label = { Text(desktopText("Name")) }) }, dismissButton = { TextButton(onClick = onDismiss) { Text(desktopText("Cancel")) } }, confirmButton = { Button(enabled = value.isNotBlank(), onClick = { onSave(value.trim()) }) { Text(desktopText("Save")) } })
 }
 
 @Composable
@@ -1002,19 +1125,19 @@ private fun VaultPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
     Scaffold(floatingActionButton = { FloatingActionButton({ adding = true }) { Icon(Icons.Default.Add, null) } }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             PageHeader("Vault", "Encrypted inside the local .tlb file")
-            OutlinedTextField(query, { query = it }, label = { Text("Search") }, modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp))
+            OutlinedTextField(query, { query = it }, label = { Text(desktopText("Search")) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp))
             LazyColumn(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(entries, key = { it.id }) { entry ->
                     Card(Modifier.fillMaxWidth()) {
                         Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
-                                Text(entry.label.ifBlank { "Untitled" }, fontWeight = FontWeight.Bold)
+                                Text(entry.label.ifBlank { desktopText("Untitled") }, fontWeight = FontWeight.Bold)
                                 Text(entry.account, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text(if (entry.id in visibleIds) entry.password else "••••••••")
                             }
-                            IconButton({ visibleIds = if (entry.id in visibleIds) visibleIds - entry.id else visibleIds + entry.id }) { Icon(if (entry.id in visibleIds) Icons.Default.VisibilityOff else Icons.Default.Visibility, "Show password") }
-                            IconButton({ editing = entry }) { Icon(Icons.Default.Edit, "Edit") }
-                            IconButton({ scope.launch { store.deleteVault(entry.id) } }) { Icon(Icons.Default.Delete, "Delete") }
+                            IconButton({ visibleIds = if (entry.id in visibleIds) visibleIds - entry.id else visibleIds + entry.id }) { Icon(if (entry.id in visibleIds) Icons.Default.VisibilityOff else Icons.Default.Visibility, desktopText("Show password")) }
+                            IconButton({ editing = entry }) { Icon(Icons.Default.Edit, desktopText("Edit")) }
+                            IconButton({ scope.launch { store.deleteVault(entry.id) } }) { Icon(Icons.Default.Delete, desktopText("Delete")) }
                         }
                     }
                 }
@@ -1030,9 +1153,9 @@ private fun VaultPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
 @Composable
 private fun VaultEditorDialog(entry: VaultEntry?, onDismiss: () -> Unit, onSave: (String, String, String, String, String) -> Unit) {
     var label by remember { mutableStateOf(entry?.label.orEmpty()) }; var account by remember { mutableStateOf(entry?.account.orEmpty()) }; var password by remember { mutableStateOf(entry?.password.orEmpty()) }; var website by remember { mutableStateOf(entry?.website.orEmpty()) }; var notes by remember { mutableStateOf(entry?.notes.orEmpty()) }; var visible by remember { mutableStateOf(false) }
-    AlertDialog(onDismissRequest = onDismiss, title = { Text(if (entry == null) "New Vault entry" else "Edit Vault entry") }, text = { Column(Modifier.width(520.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedTextField(label, { label = it }, label = { Text("Label") }, modifier = Modifier.fillMaxWidth()); OutlinedTextField(account, { account = it }, label = { Text("Account") }, modifier = Modifier.fillMaxWidth()); OutlinedTextField(password, { password = it }, label = { Text("Password") }, modifier = Modifier.fillMaxWidth(), visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(), trailingIcon = { IconButton({ visible = !visible }) { Icon(if (visible) Icons.Default.VisibilityOff else Icons.Default.Visibility, null) } }); OutlinedTextField(website, { website = it }, label = { Text("Website") }, modifier = Modifier.fillMaxWidth()); OutlinedTextField(notes, { notes = it }, label = { Text("Notes") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
-    } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }, confirmButton = { Button(enabled = listOf(label, account, password, website, notes).any(String::isNotBlank), onClick = { onSave(label, account, password, website, notes) }) { Text("Save") } })
+    AlertDialog(onDismissRequest = onDismiss, title = { Text(desktopText(if (entry == null) "New Vault entry" else "Edit Vault entry")) }, text = { Column(Modifier.widthIn(max = 520.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedTextField(label, { label = it }, label = { Text(desktopText("Label")) }, modifier = Modifier.fillMaxWidth()); OutlinedTextField(account, { account = it }, label = { Text(desktopText("Account")) }, modifier = Modifier.fillMaxWidth()); OutlinedTextField(password, { password = it }, label = { Text(desktopText("Password")) }, modifier = Modifier.fillMaxWidth(), visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(), trailingIcon = { IconButton({ visible = !visible }) { Icon(if (visible) Icons.Default.VisibilityOff else Icons.Default.Visibility, null) } }); OutlinedTextField(website, { website = it }, label = { Text(desktopText("Website")) }, modifier = Modifier.fillMaxWidth()); OutlinedTextField(notes, { notes = it }, label = { Text(desktopText("Notes")) }, modifier = Modifier.fillMaxWidth(), minLines = 3)
+    } }, dismissButton = { TextButton(onClick = onDismiss) { Text(desktopText("Cancel")) } }, confirmButton = { Button(enabled = listOf(label, account, password, website, notes).any(String::isNotBlank), onClick = { onSave(label, account, password, website, notes) }) { Text(desktopText("Save")) } })
 }
 
 @Composable
@@ -1040,7 +1163,10 @@ private fun SettingsPage(
     cloudState: DesktopCloudUiState,
     cloud: DesktopCloudSyncController,
     config: DesktopCloudConfig,
+    configStore: DesktopConfigStore,
     dataStore: DesktopDataStore,
+    openVault: () -> Unit,
+    onUiLanguageChanged: (UiLanguage) -> Unit,
     forgetLocalPassword: () -> Unit,
 ) {
     val scope = rememberSafeCoroutineScope()
@@ -1049,23 +1175,36 @@ private fun SettingsPage(
     var importPassword by remember { mutableStateOf("") }
     var importPasswordVisible by remember { mutableStateOf(false) }
     var backupMessage by remember { mutableStateOf<String?>(null) }
+    val language = LocalUiLanguage.current
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         PageHeader("Settings")
         Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.Cloud, null); Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { Text("Google Drive sync", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold); Text(if (cloudState.connected) "Connected" else "Not connected", color = MaterialTheme.colorScheme.onSurfaceVariant) } }
-            Text("Encrypted snapshots are stored in Life Tracker's private Google Drive app folder. Other Drive files are not accessible.")
-            Text("Keeps the 30 most recent revisions. Competing branches are retained until you resolve the conflict.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.Cloud, null); Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { Text(desktopText("Google Drive sync"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold); Text(desktopText(if (cloudState.connected) "Connected" else "Not connected"), color = MaterialTheme.colorScheme.onSurfaceVariant) } }
+            Text(desktopText("Encrypted snapshots are stored in Life Tracker's private Google Drive app folder. Other Drive files are not accessible."))
+            Text(desktopText("Each upload creates a new encrypted version. Previous versions are kept; conflicts pause sync until you resolve them."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (cloudState.connected) {
-                Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("Automatic sync"); Text("Checks every 15 minutes while Life Tracker is running", style = MaterialTheme.typography.bodySmall) }; Switch(cloudState.automaticSync, cloud::setAutomaticSync) }
-                cloudState.lastSyncAt?.let { Text("Last sync: ${formatTimestamp(it)}", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Button(enabled = !cloudState.syncing, onClick = { scope.launch { cloud.synchronize() } }) { Icon(Icons.Default.Refresh, null); Spacer(Modifier.width(8.dp)); Text(if (cloudState.syncing) "Syncing…" else "Sync now") }; TextButton(enabled = !cloudState.syncing, onClick = { scope.launch { cloud.disconnect() } }) { Text("Disconnect / switch account") } }
-            } else Button(onClick = { connectDialog = true }) { Text("Connect Google Drive") }
+                Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(desktopText("Automatic sync")); Text(desktopText("Off by default. When enabled, checks every 15 minutes while Life Tracker is running"), style = MaterialTheme.typography.bodySmall) }; Switch(cloudState.automaticSync, cloud::setAutomaticSync) }
+                cloudState.lastSyncAt?.let { Text(desktopLastSync(formatTimestamp(it), LocalUiLanguage.current), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Button(enabled = !cloudState.syncing, onClick = { scope.launch { cloud.synchronize() } }) { Icon(Icons.Default.Refresh, null); Spacer(Modifier.width(8.dp)); Text(desktopText(if (cloudState.syncing) "Syncing…" else "Sync now")) }; TextButton(enabled = !cloudState.syncing, onClick = { scope.launch { cloud.disconnect() } }) { Text(desktopText("Disconnect / switch account")) } }
+            } else Button(onClick = { connectDialog = true }) { Text(desktopText("Connect Google Drive")) }
         } }
-        Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { Text("Local security", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold); Text("Local data is password-encrypted. Windows can remember the password using DPAPI for this Windows account."); OutlinedButton(onClick = forgetLocalPassword) { Text("Forget remembered password") } } }
+        Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { Text(desktopText("Local security"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold); Text(desktopText("Local data is password-encrypted. Windows can remember the password using DPAPI for this Windows account.")); OutlinedButton(onClick = forgetLocalPassword) { Text(desktopText("Forget remembered password")) } } }
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Appearance", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text("Accent color")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Palette, null)
+                    Spacer(Modifier.width(10.dp))
+                    Text(desktopText("Appearance"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                }
+                Text(desktopText("Theme"))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(ThemeMode.entries, key = { it.name }) { mode ->
+                        FilterChipSimple(mode.name.lowercase().replaceFirstChar(Char::uppercase), dataStore.currentSnapshot()?.settings?.themeMode == mode) {
+                            scope.launch { dataStore.setThemeMode(mode) }
+                        }
+                    }
+                }
+                Text(desktopText("Accent color"))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(AccentColor.entries, key = { it.name }) { accent ->
                         FilterChipSimple(
@@ -1074,12 +1213,50 @@ private fun SettingsPage(
                         ) { scope.launch { dataStore.setAccentColor(accent) } }
                     }
                 }
+                Text(desktopText("UI language"))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(UiLanguage.entries, key = { it.name }) { language ->
+                        FilterChipSimple(if (language == UiLanguage.ENGLISH) "English" else "简体中文", config.uiLanguage == language) {
+                            configStore.setUiLanguage(language)
+                            onUiLanguageChanged(language)
+                        }
+                    }
+                }
+                Text(desktopText("Week starts on"))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(WeekStart.entries, key = { it.name }) { value ->
+                        FilterChipSimple(value.name.lowercase().replaceFirstChar(Char::uppercase), dataStore.currentSnapshot()?.settings?.weekStart == value) { scope.launch { dataStore.setWeekStart(value) } }
+                    }
+                }
+                Text(desktopText("Time format"))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(TimeFormatOption.entries, key = { it.name }) { value ->
+                        FilterChipSimple(value.name.lowercase().replace('_', ' ').replaceFirstChar(Char::uppercase), dataStore.currentSnapshot()?.settings?.timeFormat == value) { scope.launch { dataStore.setTimeFormat(value) } }
+                    }
+                }
+                Text(desktopText("Date format"))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(DateFormatOption.entries, key = { it.name }) { value ->
+                        FilterChipSimple(value.name.lowercase().replace('_', ' ').replaceFirstChar(Char::uppercase), dataStore.currentSnapshot()?.settings?.dateFormat == value) { scope.launch { dataStore.setDateFormat(value) } }
+                    }
+                }
+            }
+        }
+        Card(Modifier.fillMaxWidth()) {
+            Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Lock, null)
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(desktopText("Vault"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text(desktopText("Encrypted account and password entries"), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                OutlinedButton(onClick = openVault) { Text(desktopText("Open")) }
             }
         }
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Encrypted backup", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text("The .tlb file includes todos, ledger entries, notes, Vault entries, and attached files. Manual import can migrate an older Android backup password to this PC's current data password.")
+                Text(desktopText("Encrypted backup"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(desktopText("The .tlb file includes todos, ledger entries, notes, Vault entries, and attached files. Manual import can migrate an older Android backup password to this PC's current data password."))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = {
                         val chooser = JFileChooser().apply { selectedFile = File("LifeTracker-backup.tlb") }
@@ -1090,37 +1267,53 @@ private fun SettingsPage(
                             val upload = dataStore.createUploadSnapshot()
                             try {
                                 withContext(Dispatchers.IO) { upload.file.copyTo(destination, overwrite = true) }
-                                backupMessage = "Encrypted backup exported."
+                                backupMessage = desktopText("Encrypted backup exported.", language)
                             } finally {
                                 upload.file.delete()
                             }
                         }
-                    }) { Text("Export backup") }
+                    }) { Text(desktopText("Export backup")) }
                     OutlinedButton(onClick = {
                         val chooser = JFileChooser()
                         importCandidate = chooser.takeIf {
                             it.showOpenDialog(null) == JFileChooser.APPROVE_OPTION
                         }?.selectedFile
                         importPassword = ""
-                    }) { Text("Import backup") }
+                    }) { Text(desktopText("Import backup")) }
                 }
+                Text(
+                    desktopText("Before using a cloud version, Life Tracker keeps an encrypted local recovery copy. Import a copy to recover earlier local data. Recovery copies are not deleted automatically."),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                val recoveryDirectory = dataStore.cloudRecoveryDirectory
+                OutlinedButton(
+                    enabled = recoveryDirectory.isDirectory && Desktop.isDesktopSupported(),
+                    onClick = {
+                        if (recoveryDirectory.isDirectory && Desktop.isDesktopSupported()) {
+                            scope.launch(Dispatchers.IO) {
+                                runCatching { Desktop.getDesktop().open(recoveryDirectory) }
+                            }
+                        }
+                    },
+                ) { Text(desktopText("Open sync recovery folder")) }
                 backupMessage?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
             }
         }
-        Text("Life Tracker Desktop 1.6.0 • Data format compatible with Android", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(desktopText("Life Tracker Desktop 1.6.1 • Data format compatible with Android"), color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
     if (connectDialog) GoogleConnectDialog(config.clientId, { connectDialog = false }) { clientId, clientSecret -> connectDialog = false; scope.launch { cloud.connect(clientId, clientSecret) } }
     importCandidate?.let { candidate ->
         AlertDialog(
             onDismissRequest = { importCandidate = null; importPassword = "" },
-            title = { Text("Import encrypted backup?") },
+            title = { Text(desktopText("Import encrypted backup?")) },
             text = {
-                Column(Modifier.width(520.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Enter the password used when this backup was created. After validation, its contents will be encrypted with this PC's current data password.")
+                Column(Modifier.widthIn(max = 520.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(desktopText("Enter the password used when this backup was created. After validation, its contents will be encrypted with this PC's current data password."))
                     OutlinedTextField(
                         value = importPassword,
                         onValueChange = { importPassword = it },
-                        label = { Text("Source backup password") },
+                        label = { Text(desktopText("Source backup password")) },
                         singleLine = true,
                         visualTransformation = if (importPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                         trailingIcon = {
@@ -1130,10 +1323,10 @@ private fun SettingsPage(
                         },
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    Text("This replaces the local records. Export the current data first if you may need it later.", style = MaterialTheme.typography.bodySmall)
+                    Text(desktopText("This replaces the local records. Export the current data first if you may need it later."), style = MaterialTheme.typography.bodySmall)
                 }
             },
-            dismissButton = { TextButton(onClick = { importCandidate = null; importPassword = "" }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { importCandidate = null; importPassword = "" }) { Text(desktopText("Cancel")) } },
             confirmButton = {
                 Button(enabled = importPassword.length >= 8, onClick = {
                     val sourcePassword = importPassword.toCharArray()
@@ -1143,15 +1336,15 @@ private fun SettingsPage(
                         try {
                             val expected = dataStore.localFingerprint()
                             backupMessage = when (dataStore.importFromEncrypted(candidate, sourcePassword, expected)) {
-                                is DesktopReplaceResult.Applied -> "Backup imported and encrypted with the current data password."
-                                DesktopReplaceResult.LocalChanged -> "Local data changed; import was cancelled."
-                                DesktopReplaceResult.Invalid -> "The source password is incorrect or the backup is damaged."
+                                is DesktopReplaceResult.Applied -> desktopText("Backup imported and encrypted with the current data password.", language)
+                                DesktopReplaceResult.LocalChanged -> desktopText("Local data changed; import was cancelled.", language)
+                                DesktopReplaceResult.Invalid -> desktopText("The source password is incorrect or the backup is damaged.", language)
                             }
                         } finally {
                             sourcePassword.fill('\u0000')
                         }
                     }
-                }) { Text("Restore") }
+                }) { Text(desktopText("Restore")) }
             },
         )
     }
@@ -1160,7 +1353,7 @@ private fun SettingsPage(
 @Composable
 private fun GoogleConnectDialog(defaultClientId: String, onDismiss: () -> Unit, onConnect: (String, CharArray) -> Unit) {
     var clientId by remember { mutableStateOf(defaultClientId) }; var secret by remember { mutableStateOf("") }; var visible by remember { mutableStateOf(false) }
-    AlertDialog(onDismissRequest = onDismiss, title = { Text("Connect Google Drive") }, text = { Column(Modifier.width(560.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { Text("A Google Cloud Desktop OAuth client from the same project as the Android app is required for this open-source build. Sign-in opens in your system browser."); OutlinedTextField(clientId, { clientId = it.trim() }, label = { Text("Desktop OAuth client ID") }, modifier = Modifier.fillMaxWidth()); OutlinedTextField(secret, { secret = it }, label = { Text("Desktop OAuth client secret (optional)") }, modifier = Modifier.fillMaxWidth(), visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(), trailingIcon = { IconButton({ visible = !visible }) { Icon(if (visible) Icons.Default.VisibilityOff else Icons.Default.Visibility, null) } }); Text("If supplied, the client secret is protected by Windows DPAPI. OAuth desktop secrets are application configuration, not a replacement for PKCE.", style = MaterialTheme.typography.bodySmall) } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }, confirmButton = { Button(enabled = clientId.endsWith(".apps.googleusercontent.com"), onClick = { val transferred = secret.toCharArray(); secret = ""; onConnect(clientId, transferred) }) { Text("Open Google sign-in") } })
+    AlertDialog(onDismissRequest = onDismiss, title = { Text(desktopText("Connect Google Drive")) }, text = { Column(Modifier.widthIn(max = 560.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) { Text(desktopText("A Google Cloud Desktop OAuth client from the same project as the Android app is required for this open-source build. Sign-in opens in your system browser.")); OutlinedTextField(clientId, { clientId = it.trim() }, label = { Text(desktopText("Desktop OAuth client ID")) }, modifier = Modifier.fillMaxWidth()); OutlinedTextField(secret, { secret = it }, label = { Text(desktopText("Desktop OAuth client secret (optional)")) }, modifier = Modifier.fillMaxWidth(), visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(), trailingIcon = { IconButton({ visible = !visible }) { Icon(if (visible) Icons.Default.VisibilityOff else Icons.Default.Visibility, null) } }); Text(desktopText("If supplied, the client secret is protected by Windows DPAPI. OAuth desktop secrets are application configuration, not a replacement for PKCE."), style = MaterialTheme.typography.bodySmall) } }, dismissButton = { TextButton(onClick = onDismiss) { Text(desktopText("Cancel")) } }, confirmButton = { Button(enabled = clientId.endsWith(".apps.googleusercontent.com"), onClick = { val transferred = secret.toCharArray(); secret = ""; onConnect(clientId, transferred) }) { Text(desktopText("Open Google sign-in")) } })
 }
 
 private fun chooseAndAttach(scope: kotlinx.coroutines.CoroutineScope, store: DesktopDataStore, ownerType: AttachmentOwnerType, ownerId: Long) {
@@ -1195,7 +1388,7 @@ private fun AttachmentList(
                         scope.launch(Dispatchers.IO) { runCatching { Desktop.getDesktop().open(file) } }
                     }
                 },
-            ) { Icon(Icons.AutoMirrored.Filled.OpenInNew, "Open attachment", Modifier.size(18.dp)) }
+            ) { Icon(Icons.AutoMirrored.Filled.OpenInNew, desktopText("Open attachment"), Modifier.size(18.dp)) }
             IconButton(
                 onClick = {
                     val chooser = JFileChooser().apply { selectedFile = File(attachment.originalName) }
@@ -1207,10 +1400,10 @@ private fun AttachmentList(
                         scope.launch(Dispatchers.IO) { source.copyTo(destination, overwrite = true) }
                     }
                 },
-            ) { Icon(Icons.Default.Download, "Save a copy", Modifier.size(18.dp)) }
+            ) { Icon(Icons.Default.Download, desktopText("Save a copy"), Modifier.size(18.dp)) }
             IconButton(
                 onClick = { scope.launch { store.removeAttachment(attachment.id) } },
-            ) { Icon(Icons.Default.Delete, "Remove attachment", Modifier.size(18.dp)) }
+            ) { Icon(Icons.Default.Delete, desktopText("Remove attachment"), Modifier.size(18.dp)) }
         }
     }
 }
@@ -1241,6 +1434,21 @@ private fun noteFolderPath(folderId: Long, snapshot: BackupSnapshot): String {
     return path.asReversed().joinToString(" / ")
 }
 
+private fun DesktopDestination.toTopLevelDestination(): TopLevelDestination = when (this) {
+    DesktopDestination.TODO -> TopLevelDestination.TODO
+    DesktopDestination.LEDGER -> TopLevelDestination.LEDGER
+    DesktopDestination.CALENDAR -> TopLevelDestination.CALENDAR
+    DesktopDestination.NOTES -> TopLevelDestination.NOTES
+    DesktopDestination.VAULT, DesktopDestination.SETTINGS -> TopLevelDestination.NOTES
+}
+
+private fun TopLevelDestination.toDesktopDestination(): DesktopDestination = when (this) {
+    TopLevelDestination.TODO -> DesktopDestination.TODO
+    TopLevelDestination.LEDGER -> DesktopDestination.LEDGER
+    TopLevelDestination.CALENDAR -> DesktopDestination.CALENDAR
+    TopLevelDestination.NOTES -> DesktopDestination.NOTES
+}
+
 @Composable
 private fun rememberSafeCoroutineScope(): CoroutineScope {
     val reportError = LocalDesktopErrorReporter.current
@@ -1250,11 +1458,11 @@ private fun rememberSafeCoroutineScope(): CoroutineScope {
     return rememberCoroutineScope { handler }
 }
 
-private fun desktopErrorMessage(error: Throwable): String = when (error) {
-    is IOException -> "The file operation could not be completed. Check available storage and file access, then try again."
+private fun desktopErrorMessage(error: Throwable, language: UiLanguage = UiLanguage.ENGLISH): String = when (error) {
+    is IOException -> desktopText("The file operation could not be completed. Check available storage and file access, then try again.", language)
     is IllegalArgumentException -> error.message?.takeIf { it.isNotBlank() }?.take(220)
-        ?: "One of the entered values is invalid."
-    else -> "The operation could not be completed. Your last saved data was kept."
+        ?: desktopText("One of the entered values is invalid.", language)
+    else -> desktopText("The operation could not be completed. Your last saved data was kept.", language)
 }
 
 private fun formatMoney(cents: Long): String = NumberFormat.getCurrencyInstance(Locale.US).apply { currency = Currency.getInstance("USD") }.format(cents / 100.0)

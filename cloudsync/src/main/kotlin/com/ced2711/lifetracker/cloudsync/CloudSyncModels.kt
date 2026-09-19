@@ -85,6 +85,15 @@ fun cloudRevisionHeads(revisions: List<CloudRevision>): List<CloudRevision> {
     return revisions.distinctBy { it.fileId }.filterNot { it.fileId in parents }
 }
 
+/** A stable snapshot used to detect a cloud change immediately before or after an upload. */
+fun cloudRevisionHeadIds(revisions: List<CloudRevision>): Set<String> {
+    val heads = cloudRevisionHeads(revisions)
+    if (revisions.isNotEmpty() && heads.isEmpty()) {
+        throw CloudTransportException("Cloud revision history is invalid.")
+    }
+    return heads.mapTo(linkedSetOf(), CloudRevision::fileId)
+}
+
 fun latestCloudRevision(revisions: List<CloudRevision>): CloudRevision? =
     cloudRevisionHeads(revisions).firstOrNull()
 
@@ -117,9 +126,7 @@ fun decideSyncAction(
     revisions: List<CloudRevision>,
 ): SyncDecision {
     val heads = cloudRevisionHeads(revisions)
-    if (revisions.isNotEmpty() && heads.isEmpty()) {
-        throw CloudTransportException("Cloud revision history is invalid.")
-    }
+    cloudRevisionHeadIds(revisions)
     if (heads.size > 1) return SyncDecision.Conflict
     val remote = heads.firstOrNull()
     // A disappeared cloud history must not silently recreate a different dataset.
