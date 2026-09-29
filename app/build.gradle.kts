@@ -1,8 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.kotlin.kapt)
+    alias(libs.plugins.ksp)
 }
 
 val taskLedgerKeystorePath = providers.gradleProperty("taskledger.keystore.path")
@@ -26,7 +25,7 @@ val taskLedgerReleaseSigningAvailable = listOf(
 
 android {
     namespace = "com.ced2711.lifetracker"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.ced2711.lifetracker"
@@ -75,13 +74,10 @@ android {
         }
     }
 
+    // Built-in Kotlin derives its JVM target from targetCompatibility.
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = "17"
     }
 
     buildFeatures {
@@ -98,16 +94,46 @@ android {
     }
 
     sourceSets {
-        getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/legal-assets"))
-        getByName("androidTest").assets.srcDir("$projectDir/schemas")
+        getByName("androidTest").assets.directories.add("$projectDir/schemas")
     }
 }
 
-kapt {
-    correctErrorTypes = true
-    arguments {
-        arg("room.schemaLocation", "$projectDir/schemas")
+// Copies the root legal files into each variant's assets under legal/, where the in-app license
+// viewer reads them.
+abstract class PrepareLegalAssets : DefaultTask() {
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.NAME_ONLY)
+    abstract val legalFiles: ConfigurableFileCollection
+
+    @get:OutputDirectory
+    abstract val outputDirectory: DirectoryProperty
+
+    @TaskAction
+    fun copy() {
+        val target = outputDirectory.get().dir("legal").asFile
+        target.deleteRecursively()
+        target.mkdirs()
+        legalFiles.forEach { it.copyTo(target.resolve(it.name)) }
     }
+}
+
+androidComponents {
+    onVariants { variant ->
+        val prepareLegalAssets = tasks.register<PrepareLegalAssets>(
+            "prepare${variant.name.replaceFirstChar(Char::uppercase)}LegalAssets",
+        ) {
+            legalFiles.from(
+                rootProject.file("LICENSE"),
+                rootProject.file("ADDITIONAL_PERMISSIONS.md"),
+                rootProject.file("NOTICE"),
+            )
+        }
+        variant.sources.assets?.addGeneratedSourceDirectory(prepareLegalAssets, PrepareLegalAssets::outputDirectory)
+    }
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {
@@ -121,7 +147,7 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
-    kapt(libs.androidx.room.compiler)
+    ksp(libs.androidx.room.compiler)
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.window)
@@ -149,15 +175,9 @@ dependencies {
     androidTestImplementation(libs.compose.ui.test.junit4)
 }
 
-val prepareLegalAssets by tasks.registering(Sync::class) {
-    from(rootProject.file("LICENSE"), rootProject.file("ADDITIONAL_PERMISSIONS.md"), rootProject.file("NOTICE"))
-    into(layout.buildDirectory.dir("generated/legal-assets/legal"))
-}
-
 // A personal build without its encrypted migration payload would be misleading. Standard builds,
 // including CI, remain fully reproducible without any private user material.
 tasks.configureEach {
-    if (name == "preBuild") dependsOn(prepareLegalAssets)
     if (name == "mergePersonalDebugAssets" || name == "mergePersonalReleaseAssets") {
         doFirst {
             check(file("src/personal/assets/personal-backup.tlb").isFile) {

@@ -31,7 +31,7 @@ Sync transfers complete encrypted datasets. If both sides changed, choose which 
 - App label: `Life Assistant`
 - Package/application ID: `com.ced2711.lifetracker`
 - Minimum Android version: Android 8.0 / API 26
-- Target and compile SDK: API 36
+- Target SDK: API 36; compile SDK: API 37
 - Local database: Room schema 6, with migrations from schemas 1 through 6
 
 Life Assistant 1.7.0 is a display-name change from Life Tracker, not a new Android application. Install it over Life Tracker without uninstalling: the application ID, release certificate, launcher aliases, database, settings, Vault keys, and sync protocol remain unchanged. Windows retains the installer upgrade UUID and the `%APPDATA%/Life Tracker` data directory so existing encrypted data and remembered credentials remain available. The old name in internal paths is intentional compatibility, not unfinished branding.
