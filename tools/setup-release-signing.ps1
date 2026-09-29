@@ -1,7 +1,9 @@
 # Creates a new Life Assistant release signing key and configures Gradle to use it.
 # Run it yourself in PowerShell:  powershell -ExecutionPolicy Bypass -File tools\setup-release-signing.ps1
-# The password is typed here only; it is written to your personal Gradle properties file
+# With -GeneratePassword a random password is created and never displayed.
+# The password is written only to your personal Gradle properties file
 # (%USERPROFILE%\.gradle\gradle.properties), never to the repository.
+param([switch]$GeneratePassword)
 
 $ErrorActionPreference = 'Stop'
 
@@ -27,11 +29,20 @@ function Read-Secret([string]$prompt) {
     try { [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
 }
 
-Write-Host 'Choose a password for the new release signing key (at least 12 characters).'
-Write-Host 'Store it in a password manager: losing it means future updates cannot be installed over this version.'
-$first = Read-Secret 'Password'
-if ($first.Length -lt 12) { throw 'The password must have at least 12 characters.' }
-$second = Read-Secret 'Repeat password'
+if ($GeneratePassword) {
+    # 32 characters from a cryptographic generator, letters and digits only.
+    $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'.ToCharArray()
+    $bytes = New-Object byte[] 32
+    [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+    $first = -join ($bytes | ForEach-Object { $alphabet[$_ % $alphabet.Length] })
+    $second = $first
+} else {
+    Write-Host 'Choose a password for the new release signing key (at least 12 characters).'
+    Write-Host 'Store it in a password manager: losing it means future updates cannot be installed over this version.'
+    $first = Read-Secret 'Password'
+    if ($first.Length -lt 12) { throw 'The password must have at least 12 characters.' }
+    $second = Read-Secret 'Repeat password'
+}
 if ($first -ne $second) { throw 'The passwords do not match.' }
 if ($first -match '[\\\r\n]') { throw 'Please avoid backslashes and line breaks in the password.' }
 
@@ -61,7 +72,8 @@ $lines = @($existing) + @(
     "taskledger.key.password=$first"
 )
 New-Item -ItemType Directory -Force -Path (Split-Path $gradleProperties) | Out-Null
-Set-Content -Path $gradleProperties -Value $lines -Encoding utf8
+# Without a byte-order mark: Gradle would otherwise read it as part of the first property name.
+[IO.File]::WriteAllLines($gradleProperties, [string[]]$lines, (New-Object Text.UTF8Encoding $false))
 $first = $null; $second = $null
 
 Write-Host ''
