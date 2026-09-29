@@ -1,5 +1,6 @@
 package com.ced2711.lifetracker.ui.backup
 
+import androidx.core.net.toUri
 import com.ced2711.lifetracker.data.cloud.CloudProvider
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.platform.LocalContext
@@ -741,7 +742,7 @@ private fun GitHubCodeDialog(prompt: GitHubCodePrompt, onCancel: () -> Unit) {
                     Button(onClick = {
                         runCatching {
                             context.startActivity(
-                                android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse(prompt.verificationUri))
+                                android.content.Intent(android.content.Intent.ACTION_VIEW, prompt.verificationUri.toUri())
                                     .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
                             )
                         }.onFailure {
