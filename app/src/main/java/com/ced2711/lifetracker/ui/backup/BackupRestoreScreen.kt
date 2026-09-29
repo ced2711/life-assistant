@@ -628,7 +628,7 @@ private fun CloudRecoveryCard(files: List<String>, enabled: Boolean, onExport: (
 }
 
 @Composable
-private fun CloudSyncPasswordDialog(
+internal fun CloudSyncPasswordDialog(
     onDismiss: () -> Unit,
     onConnect: (CharArray) -> Unit,
     title: String = "Connect Google Drive",
@@ -654,10 +654,8 @@ private fun CloudSyncPasswordDialog(
         onDismissRequest = dismiss,
         title = { Text(localizedText(title)) },
         text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
+            // HingeSafeAlertDialog already scrolls its body; a second vertical scroll here crashes.
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
                     localizedText(
                         "Choose a sync password. You will enter the same password on Windows or a new device. " +
