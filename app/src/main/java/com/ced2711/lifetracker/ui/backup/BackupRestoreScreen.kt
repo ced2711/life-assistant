@@ -604,7 +604,7 @@ private fun CloudRecoveryCard(files: List<String>, enabled: Boolean, onExport: (
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(localizedText("Local sync recovery"), style = MaterialTheme.typography.titleMedium)
             Text(
-                localizedText("Before using a cloud version, Life Assistant keeps an encrypted local recovery copy. Export a copy and use Restore backup to recover it with its original sync password. Copies are not deleted automatically."),
+                localizedText("Before using a cloud version, Life Assistant keeps an encrypted local recovery copy. Export a copy and use Restore backup to recover it with its original sync password. The 5 most recent copies are kept."),
                 style = MaterialTheme.typography.bodySmall,
             )
             TextButton(onClick = { expanded = !expanded }) {

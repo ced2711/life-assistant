@@ -18,12 +18,18 @@ import javax.crypto.CipherOutputStream
 import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.PBEKeySpec
+import java.util.zip.Deflater
+import java.util.zip.DeflaterOutputStream
+import java.util.zip.InflaterInputStream
 import javax.crypto.spec.SecretKeySpec
 
 /** Password-encrypted, authenticated container around [BackupCodec]. Password arrays are consumed. */
 object BackupCrypto {
     private val magic = byteArrayOf(0x54, 0x4c, 0x42, 0x41, 0x43, 0x4b, 0x55, 0x50) // TLBACKUP
-    private const val CONTAINER_VERSION = 1
+    private const val UNCOMPRESSED_CONTAINER_VERSION = 1
+    // Version 2 deflates the snapshot before encryption; ciphertext cannot be compressed later.
+    private const val COMPRESSED_CONTAINER_VERSION = 2
+    private const val CONTAINER_VERSION = COMPRESSED_CONTAINER_VERSION
     private const val KDF_PBKDF2_SHA256 = 1
     private const val CIPHER_AES_256_GCM = 1
     private const val PBKDF2_ITERATIONS = 600_000
@@ -46,10 +52,20 @@ object BackupCrypto {
         password: CharArray,
         destination: OutputStream,
         attachmentSource: BackupAttachmentSource,
+    ) = encrypt(snapshot, password, destination, attachmentSource, CONTAINER_VERSION)
+
+    /** Tests use this to produce version-1 (uncompressed) containers that older builds wrote. */
+    internal fun encrypt(
+        snapshot: BackupSnapshot,
+        password: CharArray,
+        destination: OutputStream,
+        attachmentSource: BackupAttachmentSource,
+        containerVersion: Int,
     ) {
+        require(containerVersion == UNCOMPRESSED_CONTAINER_VERSION || containerVersion == COMPRESSED_CONTAINER_VERSION)
         val salt = ByteArray(SALT_BYTES).also(random::nextBytes)
         val iv = ByteArray(IV_BYTES).also(random::nextBytes)
-        val header = header(PBKDF2_ITERATIONS, salt, iv)
+        val header = header(containerVersion, PBKDF2_ITERATIONS, salt, iv)
         var keyBytes: ByteArray? = null
         try {
             require(password.isNotEmpty()) { "Backup password must not be empty." }
@@ -62,7 +78,18 @@ object BackupCrypto {
             }
             destination.write(header)
             CipherOutputStream(NonClosingOutputStream(destination), cipher).use { encrypted ->
-                BackupCodec.write(snapshot, encrypted, attachmentSource)
+                if (containerVersion == UNCOMPRESSED_CONTAINER_VERSION) {
+                    BackupCodec.write(snapshot, encrypted, attachmentSource)
+                    return@use
+                }
+                val deflater = Deflater(Deflater.DEFAULT_COMPRESSION)
+                try {
+                    DeflaterOutputStream(encrypted, deflater, DEFAULT_BUFFER_SIZE).use { compressed ->
+                        BackupCodec.write(snapshot, compressed, attachmentSource)
+                    }
+                } finally {
+                    deflater.end()
+                }
             }
             destination.flush()
         } catch (error: BackupException) {
@@ -119,8 +146,13 @@ object BackupCrypto {
                     val cipher = decryptCipher(derivedKey, secondHeader)
                     val stage = AttachmentRestoreStage.create(stagingParent)
                     attachmentStage = stage
-                    val snapshot = CipherInputStream(encrypted, cipher).use { plaintext ->
-                        BackupCodec.read(plaintext, stage)
+                    // The codec's record, text and attachment budgets also bound inflated output.
+                    val snapshot = CipherInputStream(encrypted, cipher).use { decrypted ->
+                        if (secondHeader.version == COMPRESSED_CONTAINER_VERSION) {
+                            InflaterInputStream(decrypted).use { plaintext -> BackupCodec.read(plaintext, stage) }
+                        } else {
+                            BackupCodec.read(decrypted, stage)
+                        }
                     }
                     DecryptedBackup(snapshot, stage)
                 } finally {
@@ -238,11 +270,11 @@ object BackupCrypto {
         }
     }
 
-    private fun header(iterations: Int, salt: ByteArray, iv: ByteArray): ByteArray =
+    private fun header(version: Int, iterations: Int, salt: ByteArray, iv: ByteArray): ByteArray =
         ByteArrayOutputStream().use { bytes ->
             DataOutputStream(bytes).use { output ->
                 output.write(magic)
-                output.writeInt(CONTAINER_VERSION)
+                output.writeInt(version)
                 output.writeInt(KDF_PBKDF2_SHA256)
                 output.writeInt(CIPHER_AES_256_GCM)
                 output.writeInt(iterations)
@@ -264,7 +296,7 @@ object BackupCrypto {
             val cipher = data.readInt()
             val iterations = data.readInt()
             val saltLength = data.readInt()
-            if (version != CONTAINER_VERSION) throw UnsupportedBackupException("Unsupported backup version $version.")
+            if (version != UNCOMPRESSED_CONTAINER_VERSION && version != COMPRESSED_CONTAINER_VERSION) throw UnsupportedBackupException("Unsupported backup version $version.")
             if (kdf != KDF_PBKDF2_SHA256 || cipher != CIPHER_AES_256_GCM) {
                 throw UnsupportedBackupException("Unsupported backup encryption suite.")
             }
@@ -278,7 +310,7 @@ object BackupCrypto {
                 throw InvalidBackupException("Invalid backup nonce length.")
             }
             val iv = ByteArray(ivLength).also(data::readFully)
-            return ParsedHeader(iterations, salt, iv, header(iterations, salt, iv))
+            return ParsedHeader(version, iterations, salt, iv, header(version, iterations, salt, iv))
         } catch (error: BackupException) {
             throw error
         } catch (error: EOFException) {
@@ -287,6 +319,7 @@ object BackupCrypto {
     }
 
     private data class ParsedHeader(
+        val version: Int,
         val iterations: Int,
         val salt: ByteArray,
         val iv: ByteArray,

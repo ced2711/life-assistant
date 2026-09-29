@@ -300,8 +300,8 @@ private val zhHans = mapOf(
     "Local sync recovery" to "本机同步恢复副本",
     "Export" to "导出",
     "Could not create the cloud recovery directory." to "无法创建同步恢复副本目录，本机数据未被替换。",
-    "Before using a cloud version, Life Assistant keeps an encrypted local recovery copy. Export a copy and use Restore backup to recover it with its original sync password. Copies are not deleted automatically." to
-        "使用云端版本前，生活助手 会保留一份加密的本机恢复副本。导出副本后，可通过“恢复备份”输入创建时的同步密码找回数据。副本不会自动删除。",
+    "Before using a cloud version, Life Assistant keeps an encrypted local recovery copy. Export a copy and use Restore backup to recover it with its original sync password. The 5 most recent copies are kept." to
+        "使用云端版本前，生活助手 会保留一份加密的本机恢复副本。导出副本后，可通过“恢复备份”输入创建时的同步密码找回数据。只保留最近 5 份副本。",
     "Hide recovery copies" to "收起恢复副本",
     "Show recovery copies" to "显示恢复副本",
     "Encrypted recovery copy exported. Restore it with the sync password used when it was created." to "加密恢复副本已导出，请使用创建时的同步密码恢复。",

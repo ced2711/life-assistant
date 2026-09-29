@@ -179,7 +179,7 @@ private val desktopSimplifiedChinese = mapOf(
     "Google rejected this OAuth client. Check the Desktop OAuth client ID/secret and that the client is enabled." to "Google 拒绝了此 OAuth 客户端。请检查 Desktop OAuth 客户端 ID/密钥并确认客户端已启用。",
     "Google rejected the authorization code or refresh token. Reconnect Google Drive." to "Google 拒绝了授权码或刷新令牌。请重新连接 Google Drive。",
     "Google denied Drive access. Choose an account that can use this app and try again." to "Google 拒绝了 Drive 访问。请选择可使用此应用的账号后重试。",
-    "Before using a cloud version, Life Assistant keeps an encrypted local recovery copy. Import a copy to recover earlier local data. Recovery copies are not deleted automatically." to "使用云端版本前，生活助手会保留一份加密的本地恢复副本。导入副本即可恢复之前的本地数据。恢复副本不会自动删除。",
+    "Before using a cloud version, Life Assistant keeps an encrypted local recovery copy. Import a copy to recover earlier local data. The 5 most recent recovery copies are kept." to "使用云端版本前，生活助手会保留一份加密的本地恢复副本。导入副本即可恢复之前的本地数据。只保留最近 5 份恢复副本。",
     "About" to "关于",
     "View license" to "查看许可证",
     "Source code" to "源代码",

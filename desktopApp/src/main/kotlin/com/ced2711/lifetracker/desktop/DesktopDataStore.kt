@@ -82,7 +82,7 @@ class DesktopDataStore(
 
     val encryptedFile: File get() = localBackup
 
-    /** Persistent USE_CLOUD recovery snapshots. Entries are intentionally never pruned here. */
+    /** USE_CLOUD recovery snapshots; the newest [KEPT_RECOVERY_COPIES] are kept. */
     val cloudRecoveryDirectory: File get() = cloudRecovery
 
     suspend fun open(password: CharArray, createIfMissing: Boolean = true): Boolean = mutex.withLock {
@@ -598,6 +598,7 @@ class DesktopDataStore(
                 } catch (_: Exception) {
                     Files.move(temporary.toPath(), recovery.toPath())
                 }
+                pruneRecoveryCopies(cloudRecovery, keep = KEPT_RECOVERY_COPIES)
                 recovery
             } finally {
                 if (temporary.exists()) temporary.delete()
@@ -782,6 +783,17 @@ class DesktopDataStore(
     private fun BackupSnapshot.validateForDesktop(): BackupSnapshot = validate()
 
     companion object {
+        const val KEPT_RECOVERY_COPIES = 5
+
+        /** Deletes all but the [keep] newest recovery copies in [directory]. */
+        fun pruneRecoveryCopies(directory: File, keep: Int) {
+            directory.listFiles().orEmpty()
+                .filter { it.isFile && it.name.endsWith(".tlb") }
+                .sortedWith(compareByDescending<File> { it.lastModified() }.thenByDescending { it.name })
+                .drop(keep)
+                .forEach(File::delete)
+        }
+
         fun defaultAppDirectory(): File {
             val base = System.getenv("APPDATA")?.takeIf(String::isNotBlank)
                 ?: File(System.getProperty("user.home"), ".config").absolutePath

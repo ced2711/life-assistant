@@ -1481,7 +1481,7 @@ private fun SettingsPage(
                     }) { Text(desktopText("Import backup")) }
                 }
                 Text(
-                    desktopText("Before using a cloud version, Life Assistant keeps an encrypted local recovery copy. Import a copy to recover earlier local data. Recovery copies are not deleted automatically."),
+                    desktopText("Before using a cloud version, Life Assistant keeps an encrypted local recovery copy. Import a copy to recover earlier local data. The 5 most recent recovery copies are kept."),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

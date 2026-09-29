@@ -80,6 +80,18 @@ class DesktopNewFeaturesTest {
     }
 
     @Test
+    fun onlyTheNewestRecoveryCopiesAreKept() = withTempDirectory { root ->
+        val directory = root.resolve("cloud-recovery").apply { mkdirs() }
+        (1..8).forEach { index ->
+            directory.resolve("copy-$index.tlb").apply { writeText("x"); setLastModified(index * 1_000L) }
+        }
+        directory.resolve("notes.txt").writeText("not a recovery copy")
+        DesktopDataStore.pruneRecoveryCopies(directory, keep = 5)
+        assertEquals((4..8).map { "copy-$it.tlb" }.toSet(), directory.list()!!.filter { it.endsWith(".tlb") }.toSet())
+        assertTrue(directory.resolve("notes.txt").exists())
+    }
+
+    @Test
     fun configKeepsHiddenModulesAndAppLockLocally() = withTempDirectory { root ->
         val file = root.resolve("desktop.properties")
         val defaults = DesktopConfigStore(file).read()

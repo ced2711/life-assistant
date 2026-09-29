@@ -421,6 +421,7 @@ class AndroidCloudSyncEngine(
             } catch (_: AtomicMoveNotSupportedException) {
                 Files.move(temporary.toPath(), destination.toPath())
             }
+            recoveryFiles().drop(KEPT_RECOVERY_COPIES).forEach(File::delete)
             return destination
         } finally {
             if (temporary.exists()) temporary.delete()
@@ -458,6 +459,7 @@ class AndroidCloudSyncEngine(
     private companion object {
         const val CLOUD_RECOVERY_DIRECTORY = "cloud-recovery"
         const val KEPT_CLOUD_REVISIONS = 10
+        const val KEPT_RECOVERY_COPIES = 5
         const val CLOUD_RECOVERY_FILE_PREFIX = "life-tracker-cloud-recovery-"
     }
 }
