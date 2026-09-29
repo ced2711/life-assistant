@@ -2,6 +2,8 @@ package com.ced2711.lifetracker.desktop
 
 import com.ced2711.lifetracker.cloudsync.LocalCloudSyncState
 import com.ced2711.lifetracker.domain.model.AppLockTimeout
+import com.ced2711.lifetracker.domain.model.DefaultHiddenDestinations
+import com.ced2711.lifetracker.domain.model.DefaultVisibleDestinations
 import com.ced2711.lifetracker.domain.model.TopLevelDestination
 import com.ced2711.lifetracker.domain.model.UiLanguage
 import java.io.File
@@ -16,7 +18,7 @@ data class DesktopCloudConfig(
     val syncState: LocalCloudSyncState,
     val uiLanguage: UiLanguage = UiLanguage.ENGLISH,
     val lastDestination: TopLevelDestination = TopLevelDestination.TODO,
-    val visibleDestinations: Set<TopLevelDestination> = TopLevelDestination.entries.toSet(),
+    val visibleDestinations: Set<TopLevelDestination> = DefaultVisibleDestinations,
     val appLockEnabled: Boolean = false,
     val appLockTimeout: AppLockTimeout = AppLockTimeout.ONE_MINUTE,
 )
@@ -49,7 +51,11 @@ class DesktopConfigStore(
                 ?.let { value -> runCatching { TopLevelDestination.valueOf(value) }.getOrNull() }
                 ?: TopLevelDestination.TODO,
             // Hidden rather than visible modules are stored so modules added later start visible.
-            visibleDestinations = properties.getProperty(KEY_HIDDEN_DESTINATIONS).orEmpty()
+            // No saved choice yet means the defaults; an empty saved value means every module is shown.
+            visibleDestinations = (
+                properties.getProperty(KEY_HIDDEN_DESTINATIONS)
+                    ?: DefaultHiddenDestinations.joinToString(",") { it.name }
+                )
                 .split(',')
                 .map(String::trim)
                 .toSet()

@@ -13,6 +13,8 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.ced2711.lifetracker.domain.model.DateFormatOption
 import com.ced2711.lifetracker.domain.model.AccentColor
 import com.ced2711.lifetracker.domain.model.AppLockTimeout
+import com.ced2711.lifetracker.domain.model.DefaultHiddenDestinations
+import com.ced2711.lifetracker.domain.model.DefaultVisibleDestinations
 import com.ced2711.lifetracker.domain.model.ThemeMode
 import com.ced2711.lifetracker.domain.model.TimeFormatOption
 import com.ced2711.lifetracker.domain.model.TopLevelDestination
@@ -38,7 +40,7 @@ data class AppSettings(
     val todoQuickAddFields: Set<TodoQuickAddField> = emptySet(),
     val lastDestination: TopLevelDestination = TopLevelDestination.TODO,
     // Device-local preferences below are never written to or restored from a backup.
-    val visibleDestinations: Set<TopLevelDestination> = TopLevelDestination.entries.toSet(),
+    val visibleDestinations: Set<TopLevelDestination> = DefaultVisibleDestinations,
     val appLockEnabled: Boolean = false,
     val appLockTimeout: AppLockTimeout = AppLockTimeout.ONE_MINUTE,
 )
@@ -89,7 +91,8 @@ class SettingsRepository internal constructor(
                 .mapNotNull { saved -> TodoQuickAddField.entries.firstOrNull { it.name == saved } }
                 .toSet(),
             lastDestination = this[Keys.lastDestination].enumOrDefault(TopLevelDestination.TODO),
-            visibleDestinations = this[Keys.hiddenDestinations].orEmpty().let { hidden ->
+            // No saved choice yet means the defaults; an empty saved set means every module is shown.
+            visibleDestinations = (this[Keys.hiddenDestinations] ?: DefaultHiddenDestinations.mapTo(mutableSetOf()) { it.name }).let { hidden ->
                 TopLevelDestination.entries.filterNot { it.name in hidden }.toSet()
             },
             appLockEnabled = this[Keys.appLockEnabled] ?: false,

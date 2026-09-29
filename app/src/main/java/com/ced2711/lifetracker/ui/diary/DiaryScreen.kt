@@ -16,7 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material3.AlertDialog
+import com.ced2711.lifetracker.ui.adaptive.HingeSafeAlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -176,7 +176,7 @@ fun DiaryScreen(
     }
 
     if (confirmDelete) {
-        AlertDialog(
+        HingeSafeAlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text(localizedText("Delete this diary entry?")) },
             text = { Text(dayLabel(selectedDay)) },

@@ -4,9 +4,13 @@ import android.graphics.Rect
 import android.os.Build
 import android.view.ViewTreeObserver
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
@@ -54,16 +58,46 @@ internal fun appImeInsets(): WindowInsets {
 @Composable
 private fun appSafeDrawingInsets(): WindowInsets = WindowInsets.safeDrawing.union(appImeInsets())
 
+/** A top cutout narrower than this share of the window is a camera island, not a full notch. */
+private const val CUTOUT_ISLAND_MAX_WIDTH_FRACTION = 0.4f
+
+internal fun isTopCutoutIsland(cutoutWidthPx: Int, windowWidthPx: Int): Boolean =
+    cutoutWidthPx > 0 && cutoutWidthPx <= windowWidthPx * CUTOUT_ISLAND_MAX_WIDTH_FRACTION
+
+/** The top display-cutout rectangle in window pixels, when it is a small camera island. */
+@Composable
+internal fun topCutoutIsland(): Rect? {
+    // Reading the inset subscribes this composable to cutout changes such as rotation.
+    val topCutout = WindowInsets.displayCutout.getTop(LocalDensity.current)
+    val view = LocalView.current
+    if (topCutout == 0 || Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+    val rect = view.rootWindowInsets?.displayCutout?.boundingRectTop ?: return null
+    return rect.takeIf { !it.isEmpty && isTopCutoutIsland(it.width(), view.rootView.width) }
+}
+
+/**
+ * Like [appSafeDrawingInsets], but a small top camera island does not reserve a full-width strip:
+ * with the status bar hidden, the header paints behind it and keeps only its own content clear.
+ */
+@Composable
+private fun appSafeDrawingInsetsAllowingTopIsland(): WindowInsets {
+    if (topCutoutIsland() == null) return appSafeDrawingInsets()
+    return WindowInsets.systemBars
+        .union(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
+        .union(appImeInsets())
+}
+
 @Composable
 internal fun paneSafeDrawingInsets(
     pane: SafePaneBounds,
     windowWidth: Dp,
     windowHeight: Dp,
+    allowTopCutoutIsland: Boolean = false,
 ): WindowInsets {
     val density = LocalDensity.current
     val direction = LocalLayoutDirection.current
     // safeDrawing includes the visible system bars, display cutout and software keyboard.
-    val windowInsets = appSafeDrawingInsets()
+    val windowInsets = if (allowTopCutoutIsland) appSafeDrawingInsetsAllowingTopIsland() else appSafeDrawingInsets()
     val projected = with(density) {
         projectWindowInsetsIntoPane(
             pane = PixelPaneBounds(
@@ -86,6 +120,7 @@ internal fun Modifier.paneSafeDrawingPadding(
     pane: SafePaneBounds,
     windowWidth: Dp,
     windowHeight: Dp,
-): Modifier = windowInsetsPadding(paneSafeDrawingInsets(pane, windowWidth, windowHeight))
+    allowTopCutoutIsland: Boolean = false,
+): Modifier = windowInsetsPadding(paneSafeDrawingInsets(pane, windowWidth, windowHeight, allowTopCutoutIsland))
     // Children must not apply the original window-edge insets again inside an offset pane.
     .consumeWindowInsets(appSafeDrawingInsets())

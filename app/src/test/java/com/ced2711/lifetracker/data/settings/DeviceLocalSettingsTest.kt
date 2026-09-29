@@ -20,11 +20,21 @@ class DeviceLocalSettingsTest {
     private fun repository() = SettingsRepository(MemoryPreferences())
 
     @Test
-    fun `app lock is off and every module is visible by default`() = runBlocking {
+    fun `app lock is off and optional modules are hidden by default`() = runBlocking {
         val settings = repository().settings.first()
         assertEquals(false, settings.appLockEnabled)
         assertEquals(AppLockTimeout.ONE_MINUTE, settings.appLockTimeout)
-        assertEquals(TopLevelDestination.entries.toSet(), settings.visibleDestinations)
+        assertEquals(
+            setOf(TopLevelDestination.TODO, TopLevelDestination.LEDGER, TopLevelDestination.CALENDAR, TopLevelDestination.NOTES),
+            settings.visibleDestinations,
+        )
+    }
+
+    @Test
+    fun `choosing every module is kept instead of falling back to the defaults`() = runBlocking {
+        val repository = repository()
+        repository.setVisibleDestinations(TopLevelDestination.entries.toSet())
+        assertEquals(TopLevelDestination.entries.toSet(), repository.settings.first().visibleDestinations)
     }
 
     @Test

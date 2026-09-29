@@ -13,7 +13,7 @@ By **ced2711** · 中文名：**生活助手** · [Source](https://github.com/ce
 - Diary with one page per day, saved automatically; days with a page show a small green dot in the calendar.
 - Confessional: write something down, then burn it for good or seal it on this device only. Sealed words are encrypted with a device key (Android Keystore or Windows DPAPI) and are never backed up or synced; screenshots are blocked on Android.
 - Optional app lock, off by default: Android asks for fingerprint, face or screen lock, Windows for the data password, after the app has been in the background for a chosen time.
-- Choose which modules appear in the navigation menu. Hidden modules keep their data.
+- Choose which modules appear in the navigation menu. Diary and Confessional start hidden; turn them on in Settings. Hidden modules keep their data.
 - Encrypted local Vault for credentials and private notes, protected by Android system authentication.
 - Password-encrypted `.tlb` backup and full-replacement restore with validation and preview.
 - Responsive Today Todo widget, including wide horizontal layouts.

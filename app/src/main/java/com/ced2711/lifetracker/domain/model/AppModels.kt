@@ -98,6 +98,13 @@ enum class TopLevelDestination {
     CONFESSIONAL,
 }
 
+/** Optional modules stay out of the menu until the user turns them on in Settings. */
+val DefaultHiddenDestinations: Set<TopLevelDestination> =
+    setOf(TopLevelDestination.DIARY, TopLevelDestination.CONFESSIONAL)
+
+val DefaultVisibleDestinations: Set<TopLevelDestination> =
+    TopLevelDestination.entries.toSet() - DefaultHiddenDestinations
+
 /**
  * Navigation order for the visible modules. An empty choice falls back to every module so the app
  * can never hide all of its navigation. Visibility is a device-local preference, never backed up.

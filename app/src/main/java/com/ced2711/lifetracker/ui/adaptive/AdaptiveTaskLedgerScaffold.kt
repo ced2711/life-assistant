@@ -43,6 +43,9 @@ import com.ced2711.lifetracker.ui.localization.localizedText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -50,6 +53,8 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -60,6 +65,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.window.layout.FoldingFeature
+import kotlin.math.roundToInt
 import com.ced2711.lifetracker.domain.model.TopLevelDestination
 
 private val NoInsets = WindowInsets(0, 0, 0, 0)
@@ -199,6 +205,8 @@ private fun FoldAwareScaffold(
 
         else -> PaneHost(
             pane = safePaneLayout.primaryPane,
+            // The standard layout's header sits at the top of this pane and avoids a camera itself.
+            allowTopCutoutIsland = true,
         ) {
             StandardAdaptiveScaffold(
                 selected = selected,
@@ -367,6 +375,7 @@ private fun HorizontalFoldScaffold(
 @Composable
 private fun PaneHost(
     pane: SafePaneBounds,
+    allowTopCutoutIsland: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val layout = requireNotNull(LocalSafePaneLayout.current)
@@ -378,9 +387,14 @@ private fun PaneHost(
             .clipToBounds()
             // Paint behind the camera safety area with the same surface as the app header.
             .background(MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp))
-            .paneSafeDrawingPadding(pane, layout.windowWidth, layout.windowHeight),
+            .paneSafeDrawingPadding(pane, layout.windowWidth, layout.windowHeight, allowTopCutoutIsland),
     ) {
-        content()
+        val island = if (allowTopCutoutIsland) topCutoutIsland() else null
+        CompositionLocalProvider(
+            LocalHeaderCutoutIsland provides island?.let { CutoutIsland(it.left, it.top, it.right, it.bottom) },
+        ) {
+            content()
+        }
     }
 }
 
@@ -496,13 +510,20 @@ private fun TaskLedgerNavigationRail(
     compact: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val island = LocalHeaderCutoutIsland.current
+    var railTopClearance by remember { mutableIntStateOf(0) }
     NavigationRail(
-        modifier = modifier,
+        modifier = if (island == null) modifier else modifier.onGloballyPositioned { coordinates ->
+            val bounds = coordinates.boundsInWindow()
+            val overlaps = island.left < bounds.right && island.right > bounds.left && island.top < bounds.bottom
+            railTopClearance = if (overlaps) (island.bottom - bounds.top.roundToInt()).coerceAtLeast(0) else 0
+        },
         windowInsets = NoInsets,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxHeight()
+                .padding(top = with(LocalDensity.current) { railTopClearance.toDp() })
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -538,7 +559,32 @@ private fun TaskLedgerTopBar(
     compact: Boolean,
 ) {
     val auxiliaryTitle = LocalAuxiliaryTitle.current
+    val island = LocalHeaderCutoutIsland.current
+    val density = LocalDensity.current
+    var barBounds by remember { mutableStateOf<CutoutIsland?>(null) }
+    val cutoutPadding = barBounds?.let { bounds ->
+        with(density) {
+            headerCutoutPadding(
+                barLeft = bounds.left,
+                barTop = bounds.top,
+                barRight = bounds.right,
+                barBottom = bounds.bottom,
+                titleStart = 16.dp.roundToPx(),
+                trailingWidth = 52.dp.roundToPx(),
+                minimumTitleWidth = 48.dp.roundToPx(),
+                gap = 8.dp.roundToPx(),
+                island = island,
+            )
+        }
+    } ?: HeaderCutoutPadding()
     Surface(
+        modifier = if (island == null) Modifier else Modifier.onGloballyPositioned { coordinates ->
+            val bounds = coordinates.boundsInWindow()
+            barBounds = CutoutIsland(
+                bounds.left.roundToInt(), bounds.top.roundToInt(),
+                bounds.right.roundToInt(), bounds.bottom.roundToInt(),
+            )
+        },
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 2.dp,
     ) {
@@ -546,12 +592,18 @@ private fun TaskLedgerTopBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(if (compact) 48.dp else 56.dp)
-                .padding(start = 16.dp, end = 4.dp),
+                .padding(start = 16.dp, end = 4.dp)
+                .padding(
+                    start = with(density) { cutoutPadding.start.toDp() },
+                    end = with(density) { cutoutPadding.end.toDp() },
+                ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
                 text = localizedText(auxiliaryTitle ?: if (isSettings) "Settings" else selected.label),
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = with(density) { cutoutPadding.titleEnd.toDp() }),
                 style = MaterialTheme.typography.titleLarge,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

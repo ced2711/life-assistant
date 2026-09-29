@@ -83,7 +83,10 @@ class DesktopNewFeaturesTest {
     fun configKeepsHiddenModulesAndAppLockLocally() = withTempDirectory { root ->
         val file = root.resolve("desktop.properties")
         val defaults = DesktopConfigStore(file).read()
-        assertEquals(TopLevelDestination.entries.toSet(), defaults.visibleDestinations)
+        assertEquals(
+            TopLevelDestination.entries.toSet() - setOf(TopLevelDestination.DIARY, TopLevelDestination.CONFESSIONAL),
+            defaults.visibleDestinations,
+        )
         assertFalse(defaults.appLockEnabled)
         assertEquals(AppLockTimeout.ONE_MINUTE, defaults.appLockTimeout)
 
@@ -93,6 +96,9 @@ class DesktopNewFeaturesTest {
         assertEquals(setOf(TopLevelDestination.TODO, TopLevelDestination.CONFESSIONAL), saved.visibleDestinations)
         assertTrue(saved.appLockEnabled)
         assertEquals(AppLockTimeout.FIVE_MINUTES, saved.appLockTimeout)
+
+        DesktopConfigStore(file).setVisibleDestinations(TopLevelDestination.entries.toSet())
+        assertEquals(TopLevelDestination.entries.toSet(), DesktopConfigStore(file).read().visibleDestinations)
     }
 
     @Test

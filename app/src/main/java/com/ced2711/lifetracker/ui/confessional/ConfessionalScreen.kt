@@ -18,7 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.LocalFireDepartment
 import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material3.AlertDialog
+import com.ced2711.lifetracker.ui.adaptive.HingeSafeAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -238,7 +238,7 @@ fun ConfessionalScreen(
     }
 
     if (confirmBurnAll) {
-        AlertDialog(
+        HingeSafeAlertDialog(
             onDismissRequest = { confirmBurnAll = false },
             title = { Text(localizedText("Burn every sealed confession?")) },
             text = { Text(localizedText("They will be permanently deleted from this device.")) },
