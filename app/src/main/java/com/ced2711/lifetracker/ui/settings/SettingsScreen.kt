@@ -217,7 +217,7 @@ fun SettingsScreen(
                 SettingsSectionTitle("Data")
                 SettingsValueRow(
                     title = "Backup & sync",
-                    value = "Local .tlb or Google Drive",
+                    value = "Local .tlb, Google Drive or GitHub",
                     onClick = onOpenBackup,
                 )
 

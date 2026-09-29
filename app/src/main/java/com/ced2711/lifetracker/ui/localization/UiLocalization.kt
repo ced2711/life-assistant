@@ -765,6 +765,7 @@ private val zhHans = mapOf(
     "They will be permanently deleted from this PC." to "它们将从这台电脑上永久删除。",
     // Cloud sync providers
     "GitHub sync" to "GitHub 同步",
+    "Local .tlb, Google Drive or GitHub" to "本地 .tlb、Google Drive 或 GitHub",
     "Connect GitHub" to "连接 GitHub",
     "Sync password-encrypted snapshots between Android and Windows through Google Drive's " +
         "private app folder or a private GitHub repository. Cloud sync is optional; " +

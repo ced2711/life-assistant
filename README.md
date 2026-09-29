@@ -19,14 +19,14 @@ By **ced2711** · 中文名：**生活助手** · [Source](https://github.com/ce
 - Responsive Today Todo widget, including wide horizontal layouts.
 - Six selectable accent palettes with light, dark, and system themes.
 - Fullscreen Android status-bar policy, camera-cutout and keyboard avoidance, and tabletop-pane handling without brand-specific device lists.
-- Optional Google Drive authorization and automatic encrypted snapshot sync, with explicit conflict resolution and retained cloud history.
+- Optional encrypted snapshot sync through Google Drive or a private GitHub repository, with explicit conflict resolution; the 10 newest cloud versions are kept.
 - Offline use without accounts; no analytics or advertising. Google authorization is required only when enabling Drive sync.
 
 ## Windows and Google Drive
 
 The Windows app supports local Todo, Ledger, Calendar, Notes, folders, attachments, Vault, and manual `.tlb` import/export. It uses the same backup codec, encryption, theme palettes and formatting utilities as Android. Both offer English and Simplified Chinese UI, light/dark/system themes and six accent colors. Windows also supports multi-category Todo filtering and collapsible Notes folders/search. New Windows installations are offline by default, with automatic sync off; connect Drive explicitly in Settings. Advanced Android recurrence creation, reminder scheduling and widgets remain Android features; imported recurrence metadata is preserved when editing existing occurrences on Windows.
 
-**Google Cloud setup is required before live sign-in works.** This repository does not bundle production OAuth credentials. Register the Android package/signing certificate and a Desktop OAuth client in the same Google Cloud project, then authorize the same Google account on both devices. Follow [Google Drive setup](docs/GOOGLE_DRIVE_SETUP.md). Until configured, local use and encrypted file transfer work independently.
+**Google Cloud setup is required before live sign-in works.** This repository does not bundle production OAuth credentials. Register the Android package/signing certificate and a Desktop OAuth client in the same Google Cloud project, then authorize the same Google account on both devices. Follow [Google Drive setup](docs/GOOGLE_DRIVE_SETUP.md). GitHub sync is a simpler alternative: follow [GitHub sync setup](docs/GITHUB_SYNC_SETUP.md). Until configured, local use and encrypted file transfer work independently.
 
 Sync transfers complete encrypted datasets. If both sides changed, choose which version to use; it is not a record-by-record merge. Each upload creates a new encrypted file; older versions and competing branches are not automatically deleted. Cloud heads are checked before and after upload. Drive has no atomic cross-file compare-and-create, so simultaneous uploads can produce branches; both are preserved and sync asks for review. Password mismatches are rejected rather than treated as content conflicts. Android Vault authentication is still required for complete snapshots containing Vault entries, so unattended sync waits for unlock when necessary. Windows sync runs while the app is open and unlocked.
 
@@ -54,16 +54,16 @@ Use JDK 17 and the included Gradle wrapper.
 
 There are two distribution flavors:
 
-- `standard`: normal Android install/update build; version code 15 for the 1.7.1 release.
+- `standard`: normal Android install/update build; version code 16 for the 1.8.0 release.
 - `personal`: one-off migration build; version code 5 so the standard APK can update it afterward.
 
 The personal flavor intentionally requires a local `app/src/personal/assets/personal-backup.tlb`. That encrypted user backup, its password, APK outputs, release keystore, and signing credentials are excluded from Git and must never be committed, even to a private repository.
 
-Windows distributions are written to `desktopApp/build/compose/binaries/main/exe` and `msi`. Use `:desktopApp:createDistributable` to create a portable app folder. Building installers requires Windows and JDK 17; Gradle obtains the WiX packaging tools as needed. Release Android signing is configured locally through the existing signing environment variables, never through committed credentials.
+Windows distributions are written to `desktopApp/build/compose/binaries/main/exe` and `msi`. Use `:desktopApp:createDistributable` to create a portable app folder. Building installers requires Windows and JDK 17; Gradle obtains the WiX packaging tools as needed. Release Android signing is configured locally through the existing signing environment variables, never through committed credentials. `tools/setup-release-signing.ps1` creates a release key and stores its settings in your personal `~/.gradle/gradle.properties`.
 
 ## Verification
 
-The project includes JVM, Android instrumentation, sync transport/branch-conflict, Windows encrypted-store/attachment, and Windows DPAPI tests. See the [1.7.1 fullscreen and compatibility report](docs/RELEASE_1.7.1.md), [1.7.0 release notes](docs/RELEASE_1.7.0.md) and historical [1.6.0 verification report](docs/RELEASE_1.6.0.md). The cloud tests use a local HTTP fixture; a real OAuth end-to-end check additionally requires the developer's configured Google Cloud project and interactive consent. Unit tests alone do not establish that live Google authorization is configured.
+The project includes JVM, Android instrumentation, sync transport/branch-conflict, Windows encrypted-store/attachment, and Windows DPAPI tests. See the [1.8.0 release notes](docs/RELEASE_1.8.0.md), the [1.7.1 fullscreen and compatibility report](docs/RELEASE_1.7.1.md), [1.7.0 release notes](docs/RELEASE_1.7.0.md) and historical [1.6.0 verification report](docs/RELEASE_1.6.0.md). The cloud tests use a local HTTP fixture; a real OAuth end-to-end check additionally requires the developer's configured Google Cloud project and interactive consent. Unit tests alone do not establish that live Google authorization is configured.
 
 Android support remains **Android 8.0 (API 26) and newer**, for phone/tablet app environments. There is no Samsung-only restriction. Tests on Android 8 and Android 16 emulators and resized/folded layouts do not prove compatibility with every OEM, keyboard, or future OS release. Camera hardware cannot be removed; system-owned authentication, permission or external-app screens control their own bars. Flip cover-screen launch access is controlled by Samsung/One UI (and may require its supported launcher/settings); adapting the app's small-window layout does not bypass those restrictions.
 

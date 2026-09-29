@@ -203,7 +203,7 @@ private fun DiaryEntryList(
     modifier: Modifier = Modifier,
 ) {
     if (entries.isEmpty()) {
-        Column(modifier, verticalArrangement = Arrangement.Center) {
+        Column(modifier.padding(top = 8.dp), verticalArrangement = Arrangement.Top) {
             Text(
                 text = localizedText("No diary entries yet"),
                 style = MaterialTheme.typography.bodyMedium,
