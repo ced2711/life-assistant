@@ -78,6 +78,13 @@ import com.ced2711.lifetracker.domain.model.TodoQuickAddField
 import com.ced2711.lifetracker.domain.model.UiLanguage
 import com.ced2711.lifetracker.domain.model.WeekStart
 import com.ced2711.lifetracker.ui.TaskLedgerViewModel
+import com.ced2711.lifetracker.domain.model.AppLockTimeout
+import com.ced2711.lifetracker.domain.model.TopLevelDestination
+import com.ced2711.lifetracker.ui.adaptive.label
+import com.ced2711.lifetracker.ui.lock.AppLockController
+import com.ced2711.lifetracker.ui.lock.authenticateWithDevice
+import com.ced2711.lifetracker.ui.lock.findHostActivity
+import com.ced2711.lifetracker.ui.lock.isDeviceSecure
 import com.ced2711.lifetracker.ui.adaptive.HingeSafeAlertDialog
 import com.ced2711.lifetracker.ui.adaptive.rememberHingeSafePlatformDialogLauncher
 import com.ced2711.lifetracker.ui.components.CustomReminderOffsetInput
@@ -93,6 +100,7 @@ fun SettingsScreen(
     viewModel: TaskLedgerViewModel,
     onOpenVault: () -> Unit,
     onOpenBackup: () -> Unit,
+    appLock: AppLockController,
     modifier: Modifier = Modifier,
     isWide: Boolean = false,
     onDefaultReminderOffsetsChange: (Set<Long>) -> Unit,
@@ -106,6 +114,32 @@ fun SettingsScreen(
     var choiceDialog by rememberSettingsDialogState()
     val noBrowserMessage = localizedText("No browser is available to open the source link.")
     val sourceLinkErrorMessage = localizedText("The source link could not be opened.")
+
+    fun showMessage(text: String) {
+        scope.launch { snackbarHostState.showSnackbar(translateUiText(text, uiLanguage)) }
+    }
+
+    // Both turning the lock on and off need the device's own authentication, so whoever holds an
+    // unlocked phone cannot quietly remove it, and nobody can lock themselves out.
+    fun changeAppLock(enable: Boolean) {
+        val activity = context.findHostActivity() ?: return
+        if (!context.isDeviceSecure()) {
+            if (enable) showMessage("Set a screen lock on this device first.") else viewModel.setAppLockEnabled(false)
+            return
+        }
+        appLock.authenticating = true
+        activity.authenticateWithDevice(
+            translateUiText(if (enable) "Turn on app lock" else "Turn off app lock", uiLanguage),
+        ) { error ->
+            appLock.authenticating = false
+            if (error != null) {
+                showMessage(error)
+            } else {
+                if (enable) appLock.onUnlocked()
+                viewModel.setAppLockEnabled(enable)
+            }
+        }
+    }
 
     LaunchedEffect(viewModel, uiLanguage) {
         viewModel.errors.collect { message ->
@@ -156,6 +190,28 @@ fun SettingsScreen(
                     title = "Password vault",
                     value = "Encrypted on this device",
                     onClick = onOpenVault,
+                )
+                HorizontalDivider()
+                SettingsSwitchRow(
+                    title = "App lock",
+                    supportingText = "Ask for fingerprint, face or screen lock when opening the app",
+                    checked = settings.appLockEnabled,
+                    onCheckedChange = ::changeAppLock,
+                )
+                if (settings.appLockEnabled) {
+                    HorizontalDivider()
+                    SettingsValueRow(
+                        title = "Lock after leaving the app",
+                        value = settings.appLockTimeout.label,
+                        onClick = { choiceDialog = SettingsDialog.AppLockTimeout },
+                    )
+                }
+
+                SettingsSectionTitle("Menu")
+                SettingsValueRow(
+                    title = "Modules in menu",
+                    value = visibleModulesSummary(settings.visibleDestinations),
+                    onClick = { choiceDialog = SettingsDialog.VisibleModules },
                 )
 
                 SettingsSectionTitle("Data")
@@ -324,6 +380,20 @@ fun SettingsScreen(
         SettingsDialog.DefaultReminders -> DefaultRemindersDialog(
             selected = settings.defaultReminderOffsetsMinutes,
             onSave = onDefaultReminderOffsetsChange,
+            onDismiss = { choiceDialog = null },
+        )
+
+        SettingsDialog.AppLockTimeout -> ChoiceDialog(
+            title = "Lock after leaving the app",
+            choices = AppLockTimeout.entries.map { Choice(it.label, it) },
+            selected = settings.appLockTimeout,
+            onSelect = viewModel::setAppLockTimeout,
+            onDismiss = { choiceDialog = null },
+        )
+
+        SettingsDialog.VisibleModules -> VisibleModulesDialog(
+            selected = settings.visibleDestinations,
+            onSave = viewModel::setVisibleDestinations,
             onDismiss = { choiceDialog = null },
         )
 
@@ -834,6 +904,8 @@ internal enum class SettingsDialog {
     TimeFormat,
     DateFormat,
     TodoQuickAddFields,
+    AppLockTimeout,
+    VisibleModules,
     DefaultReminders,
     AllDayReminderTime,
     About,
@@ -969,4 +1041,87 @@ private fun defaultReminderSummary(offsets: Set<Long>): String = when (offsets.s
         ?.label
         ?: formatReminderOffset(offsets.first())
     else -> "${offsets.size} reminders"
+}
+
+private val AppLockTimeout.label: String
+    get() = when (this) {
+        AppLockTimeout.IMMEDIATELY -> "Immediately"
+        AppLockTimeout.ONE_MINUTE -> "After 1 minute"
+        AppLockTimeout.FIVE_MINUTES -> "After 5 minutes"
+    }
+
+private fun visibleModulesSummary(visible: Set<TopLevelDestination>): String {
+    val total = TopLevelDestination.entries.size
+    val shown = TopLevelDestination.entries.count { it in visible }.takeIf { it > 0 } ?: total
+    return if (shown == total) "All modules" else "$shown of $total modules shown"
+}
+
+private val DestinationSetSaver = Saver<Set<TopLevelDestination>, ArrayList<String>>(
+    save = { destinations -> ArrayList(destinations.map { it.name }) },
+    restore = { saved ->
+        saved.mapNotNullTo(mutableSetOf()) { name ->
+            TopLevelDestination.entries.firstOrNull { it.name == name }
+        }
+    },
+)
+
+@Composable
+private fun VisibleModulesDialog(
+    selected: Set<TopLevelDestination>,
+    onSave: (Set<TopLevelDestination>) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var draft by rememberSaveable(selected, stateSaver = DestinationSetSaver) {
+        mutableStateOf(selected)
+    }
+
+    HingeSafeAlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(localizedText("Modules in menu")) },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = localizedText("Hidden modules keep their data. At least one module stays visible."),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+                TopLevelDestination.entries.forEach { destination ->
+                    val checked = destination in draft
+                    // The last visible module cannot be unchecked.
+                    val canToggle = !checked || draft.size > 1
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .toggleable(
+                                value = checked,
+                                enabled = canToggle,
+                                role = Role.Checkbox,
+                                onValueChange = { isChecked ->
+                                    draft = if (isChecked) draft + destination else draft - destination
+                                },
+                            )
+                            .padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(checked = checked, onCheckedChange = null, enabled = canToggle)
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(localizedText(destination.label), style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onSave(draft)
+                    onDismiss()
+                },
+                enabled = draft.isNotEmpty(),
+            ) { Text(localizedText("Save")) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(localizedText("Cancel")) }
+        },
+    )
 }

@@ -1018,6 +1018,7 @@ private fun RestorePreviewDialog(
                 PreviewValue("Todos", preview.todoCount.toString())
                 PreviewValue("Ledger entries", preview.ledgerCount.toString())
                 PreviewValue("Notes", preview.noteCount.toString())
+                PreviewValue("Diary entries", preview.diaryCount.toString())
                 PreviewValue("Vault entries", preview.vaultCount.toString())
                 PreviewValue(
                     "Attachments",

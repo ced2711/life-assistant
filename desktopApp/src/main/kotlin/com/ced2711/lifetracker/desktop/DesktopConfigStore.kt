@@ -1,6 +1,7 @@
 package com.ced2711.lifetracker.desktop
 
 import com.ced2711.lifetracker.cloudsync.LocalCloudSyncState
+import com.ced2711.lifetracker.domain.model.AppLockTimeout
 import com.ced2711.lifetracker.domain.model.TopLevelDestination
 import com.ced2711.lifetracker.domain.model.UiLanguage
 import java.io.File
@@ -15,6 +16,9 @@ data class DesktopCloudConfig(
     val syncState: LocalCloudSyncState,
     val uiLanguage: UiLanguage = UiLanguage.ENGLISH,
     val lastDestination: TopLevelDestination = TopLevelDestination.TODO,
+    val visibleDestinations: Set<TopLevelDestination> = TopLevelDestination.entries.toSet(),
+    val appLockEnabled: Boolean = false,
+    val appLockTimeout: AppLockTimeout = AppLockTimeout.ONE_MINUTE,
 )
 
 class DesktopConfigStore(
@@ -44,6 +48,16 @@ class DesktopConfigStore(
             lastDestination = properties.getProperty(KEY_LAST_DESTINATION)
                 ?.let { value -> runCatching { TopLevelDestination.valueOf(value) }.getOrNull() }
                 ?: TopLevelDestination.TODO,
+            // Hidden rather than visible modules are stored so modules added later start visible.
+            visibleDestinations = properties.getProperty(KEY_HIDDEN_DESTINATIONS).orEmpty()
+                .split(',')
+                .map(String::trim)
+                .toSet()
+                .let { hidden -> TopLevelDestination.entries.filterNot { it.name in hidden }.toSet() },
+            appLockEnabled = properties.getProperty(KEY_APP_LOCK)?.toBooleanStrictOrNull() ?: false,
+            appLockTimeout = properties.getProperty(KEY_APP_LOCK_TIMEOUT)
+                ?.let { value -> AppLockTimeout.entries.firstOrNull { it.name == value } }
+                ?: AppLockTimeout.ONE_MINUTE,
         )
     }
 
@@ -72,6 +86,24 @@ class DesktopConfigStore(
     fun setLastDestination(value: TopLevelDestination) {
         val properties = load()
         properties.setProperty(KEY_LAST_DESTINATION, value.name)
+        save(properties)
+    }
+
+    @Synchronized
+    fun setVisibleDestinations(value: Set<TopLevelDestination>) {
+        val properties = load()
+        properties.setProperty(
+            KEY_HIDDEN_DESTINATIONS,
+            TopLevelDestination.entries.filterNot(value::contains).joinToString(",") { it.name },
+        )
+        save(properties)
+    }
+
+    @Synchronized
+    fun setAppLock(enabled: Boolean, timeout: AppLockTimeout) {
+        val properties = load()
+        properties.setProperty(KEY_APP_LOCK, enabled.toString())
+        properties.setProperty(KEY_APP_LOCK_TIMEOUT, timeout.name)
         save(properties)
     }
 
@@ -126,5 +158,8 @@ class DesktopConfigStore(
         const val KEY_LAST_SYNC_AT = "cloud.lastSyncAt"
         const val KEY_UI_LANGUAGE = "ui.language"
         const val KEY_LAST_DESTINATION = "ui.lastDestination"
+        const val KEY_HIDDEN_DESTINATIONS = "ui.hiddenDestinations"
+        const val KEY_APP_LOCK = "security.appLock"
+        const val KEY_APP_LOCK_TIMEOUT = "security.appLockTimeout"
     }
 }

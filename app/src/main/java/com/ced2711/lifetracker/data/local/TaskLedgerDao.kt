@@ -469,6 +469,21 @@ interface TaskLedgerDao {
     @Query("DELETE FROM notes WHERE id = :noteId")
     suspend fun deleteNoteById(noteId: Long)
 
+    @Query("SELECT * FROM diary_entries ORDER BY epochDay DESC")
+    fun observeDiaryEntries(): Flow<List<DiaryEntryEntity>>
+
+    @Query("SELECT * FROM diary_entries WHERE epochDay = :epochDay LIMIT 1")
+    suspend fun getDiaryEntry(epochDay: Long): DiaryEntryEntity?
+
+    @Insert
+    suspend fun insertDiaryEntry(entry: DiaryEntryEntity): Long
+
+    @Update
+    suspend fun updateDiaryEntry(entry: DiaryEntryEntity)
+
+    @Query("DELETE FROM diary_entries WHERE epochDay = :epochDay")
+    suspend fun deleteDiaryEntry(epochDay: Long)
+
     @Query("SELECT * FROM attachments WHERE ownerType = :ownerType AND ownerId = :ownerId AND pendingDeleteAt IS NULL ORDER BY createdAt")
     fun observeAttachments(ownerType: String, ownerId: Long): Flow<List<AttachmentEntity>>
 

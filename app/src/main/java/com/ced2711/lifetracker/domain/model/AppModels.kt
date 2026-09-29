@@ -94,7 +94,40 @@ enum class TopLevelDestination {
     LEDGER,
     CALENDAR,
     NOTES,
+    DIARY,
+    CONFESSIONAL,
 }
+
+/**
+ * Navigation order for the visible modules. An empty choice falls back to every module so the app
+ * can never hide all of its navigation. Visibility is a device-local preference, never backed up.
+ */
+fun normalizeVisibleDestinations(selected: Set<TopLevelDestination>): List<TopLevelDestination> =
+    TopLevelDestination.entries.filter { it in selected }.ifEmpty { TopLevelDestination.entries }
+
+/** How long the app may stay in the background before the optional app lock engages again. */
+enum class AppLockTimeout(val millis: Long) {
+    IMMEDIATELY(0),
+    ONE_MINUTE(60_000),
+    FIVE_MINUTES(300_000),
+}
+
+/**
+ * Whether a lock that is enabled should be shown after the app returned to the foreground.
+ * [backgroundedAtElapsed] is null while the app has not been in the background since unlocking.
+ */
+fun appLockExpired(
+    backgroundedAtElapsed: Long?,
+    nowElapsed: Long,
+    timeout: AppLockTimeout,
+): Boolean = backgroundedAtElapsed != null &&
+    (nowElapsed < backgroundedAtElapsed || nowElapsed - backgroundedAtElapsed >= timeout.millis)
+
+/** Where to land when the remembered destination has been hidden. */
+fun resolveVisibleDestination(
+    preferred: TopLevelDestination,
+    visible: List<TopLevelDestination>,
+): TopLevelDestination = if (preferred in visible) preferred else visible.first()
 
 enum class SeriesEditScope {
     ONLY_THIS_OCCURRENCE,
@@ -139,6 +172,20 @@ data class NoteDraft(
     val title: String = "",
     val body: String = "",
     val pinned: Boolean = false,
+)
+
+const val MAX_DIARY_LENGTH = 1_000_000
+
+/** First non-blank line of a diary page, shortened for lists and calendar details. */
+fun diaryPreview(body: String, maximumLength: Int = 80): String {
+    val line = body.lineSequence().map(String::trim).firstOrNull(String::isNotEmpty).orEmpty()
+    return if (line.length <= maximumLength) line else line.take(maximumLength - 1).trimEnd() + "…"
+}
+
+/** One diary page per calendar day; saving a blank body removes that day's page. */
+data class DiaryDraft(
+    val epochDay: Long,
+    val body: String,
 )
 
 /**

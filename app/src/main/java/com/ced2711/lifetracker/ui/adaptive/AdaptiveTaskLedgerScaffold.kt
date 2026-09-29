@@ -22,9 +22,11 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
+import androidx.compose.material.icons.outlined.Book
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.LocalFireDepartment
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -62,7 +64,8 @@ import com.ced2711.lifetracker.domain.model.TopLevelDestination
 
 private val NoInsets = WindowInsets(0, 0, 0, 0)
 private val LocalAuxiliaryTitle = staticCompositionLocalOf<String?> { null }
-private val TopLevelDestinations = TopLevelDestination.entries
+// The modules the user chose to show, in navigation order.
+private val LocalNavigationDestinations = staticCompositionLocalOf<List<TopLevelDestination>> { TopLevelDestination.entries }
 private val CompactHeightThreshold = 320.dp
 private val RailWidth = 80.dp
 private val CompactRailWidth = 64.dp
@@ -86,6 +89,7 @@ fun AdaptiveTaskLedgerScaffold(
     auxiliaryTitle: String? = null,
     modifier: Modifier = Modifier,
     foldingFeature: FoldingFeature? = null,
+    destinations: List<TopLevelDestination> = TopLevelDestination.entries,
     content: @Composable (PaddingValues) -> Unit,
 ) {
     val effectiveAuxiliaryTitle = if (isSettings) auxiliaryTitle ?: "Settings" else null
@@ -122,6 +126,7 @@ fun AdaptiveTaskLedgerScaffold(
         CompositionLocalProvider(
             LocalSafePaneLayout provides safePaneLayout,
             LocalAuxiliaryTitle provides effectiveAuxiliaryTitle,
+            LocalNavigationDestinations provides destinations,
         ) {
             FoldAwareScaffold(
                 safePaneLayout = safePaneLayout,
@@ -457,7 +462,10 @@ private fun TaskLedgerNavigationBar(
         modifier = Modifier.height(if (compact) 48.dp else 72.dp),
         windowInsets = NoInsets,
     ) {
-        TopLevelDestinations.forEach { destination ->
+        val destinations = LocalNavigationDestinations.current
+        // Six items do not fit readable labels on a phone; show only the selected label then.
+        val crowded = destinations.size > 5
+        destinations.forEach { destination ->
             val localizedLabel = localizedText(destination.label)
             NavigationBarItem(
                 selected = !isSettings && selected == destination,
@@ -474,7 +482,7 @@ private fun TaskLedgerNavigationBar(
                 label = if (compact) null else {
                     { Text(localizedLabel, maxLines = 1) }
                 },
-                alwaysShowLabel = !compact,
+                alwaysShowLabel = !compact && !crowded,
             )
         }
     }
@@ -498,7 +506,7 @@ private fun TaskLedgerNavigationRail(
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            TopLevelDestinations.forEach { destination ->
+            LocalNavigationDestinations.current.forEach { destination ->
                 val localizedLabel = localizedText(destination.label)
                 NavigationRailItem(
                 selected = !isSettings && selected == destination,
@@ -633,18 +641,22 @@ private fun PixelPaneBounds.toDpBounds(density: Density): SafePaneBounds = with(
     )
 }
 
-private val TopLevelDestination.label: String
+internal val TopLevelDestination.label: String
     get() = when (this) {
         TopLevelDestination.TODO -> "Todo"
         TopLevelDestination.LEDGER -> "Ledger"
         TopLevelDestination.CALENDAR -> "Calendar"
         TopLevelDestination.NOTES -> "Notes"
+        TopLevelDestination.DIARY -> "Diary"
+        TopLevelDestination.CONFESSIONAL -> "Confessional"
     }
 
-private val TopLevelDestination.icon: ImageVector
+internal val TopLevelDestination.icon: ImageVector
     get() = when (this) {
         TopLevelDestination.TODO -> Icons.Outlined.CheckCircle
         TopLevelDestination.LEDGER -> Icons.Outlined.AccountBalanceWallet
         TopLevelDestination.CALENDAR -> Icons.Outlined.CalendarMonth
         TopLevelDestination.NOTES -> Icons.Outlined.Description
+        TopLevelDestination.DIARY -> Icons.Outlined.Book
+        TopLevelDestination.CONFESSIONAL -> Icons.Outlined.LocalFireDepartment
     }

@@ -34,6 +34,7 @@ data class BackupPreview(
     val attachmentBytes: Long,
     val totalBytes: Long = 0,
     val noteCount: Int = 0,
+    val diaryCount: Int = 0,
 )
 
 data class BackupExportResult(
@@ -215,6 +216,7 @@ class BackupRepository(
             state.ledgerEntries.isEmpty() &&
             state.noteFolders.isEmpty() &&
             state.notes.isEmpty() &&
+            state.diaryEntries.isEmpty() &&
             state.attachments.isEmpty() &&
             state.vaultEntries.isEmpty()
     }
@@ -582,6 +584,7 @@ internal fun buildBackupPreview(snapshot: BackupSnapshot): BackupPreview = Backu
     attachmentCount = snapshot.attachments.size,
     attachmentBytes = snapshot.attachments.sumOf(BackupAttachment::sizeBytes),
     noteCount = snapshot.notes.size,
+    diaryCount = snapshot.diaryEntries.size,
 )
 
 internal fun AppSettings.toBackupSettings() = BackupSettings(
@@ -654,6 +657,7 @@ internal fun BackupDatabaseState.toBackupSnapshot(
         vaultEntries = vaultEntries,
         noteFolders = noteFolders,
         notes = notes,
+        diaryEntries = diaryEntries,
     ).validate()
 }
 

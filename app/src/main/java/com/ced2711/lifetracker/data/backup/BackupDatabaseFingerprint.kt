@@ -39,6 +39,7 @@ internal fun expectedDatabaseFingerprint(
         ledgerEntries = snapshot.ledgerEntries,
         noteFolders = snapshot.noteFolders,
         notes = snapshot.notes,
+        diaryEntries = snapshot.diaryEntries,
         attachments = attachments,
         vaultMarkers = snapshot.vaultEntries.map { VaultMarker(it.id, it.createdAt, it.updatedAt) },
     ),
@@ -62,6 +63,7 @@ internal fun expectedFullDatabaseFingerprint(
         ledgerEntries = snapshot.ledgerEntries,
         noteFolders = snapshot.noteFolders,
         notes = snapshot.notes,
+        diaryEntries = snapshot.diaryEntries,
         attachments = attachments,
         vaultEntries = encryptedVault,
     ),
@@ -80,6 +82,7 @@ private fun rows(state: BackupDatabaseState) = FingerprintRows(
     ledgerEntries = state.ledgerEntries,
     noteFolders = state.noteFolders,
     notes = state.notes,
+    diaryEntries = state.diaryEntries,
     attachments = state.attachments,
     vaultMarkers = state.vaultEntries.map { VaultMarker(it.id, it.createdAt, it.updatedAt) },
 )
@@ -99,6 +102,7 @@ private data class FingerprintRows(
     val ledgerEntries: List<com.ced2711.lifetracker.data.local.LedgerEntryEntity>,
     val noteFolders: List<com.ced2711.lifetracker.data.local.NoteFolderEntity>,
     val notes: List<com.ced2711.lifetracker.data.local.NoteEntity>,
+    val diaryEntries: List<com.ced2711.lifetracker.data.local.DiaryEntryEntity>,
     val attachments: List<AttachmentEntity>,
     val vaultMarkers: List<VaultMarker>,
 )
@@ -159,6 +163,11 @@ private fun fingerprint(rows: FingerprintRows): String {
     rows.notes.sortedBy { it.id }.forEach {
         writer.tag("note"); writer.long(it.id); writer.longOrNull(it.folderId)
         writer.string(it.title); writer.string(it.body); writer.bool(it.pinned)
+        writer.long(it.createdAt); writer.long(it.updatedAt)
+    }
+    // Per-row tags only: data without diary pages keeps the fingerprint it had before diaries existed.
+    rows.diaryEntries.sortedBy { it.id }.forEach {
+        writer.tag("diary"); writer.long(it.id); writer.long(it.epochDay); writer.string(it.body)
         writer.long(it.createdAt); writer.long(it.updatedAt)
     }
     rows.attachments.sortedBy { it.id }.forEach {

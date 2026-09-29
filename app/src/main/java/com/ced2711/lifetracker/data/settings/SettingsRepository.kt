@@ -12,6 +12,7 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.ced2711.lifetracker.domain.model.DateFormatOption
 import com.ced2711.lifetracker.domain.model.AccentColor
+import com.ced2711.lifetracker.domain.model.AppLockTimeout
 import com.ced2711.lifetracker.domain.model.ThemeMode
 import com.ced2711.lifetracker.domain.model.TimeFormatOption
 import com.ced2711.lifetracker.domain.model.TopLevelDestination
@@ -36,6 +37,10 @@ data class AppSettings(
     val defaultReminderOffsetsMinutes: Set<Long> = setOf(0L),
     val todoQuickAddFields: Set<TodoQuickAddField> = emptySet(),
     val lastDestination: TopLevelDestination = TopLevelDestination.TODO,
+    // Device-local preferences below are never written to or restored from a backup.
+    val visibleDestinations: Set<TopLevelDestination> = TopLevelDestination.entries.toSet(),
+    val appLockEnabled: Boolean = false,
+    val appLockTimeout: AppLockTimeout = AppLockTimeout.ONE_MINUTE,
 )
 
 class SettingsRepository internal constructor(
@@ -55,6 +60,10 @@ class SettingsRepository internal constructor(
         val defaultReminderOffsetsMinutes = stringSetPreferencesKey("default_reminder_offsets_minutes")
         val todoQuickAddFields = stringSetPreferencesKey("todo_quick_add_fields")
         val lastDestination = stringPreferencesKey("last_destination")
+        // Hidden rather than visible modules are stored so modules added later start visible.
+        val hiddenDestinations = stringSetPreferencesKey("hidden_destinations")
+        val appLockEnabled = booleanPreferencesKey("app_lock_enabled")
+        val appLockTimeout = stringPreferencesKey("app_lock_timeout")
     }
 
     val settings: Flow<AppSettings> = dataStore.data.map { preferences -> preferences.toAppSettings() }
@@ -80,6 +89,11 @@ class SettingsRepository internal constructor(
                 .mapNotNull { saved -> TodoQuickAddField.entries.firstOrNull { it.name == saved } }
                 .toSet(),
             lastDestination = this[Keys.lastDestination].enumOrDefault(TopLevelDestination.TODO),
+            visibleDestinations = this[Keys.hiddenDestinations].orEmpty().let { hidden ->
+                TopLevelDestination.entries.filterNot { it.name in hidden }.toSet()
+            },
+            appLockEnabled = this[Keys.appLockEnabled] ?: false,
+            appLockTimeout = this[Keys.appLockTimeout].enumOrDefault(AppLockTimeout.ONE_MINUTE),
         )
 
     suspend fun setTheme(value: ThemeMode) = edit(Keys.theme, value.name)
@@ -104,6 +118,12 @@ class SettingsRepository internal constructor(
         value.mapTo(mutableSetOf()) { it.name },
     )
     suspend fun setLastDestination(value: TopLevelDestination) = edit(Keys.lastDestination, value.name)
+    suspend fun setVisibleDestinations(value: Set<TopLevelDestination>) = edit(
+        Keys.hiddenDestinations,
+        TopLevelDestination.entries.filterNot(value::contains).mapTo(mutableSetOf()) { it.name },
+    )
+    suspend fun setAppLockEnabled(value: Boolean) = edit(Keys.appLockEnabled, value)
+    suspend fun setAppLockTimeout(value: AppLockTimeout) = edit(Keys.appLockTimeout, value.name)
 
     /** Returns one normalized, complete settings value suitable for an encrypted backup. */
     suspend fun snapshot(): AppSettings = settings.first()
@@ -156,6 +176,9 @@ class SettingsRepository internal constructor(
 private fun AppSettings.sameRestorableSettings(other: AppSettings): Boolean = copy(
     uiLanguage = other.uiLanguage,
     lastDestination = other.lastDestination,
+    visibleDestinations = other.visibleDestinations,
+    appLockEnabled = other.appLockEnabled,
+    appLockTimeout = other.appLockTimeout,
 ) == other
 
 private inline fun <reified T : Enum<T>> String?.enumOrDefault(default: T): T =

@@ -2,6 +2,7 @@ package com.ced2711.lifetracker.data.backup
 
 import com.ced2711.lifetracker.data.local.AttachmentEntity
 import com.ced2711.lifetracker.data.local.CategoryEntity
+import com.ced2711.lifetracker.data.local.DiaryEntryEntity
 import com.ced2711.lifetracker.data.local.LedgerEntryEntity
 import com.ced2711.lifetracker.data.local.LedgerOccurrenceExceptionEntity
 import com.ced2711.lifetracker.data.local.LedgerSeriesEntity
@@ -114,6 +115,7 @@ data class BackupSnapshot(
     val vaultEntries: List<VaultEntry>,
     val noteFolders: List<NoteFolderEntity> = emptyList(),
     val notes: List<NoteEntity> = emptyList(),
+    val diaryEntries: List<DiaryEntryEntity> = emptyList(),
 )
 
 sealed class BackupException(message: String, cause: Throwable? = null) : Exception(message, cause)
@@ -130,7 +132,8 @@ object BackupLimits {
     const val LEGACY_SNAPSHOT_VERSION = 1
     const val ACCENT_COLOR_SNAPSHOT_VERSION = 3
     const val NOTES_SNAPSHOT_VERSION = 4
-    const val SNAPSHOT_VERSION = NOTES_SNAPSHOT_VERSION
+    const val DIARY_SNAPSHOT_VERSION = 5
+    const val SNAPSHOT_VERSION = DIARY_SNAPSHOT_VERSION
     const val MAX_RECORDS_PER_TABLE = 100_000
     const val MAX_TOTAL_RECORDS = 300_000
     const val MAX_TEXT_UTF8_BYTES = 1024 * 1024
@@ -167,6 +170,7 @@ fun BackupSnapshot.validate(): BackupSnapshot {
         vaultEntries.size,
         noteFolders.size,
         notes.size,
+        diaryEntries.size,
     )
     invalidIf(tables.any { it > BackupLimits.MAX_RECORDS_PER_TABLE }, "A table exceeds the record limit.")
     invalidIf(tables.sumOf(Int::toLong) > BackupLimits.MAX_TOTAL_RECORDS, "Snapshot has too many records.")
@@ -176,6 +180,10 @@ fun BackupSnapshot.validate(): BackupSnapshot {
         formatVersion < BackupLimits.NOTES_SNAPSHOT_VERSION &&
             (noteFolders.isNotEmpty() || notes.isNotEmpty()),
         "This snapshot version cannot contain notes.",
+    )
+    invalidIf(
+        formatVersion < BackupLimits.DIARY_SNAPSHOT_VERSION && diaryEntries.isNotEmpty(),
+        "This snapshot version cannot contain diary entries.",
     )
     val categoryIds = categories.uniquePositiveIds("category", CategoryEntity::id)
     categories.forEach { category ->
@@ -294,6 +302,15 @@ fun BackupSnapshot.validate(): BackupSnapshot {
         text(note.body, "Note body")
         invalidIf(note.title.isBlank(), "Note title is empty.")
         timestampOrder(note.createdAt, note.updatedAt, "Note")
+    }
+
+    diaryEntries.uniquePositiveIds("diary entry", DiaryEntryEntity::id)
+    uniquePairs(diaryEntries, "diary day") { it.epochDay }
+    diaryEntries.forEach { entry ->
+        epochDay(entry.epochDay, "Diary date")
+        text(entry.body, "Diary entry")
+        invalidIf(entry.body.isBlank(), "Diary entry is empty.")
+        timestampOrder(entry.createdAt, entry.updatedAt, "Diary entry")
     }
 
     attachments.uniquePositiveIds("attachment", BackupAttachment::id)

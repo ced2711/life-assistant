@@ -32,6 +32,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
@@ -42,6 +43,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
@@ -97,6 +99,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -110,6 +114,11 @@ import com.ced2711.lifetracker.data.local.TodoEntity
 import com.ced2711.lifetracker.domain.model.AttachmentOwnerType
 import com.ced2711.lifetracker.domain.model.AccentColor
 import com.ced2711.lifetracker.domain.model.AppIdentity
+import com.ced2711.lifetracker.domain.model.AppLockTimeout
+import com.ced2711.lifetracker.domain.model.appLockExpired
+import com.ced2711.lifetracker.domain.model.diaryPreview
+import com.ced2711.lifetracker.domain.model.normalizeVisibleDestinations
+import com.ced2711.lifetracker.domain.model.resolveVisibleDestination
 import com.ced2711.lifetracker.domain.model.DateFormatOption
 import com.ced2711.lifetracker.domain.model.LedgerType
 import com.ced2711.lifetracker.domain.model.ThemeMode
@@ -151,6 +160,8 @@ private enum class DesktopDestination(val label: String, val icon: ImageVector) 
     LEDGER("Ledger", Icons.Default.Payments),
     CALENDAR("Calendar", Icons.Default.CalendarMonth),
     NOTES("Notes", Icons.AutoMirrored.Filled.Notes),
+    DIARY("Diary", Icons.Default.Book),
+    CONFESSIONAL("Confessional", Icons.Default.LocalFireDepartment),
     VAULT("Vault", Icons.Default.Lock),
     SETTINGS("Settings", Icons.Default.Settings),
 }
@@ -193,6 +204,21 @@ fun LifeTrackerDesktopApp() {
         CoroutineExceptionHandler { _, error -> reportError(error) }
     }
     val scope = rememberCoroutineScope { rootHandler }
+    // Optional app lock. It re-asks for the data password even when Windows remembers it.
+    var appLockEnabled by remember { mutableStateOf(config.read().appLockEnabled) }
+    var appLockTimeout by remember { mutableStateOf(config.read().appLockTimeout) }
+    var appLocked by remember { mutableStateOf(false) }
+    var unfocusedAt by remember { mutableStateOf<Long?>(null) }
+    val windowFocused = LocalWindowInfo.current.isWindowFocused
+    LaunchedEffect(windowFocused) {
+        val now = System.nanoTime() / 1_000_000
+        if (!windowFocused) {
+            if (!appLocked) unfocusedAt = now
+        } else {
+            if (appLockEnabled && appLockExpired(unfocusedAt, now, appLockTimeout)) appLocked = true
+            unfocusedAt = null
+        }
+    }
 
     DisposableEffect(Unit) {
         onDispose { dataStore.close() }
@@ -200,7 +226,10 @@ fun LifeTrackerDesktopApp() {
     LaunchedEffect(Unit) {
         val saved = credentials.load(WindowsCredentialStore.LOCAL_PASSWORD)
         if (saved != null) {
-            if (dataStore.open(saved.copyOf())) cloud.start(scope)
+            if (dataStore.open(saved.copyOf())) {
+                appLocked = appLockEnabled
+                cloud.start(scope)
+            }
             saved.fill('\u0000')
         }
     }
@@ -220,6 +249,7 @@ fun LifeTrackerDesktopApp() {
                             val copyForStore = password.copyOf()
                             val opened = dataStore.open(copyForStore)
                             if (opened) {
+                                appLocked = false
                                 if (rememberOnPc) {
                                     credentials.save(
                                         WindowsCredentialStore.LOCAL_PASSWORD,
@@ -239,6 +269,7 @@ fun LifeTrackerDesktopApp() {
                         scope.launch {
                             val opened = dataStore.open(password.copyOf())
                             if (opened) {
+                                appLocked = false
                                 if (rememberOnPc) credentials.save(
                                     WindowsCredentialStore.LOCAL_PASSWORD,
                                     password.copyOf(),
@@ -249,13 +280,22 @@ fun LifeTrackerDesktopApp() {
                         }
                     },
                 )
-                is DesktopStoreState.Open -> DesktopHome(
+                is DesktopStoreState.Open -> if (appLockEnabled && appLocked) {
+                    DesktopAppLockScreen(verify = dataStore::verifyPassword, onUnlocked = { appLocked = false })
+                } else DesktopHome(
                     snapshot = current.snapshot,
                     dataStore = dataStore,
                     cloud = cloud,
                     configStore = config,
                     credentials = credentials,
                     onUiLanguageChanged = { uiLanguage = it },
+                    appLockEnabled = appLockEnabled,
+                    appLockTimeout = appLockTimeout,
+                    onAppLockChanged = { enabled, timeout ->
+                        config.setAppLock(enabled, timeout)
+                        appLockEnabled = enabled
+                        appLockTimeout = timeout
+                    },
                 )
                 }
             }
@@ -341,9 +381,16 @@ private fun DesktopHome(
     configStore: DesktopConfigStore,
     credentials: WindowsCredentialStore,
     onUiLanguageChanged: (UiLanguage) -> Unit,
+    appLockEnabled: Boolean,
+    appLockTimeout: AppLockTimeout,
+    onAppLockChanged: (Boolean, AppLockTimeout) -> Unit,
 ) {
-    val configuredDestination = configStore.read().lastDestination.toDesktopDestination()
+    var visibleDestinations by remember { mutableStateOf(normalizeVisibleDestinations(configStore.read().visibleDestinations)) }
+    val configuredDestination = resolveVisibleDestination(configStore.read().lastDestination, visibleDestinations)
+        .toDesktopDestination()
     var destination by remember { mutableStateOf(configuredDestination) }
+    var requestedDiaryDay by remember { mutableStateOf<Long?>(null) }
+    val confessionStore = remember { DesktopConfessionStore() }
     val scope = rememberSafeCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
     val cloudState by cloud.state.collectAsDesktopState()
@@ -356,7 +403,7 @@ private fun DesktopHome(
         }
     }
 
-    val mainDestinations = remember { listOf(DesktopDestination.TODO, DesktopDestination.LEDGER, DesktopDestination.CALENDAR, DesktopDestination.NOTES) }
+    val mainDestinations = visibleDestinations.map { it.toDesktopDestination() }
     fun navigate(to: DesktopDestination) {
         destination = to
         if (to in mainDestinations) configStore.setLastDestination(to.toTopLevelDestination())
@@ -402,7 +449,7 @@ private fun DesktopHome(
                     ) {
                         Spacer(Modifier.weight(1f))
                         if (destination == DesktopDestination.SETTINGS || destination == DesktopDestination.VAULT) {
-                            IconButton(onClick = { navigate(DesktopDestination.NOTES) }) {
+                            IconButton(onClick = { navigate(mainDestinations.first()) }) {
                                 Icon(Icons.Default.ChevronLeft, desktopText("Back"))
                             }
                         } else {
@@ -414,7 +461,17 @@ private fun DesktopHome(
                     when (destination) {
                         DesktopDestination.TODO -> TodoPage(snapshot, dataStore)
                         DesktopDestination.LEDGER -> LedgerPage(snapshot, dataStore)
-                        DesktopDestination.CALENDAR -> CalendarPage(snapshot, dataStore)
+                        DesktopDestination.CALENDAR -> CalendarPage(
+                            snapshot = snapshot,
+                            store = dataStore,
+                            showDiary = DesktopDestination.DIARY in mainDestinations,
+                            onOpenDiary = { day ->
+                                requestedDiaryDay = day
+                                navigate(DesktopDestination.DIARY)
+                            },
+                        )
+                        DesktopDestination.DIARY -> DiaryPage(snapshot, dataStore, requestedDiaryDay) { requestedDiaryDay = null }
+                        DesktopDestination.CONFESSIONAL -> ConfessionalPage(confessionStore, dataStore::verifyPassword)
                         DesktopDestination.NOTES -> NotesPage(snapshot, dataStore) { destination = DesktopDestination.VAULT }
                         DesktopDestination.VAULT -> VaultPage(snapshot, dataStore)
                         DesktopDestination.SETTINGS -> SettingsPage(
@@ -426,6 +483,15 @@ private fun DesktopHome(
                             openVault = { destination = DesktopDestination.VAULT },
                             onUiLanguageChanged = onUiLanguageChanged,
                             forgetLocalPassword = { credentials.delete(WindowsCredentialStore.LOCAL_PASSWORD) },
+                            visibleDestinations = visibleDestinations.toSet(),
+                            onVisibleDestinationsChanged = { selected ->
+                                configStore.setVisibleDestinations(selected)
+                                visibleDestinations = normalizeVisibleDestinations(selected)
+                            },
+                            appLockEnabled = appLockEnabled,
+                            appLockTimeout = appLockTimeout,
+                            onAppLockChanged = onAppLockChanged,
+                            verifyPassword = dataStore::verifyPassword,
                         )
                     }
                 }
@@ -454,7 +520,7 @@ private fun DesktopHome(
 }
 
 @Composable
-private fun PageHeader(title: String, subtitle: String? = null) {
+internal fun PageHeader(title: String, subtitle: String? = null) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 18.dp)) {
         Text(desktopText(title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         if (subtitle != null) Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -587,6 +653,13 @@ private fun TodoPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
             todo = editing,
             snapshot = snapshot,
             onDismiss = { adding = false; editing = null },
+            onDelete = editing?.let { todo ->
+                {
+                    scope.launch { store.deleteTodo(todo.id) }
+                    adding = false
+                    editing = null
+                }
+            },
             onSave = { title, description, date, priority, categoryId, tags, completed ->
                 scope.launch {
                     store.upsertTodo(
@@ -618,6 +691,7 @@ private fun TodoEditorDialog(
     todo: TodoEntity?,
     snapshot: BackupSnapshot,
     onDismiss: () -> Unit,
+    onDelete: (() -> Unit)? = null,
     onSave: (String, String, Long?, TodoPriority, Long?, String, Boolean) -> Unit,
 ) {
     var title by remember { mutableStateOf(todo?.title.orEmpty()) }
@@ -633,6 +707,7 @@ private fun TodoEditorDialog(
     var categoryId by remember { mutableStateOf(todo?.categoryId) }
     var tags by remember { mutableStateOf(todo?.tagsCsv.orEmpty()) }
     var completed by remember { mutableStateOf(todo?.completedAt != null) }
+    var confirmDelete by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(desktopText(if (todo == null) "New todo" else "Edit todo")) },
@@ -664,7 +739,16 @@ private fun TodoEditorDialog(
                 }
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(desktopText("Cancel")) } },
+        dismissButton = {
+            Row {
+                if (onDelete != null) {
+                    TextButton(onClick = { confirmDelete = true }) {
+                        Text(desktopText("Delete"), color = MaterialTheme.colorScheme.error)
+                    }
+                }
+                TextButton(onClick = onDismiss) { Text(desktopText("Cancel")) }
+            }
+        },
         confirmButton = {
             val day = deadline.takeIf(String::isNotBlank)?.let { SmartDateParser.parse(it, LocalDate.now())?.toEpochDay() }
             Button(enabled = description.isNotBlank() && (deadline.isBlank() || day != null), onClick = {
@@ -672,10 +756,20 @@ private fun TodoEditorDialog(
             }) { Text(desktopText("Save")) }
         },
     )
+    if (confirmDelete && onDelete != null) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text(desktopText("Delete this todo?")) },
+            text = { Text(todo?.title.orEmpty()) },
+            confirmButton = { TextButton(onClick = { confirmDelete = false; onDelete() }) { Text(desktopText("Delete")) } },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(desktopText("Cancel")) } },
+        )
+    }
 }
 
 @Composable
-private fun FilterChipSimple(label: String, selected: Boolean, onClick: () -> Unit) {
+internal fun FilterChipSimple(
+label: String, selected: Boolean, onClick: () -> Unit) {
     Surface(
         modifier = Modifier.clip(RoundedCornerShape(50)).clickable(onClick = onClick),
         shape = RoundedCornerShape(50),
@@ -838,7 +932,13 @@ private fun LedgerEditorDialog(
 }
 
 @Composable
-private fun CalendarPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
+private fun CalendarPage(
+    snapshot: BackupSnapshot,
+    store: DesktopDataStore,
+    showDiary: Boolean,
+    onOpenDiary: (Long) -> Unit,
+) {
+    val diaryDays = if (showDiary) snapshot.diaryEntries.associateBy { it.epochDay } else emptyMap()
     val scope = rememberSafeCoroutineScope()
     var month by remember { mutableStateOf(YearMonth.now()) }
     var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
@@ -868,6 +968,13 @@ private fun CalendarPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
                     val ledger = snapshot.ledgerEntries.filter { it.epochDay == epoch && it.deletedAt == null }
                     val net = ledger.sumOf { if (it.type == LedgerType.INCOME) it.amountCents else -it.amountCents }
                     Card(Modifier.padding(3.dp).height(104.dp).clickable { selectedDate = date }) {
+                        Box(Modifier.fillMaxSize()) {
+                        if (epoch in diaryDays) {
+                            Box(
+                                Modifier.align(Alignment.TopEnd).padding(8.dp).size(7.dp)
+                                    .clip(CircleShape).background(Color(0xFF65D28A)),
+                            )
+                        }
                         Column(Modifier.padding(8.dp)) {
                             Text(date.dayOfMonth.toString(), fontWeight = if (date == LocalDate.now()) FontWeight.Bold else FontWeight.Normal)
                             Box(Modifier.fillMaxWidth().height(22.dp), contentAlignment = Alignment.Center) {
@@ -912,6 +1019,7 @@ private fun CalendarPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
                                 }
                             }
                         }
+                        }
                     }
                 }
             }
@@ -928,6 +1036,21 @@ private fun CalendarPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
                     Modifier.widthIn(max = 620.dp).fillMaxWidth().heightIn(max = 520.dp).verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    if (showDiary) {
+                        val diary = diaryDays[date.toEpochDay()]
+                        Text(desktopText("Diary"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                diary?.let { diaryPreview(it.body) } ?: desktopText("No diary entry"),
+                                Modifier.weight(1f),
+                                color = if (diary != null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            TextButton(onClick = { selectedDate = null; onOpenDiary(date.toEpochDay()) }) {
+                                Text(desktopText(if (diary != null) "Open diary" else "Write diary"))
+                            }
+                        }
+                        HorizontalDivider()
+                    }
                     Text(desktopText("Todos"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     if (todoRows.isEmpty()) Text(desktopText("No todos"), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     todoRows.forEach { todo ->
@@ -970,7 +1093,15 @@ private fun CalendarPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
         )
     }
     editingTodo?.let { todo ->
-        TodoEditorDialog(todo, snapshot, { editingTodo = null }) { title, description, day, priority, categoryId, tags, completed ->
+        TodoEditorDialog(
+            todo,
+            snapshot,
+            { editingTodo = null },
+            onDelete = {
+                scope.launch { store.deleteTodo(todo.id) }
+                editingTodo = null
+            },
+        ) { title, description, day, priority, categoryId, tags, completed ->
             scope.launch { store.upsertTodo(todo.id, title, description, day, priority, categoryId, tags, completed) }
             editingTodo = null
         }
@@ -1171,6 +1302,12 @@ private fun SettingsPage(
     openVault: () -> Unit,
     onUiLanguageChanged: (UiLanguage) -> Unit,
     forgetLocalPassword: () -> Unit,
+    visibleDestinations: Set<TopLevelDestination>,
+    onVisibleDestinationsChanged: (Set<TopLevelDestination>) -> Unit,
+    appLockEnabled: Boolean,
+    appLockTimeout: AppLockTimeout,
+    onAppLockChanged: (Boolean, AppLockTimeout) -> Unit,
+    verifyPassword: (CharArray) -> Boolean,
 ) {
     val scope = rememberSafeCoroutineScope()
     var connectDialog by remember { mutableStateOf(false) }
@@ -1179,6 +1316,16 @@ private fun SettingsPage(
     var importPasswordVisible by remember { mutableStateOf(false) }
     var backupMessage by remember { mutableStateOf<String?>(null) }
     var showLicenseDialog by remember { mutableStateOf(false) }
+    var confirmDisableLock by remember { mutableStateOf(false) }
+    if (confirmDisableLock) {
+        DataPasswordDialog(
+            title = "Turn off app lock",
+            message = "Enter your data password to turn off the app lock.",
+            verify = verifyPassword,
+            onVerified = { confirmDisableLock = false; onAppLockChanged(false, appLockTimeout) },
+            onDismiss = { confirmDisableLock = false },
+        )
+    }
     val language = LocalUiLanguage.current
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         PageHeader("Settings")
@@ -1193,6 +1340,53 @@ private fun SettingsPage(
             } else Button(onClick = { connectDialog = true }) { Text(desktopText("Connect Google Drive")) }
         } }
         Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { Text(desktopText("Local security"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold); Text(desktopText("Local data is password-encrypted. Windows can remember the password using DPAPI for this Windows account.")); OutlinedButton(onClick = forgetLocalPassword) { Text(desktopText("Forget remembered password")) } } }
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(desktopText("App lock"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(desktopText("Ask for the data password when returning to the app"))
+                        Text(
+                            desktopText("Applies even when Windows remembers the password."),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(appLockEnabled, { enabled ->
+                        // Turning the lock off needs the password, so an unattended PC cannot drop it.
+                        if (enabled) onAppLockChanged(true, appLockTimeout) else confirmDisableLock = true
+                    })
+                }
+                if (appLockEnabled) {
+                    Text(desktopText("Lock after leaving the app"))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(AppLockTimeout.entries, key = { it.name }) { timeout ->
+                            FilterChipSimple(desktopText(timeout.desktopLabel), timeout == appLockTimeout) {
+                                onAppLockChanged(true, timeout)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(desktopText("Modules in menu"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(
+                    desktopText("Hidden modules keep their data. At least one module stays visible."),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(TopLevelDestination.entries, key = { it.name }) { module ->
+                        val shown = module in visibleDestinations
+                        FilterChipSimple(desktopText(module.toDesktopDestination().label), shown) {
+                            val next = if (shown) visibleDestinations - module else visibleDestinations + module
+                            if (next.isNotEmpty()) onVisibleDestinationsChanged(next)
+                        }
+                    }
+                }
+            }
+        }
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1498,6 +1692,8 @@ private fun DesktopDestination.toTopLevelDestination(): TopLevelDestination = wh
     DesktopDestination.LEDGER -> TopLevelDestination.LEDGER
     DesktopDestination.CALENDAR -> TopLevelDestination.CALENDAR
     DesktopDestination.NOTES -> TopLevelDestination.NOTES
+    DesktopDestination.DIARY -> TopLevelDestination.DIARY
+    DesktopDestination.CONFESSIONAL -> TopLevelDestination.CONFESSIONAL
     DesktopDestination.VAULT, DesktopDestination.SETTINGS -> TopLevelDestination.NOTES
 }
 
@@ -1506,10 +1702,12 @@ private fun TopLevelDestination.toDesktopDestination(): DesktopDestination = whe
     TopLevelDestination.LEDGER -> DesktopDestination.LEDGER
     TopLevelDestination.CALENDAR -> DesktopDestination.CALENDAR
     TopLevelDestination.NOTES -> DesktopDestination.NOTES
+    TopLevelDestination.DIARY -> DesktopDestination.DIARY
+    TopLevelDestination.CONFESSIONAL -> DesktopDestination.CONFESSIONAL
 }
 
 @Composable
-private fun rememberSafeCoroutineScope(): CoroutineScope {
+internal fun rememberSafeCoroutineScope(): CoroutineScope {
     val reportError = LocalDesktopErrorReporter.current
     val handler = remember(reportError) {
         CoroutineExceptionHandler { _, error -> reportError(error) }
@@ -1544,4 +1742,11 @@ private fun parseAmountCents(value: String): Long? {
 }
 
 @Composable
-private fun <T> kotlinx.coroutines.flow.StateFlow<T>.collectAsDesktopState(): androidx.compose.runtime.State<T> = collectAsState()
+internal fun <T> kotlinx.coroutines.flow.StateFlow<T>.collectAsDesktopState(): androidx.compose.runtime.State<T> = collectAsState()
+
+private val AppLockTimeout.desktopLabel: String
+    get() = when (this) {
+        AppLockTimeout.IMMEDIATELY -> "Immediately"
+        AppLockTimeout.ONE_MINUTE -> "After 1 minute"
+        AppLockTimeout.FIVE_MINUTES -> "After 5 minutes"
+    }

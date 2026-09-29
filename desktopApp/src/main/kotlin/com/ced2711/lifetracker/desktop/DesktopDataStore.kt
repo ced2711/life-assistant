@@ -10,6 +10,7 @@ import com.ced2711.lifetracker.data.backup.attachmentArchivePath
 import com.ced2711.lifetracker.data.backup.validate
 import com.ced2711.lifetracker.data.local.AttachmentEntity
 import com.ced2711.lifetracker.data.local.CategoryEntity
+import com.ced2711.lifetracker.data.local.DiaryEntryEntity
 import com.ced2711.lifetracker.data.local.LedgerEntryEntity
 import com.ced2711.lifetracker.data.local.NoteEntity
 import com.ced2711.lifetracker.data.local.NoteFolderEntity
@@ -19,6 +20,7 @@ import com.ced2711.lifetracker.domain.model.AppIdentity
 import com.ced2711.lifetracker.domain.model.AttachmentOwnerType
 import com.ced2711.lifetracker.domain.model.DateFormatOption
 import com.ced2711.lifetracker.domain.model.LedgerType
+import com.ced2711.lifetracker.domain.model.MAX_DIARY_LENGTH
 import com.ced2711.lifetracker.domain.model.ThemeMode
 import com.ced2711.lifetracker.domain.model.TimeFormatOption
 import com.ced2711.lifetracker.domain.model.TodoPriority
@@ -192,13 +194,16 @@ class DesktopDataStore(
             snapshot.categories.isEmpty() && snapshot.todos.isEmpty() && snapshot.todoSeries.isEmpty() &&
             snapshot.ledgerEntries.isEmpty() && snapshot.ledgerSeries.isEmpty() &&
             snapshot.noteFolders.isEmpty() && snapshot.notes.isEmpty() &&
+            snapshot.diaryEntries.isEmpty() &&
             snapshot.attachments.isEmpty() && snapshot.vaultEntries.isEmpty()
     } ?: true
 
     suspend fun mutate(transform: (BackupSnapshot) -> BackupSnapshot): Boolean = mutex.withLock {
         withContext(ioDispatcher) {
             val current = currentSnapshot() ?: return@withContext false
-            val updated = transform(current).copy(createdAt = System.currentTimeMillis()).validateForDesktop()
+            val updated = transform(current)
+                .copy(formatVersion = BackupLimits.SNAPSHOT_VERSION, createdAt = System.currentTimeMillis())
+                .validateForDesktop()
             saveLocked(updated)
             _state.value = DesktopStoreState.Open(updated)
             val retainedIds = updated.attachments.mapTo(HashSet(), BackupAttachment::id)
@@ -411,6 +416,48 @@ class DesktopDataStore(
         )
     }
 
+    /** Saves the page for [epochDay]; a blank body removes it. */
+    suspend fun upsertDiary(epochDay: Long, body: String) = mutate { snapshot ->
+        require(body.length <= MAX_DIARY_LENGTH) { "Diary entry is too long" }
+        val existing = snapshot.diaryEntries.firstOrNull { it.epochDay == epochDay }
+        val others = snapshot.diaryEntries.filterNot { it.epochDay == epochDay }
+        when {
+            body.isBlank() -> snapshot.copy(diaryEntries = others)
+            existing?.body == body -> snapshot
+            else -> {
+                val now = System.currentTimeMillis()
+                val entry = existing?.copy(body = body, updatedAt = maxOf(now, existing.createdAt))
+                    ?: DiaryEntryEntity(
+                        id = snapshot.diaryEntries.maxOfOrNull(DiaryEntryEntity::id)?.plus(1) ?: 1L,
+                        epochDay = epochDay,
+                        body = body,
+                        createdAt = now,
+                        updatedAt = now,
+                    )
+                snapshot.copy(diaryEntries = others + entry)
+            }
+        }
+    }
+
+    suspend fun deleteDiary(epochDay: Long) = mutate { snapshot ->
+        snapshot.copy(diaryEntries = snapshot.diaryEntries.filterNot { it.epochDay == epochDay })
+    }
+
+    /** Constant-time check of the open data password, used by the optional app lock. */
+    fun verifyPassword(candidate: CharArray): Boolean {
+        val current = password
+        try {
+            if (current == null) return false
+            var difference = current.size xor candidate.size
+            for (index in current.indices) {
+                difference = difference or (current[index].code xor candidate.getOrElse(index) { '\u0000' }.code)
+            }
+            return difference == 0
+        } finally {
+            candidate.fill('\u0000')
+        }
+    }
+
     suspend fun upsertVault(
         id: String?,
         label: String,
@@ -476,6 +523,7 @@ class DesktopDataStore(
             )
             val candidateFiles = attachmentFiles + (id to target)
             val updated = snapshot.copy(
+                formatVersion = BackupLimits.SNAPSHOT_VERSION,
                 createdAt = System.currentTimeMillis(),
                 attachments = snapshot.attachments + attachment,
             ).validateForDesktop()

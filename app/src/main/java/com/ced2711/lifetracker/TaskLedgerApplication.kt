@@ -3,6 +3,7 @@ package com.ced2711.lifetracker
 import android.app.Application
 import com.ced2711.lifetracker.data.attachment.AttachmentStore
 import com.ced2711.lifetracker.data.backup.BackupRepository
+import com.ced2711.lifetracker.data.confession.ConfessionStore
 import com.ced2711.lifetracker.data.cloud.AndroidCloudSyncEngine
 import com.ced2711.lifetracker.data.cloud.CloudSyncPreferences
 import com.ced2711.lifetracker.data.cloud.CloudSyncSecretStore
@@ -14,6 +15,7 @@ import com.ced2711.lifetracker.data.vault.VaultClipboard
 import com.ced2711.lifetracker.data.vault.VaultKeyManager
 import com.ced2711.lifetracker.data.vault.VaultRepository
 import com.ced2711.lifetracker.launcher.LauncherIconMoodCoordinator
+import com.ced2711.lifetracker.ui.lock.AppLockController
 import com.ced2711.lifetracker.worker.WorkScheduler
 import com.ced2711.lifetracker.worker.CloudSyncScheduler
 import com.ced2711.lifetracker.widget.WidgetRefreshCoordinator
@@ -97,6 +99,11 @@ class AppContainer(application: Application) {
             WorkScheduler.rescheduleAfterSystemTimeChange(application)
             WidgetRefreshCoordinator.refresh(application)
         },
+    )
+    val confessionStore = ConfessionStore(application)
+    val appLock = AppLockController(
+        settings = settingsRepository.settings,
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
     )
     // ClipboardManager construction requires a Looper on API 26. Startup recovery builds the
     // rest of this container on a background dispatcher, while clipboard access is UI-only.

@@ -77,6 +77,7 @@ import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
 import com.ced2711.lifetracker.ui.localization.translateUiText
 import com.ced2711.lifetracker.ui.localization.uiLocale
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -1122,6 +1123,17 @@ fun TodoScreen(
                 draft.id?.let { id ->
                     if (completed) viewModel.completeTodo(id, completeSubtasks = false)
                     else viewModel.restoreTodo(id)
+                }
+            },
+            onDelete = draft.id?.let { id ->
+                {
+                    val todo = allTodos.firstOrNull { it.id == id }
+                    closeEditor()
+                    when {
+                        todo == null -> Unit
+                        todo.seriesId == null -> deleteWithUndo(todo, SeriesEditScope.ONLY_THIS_OCCURRENCE)
+                        else -> deleteTargetId = todo.id
+                    }
                 }
             },
             onDismiss = ::closeEditor,
@@ -2170,6 +2182,8 @@ private fun TodoEditorDialog(
     onCompletionChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
     onSave: (TodoDraft, SeriesEditScope, List<Uri>) -> Unit,
+    // Offered only when editing an existing task; it closes the editor and deletes with Undo.
+    onDelete: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val platformDialogLauncher = rememberHingeSafePlatformDialogLauncher()
@@ -2831,6 +2845,14 @@ private fun TodoEditorDialog(
             horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (onDelete != null) {
+                TextButton(
+                    onClick = onDelete,
+                    enabled = !isSaving,
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                ) { Text(localizedText("Delete")) }
+                Spacer(Modifier.weight(1f))
+            }
             TextButton(onClick = onDismiss, enabled = !isSaving) { Text(localizedText("Cancel")) }
             Spacer(Modifier.width(8.dp))
             Button(

@@ -43,6 +43,9 @@ private fun translateDynamicChinese(text: String): String {
     match("Active \\((\\d+)\\)")?.let { return "待完成（${it.groupValues[1]}）" }
     match("Completed \\((\\d+)\\)")?.let { return "已完成（${it.groupValues[1]}）" }
     match("(\\d+) notes")?.let { return "${it.groupValues[1]} 条笔记" }
+    match("(\\d+) of (\\d+) modules shown")?.let {
+        return "显示 ${it.groupValues[1]}/${it.groupValues[2]} 个功能"
+    }
     match("(\\d+) reminders")?.let { return "${it.groupValues[1]} 个提醒" }
     match("(\\d+) categories selected")?.let { return "已选择 ${it.groupValues[1]} 个分类" }
     match("(\\d+) of 10 files")?.let { return "${it.groupValues[1]}/10 个文件" }
@@ -690,4 +693,68 @@ private val zhHans = mapOf(
     "Website" to "网站",
     "Enter at least one field. Passwords stay encrypted on this device." to "请至少填写一项，密码会加密保存在本机。",
     "Select an entry or use Add." to "请选择一个条目或点击添加。",
+    // Diary
+    "Diary" to "日记",
+    "Diary entries" to "日记",
+    "Previous day" to "前一天",
+    "Next day" to "后一天",
+    "Delete diary entry" to "删除日记",
+    "How was your day?" to "今天过得怎么样？",
+    "Saved automatically. Clearing the text removes the entry." to "自动保存。清空内容即删除这篇日记。",
+    "No diary entries yet" to "还没有日记",
+    "Delete this diary entry?" to "删除这篇日记？",
+    "No diary entry" to "没有日记",
+    "Open diary" to "查看日记",
+    "Write diary" to "写日记",
+    // Confessional
+    "Confessional" to "告解室",
+    "Say what you need to say. Burn it to let it go for good, or seal it on this device. " +
+        "Nothing here is backed up or synced, and screenshots are blocked." to
+        "把想说的话写下来。焚烧它，让它彻底消失；或者封存在这台设备上。这里的内容不会备份或同步，也无法截屏。",
+    "Write it down…" to "写下来……",
+    "Burn" to "焚烧",
+    "Seal" to "封存",
+    "Burned. It's gone." to "已焚烧，它消失了。",
+    "Sealed on this device." to "已封存在这台设备上。",
+    "Open sealed confessions" to "打开封存的告解",
+    "Sealed confessions" to "封存的告解",
+    "Burn all" to "全部焚烧",
+    "Burn every sealed confession?" to "焚烧所有封存的告解？",
+    "They will be permanently deleted from this device." to "它们将从这台设备上永久删除。",
+    "Something went wrong" to "出错了",
+    "The confessional is full. Burn some sealed entries first." to "告解室已满，请先焚烧一些封存的内容。",
+    // App lock and menu
+    "Unlock Life Assistant" to "解锁生活助手",
+    "Life Assistant is locked" to "生活助手已锁定",
+    "Use your fingerprint, face or screen lock to continue." to "请使用指纹、面部或锁屏密码继续。",
+    "This device has no screen lock, so the app lock cannot verify you. Set a screen lock to protect the app." to
+        "此设备没有设置锁屏，软件锁无法验证你的身份。请设置锁屏来保护应用。",
+    "App lock" to "软件锁",
+    "Ask for fingerprint, face or screen lock when opening the app" to "打开应用时需要指纹、面部或锁屏密码验证",
+    "Lock after leaving the app" to "离开应用后锁定",
+    "Immediately" to "立即",
+    "After 1 minute" to "1 分钟后",
+    "After 5 minutes" to "5 分钟后",
+    "Set a screen lock on this device first." to "请先为此设备设置锁屏。",
+    "Turn on app lock" to "开启软件锁",
+    "Turn off app lock" to "关闭软件锁",
+    "Menu" to "菜单",
+    "Modules in menu" to "菜单显示的功能",
+    "All modules" to "全部功能",
+    "Hidden modules keep their data. At least one module stays visible." to "隐藏的功能会保留数据，至少保留一个功能可见。",
+    // Windows-only texts live here too: the "(.+) to (.+)" range rule would otherwise rewrite
+    // any sentence containing " to " before the desktop table is consulted.
+    "Confirm" to "确认",
+    "The password is incorrect." to "密码不正确。",
+    "Enter your data password to continue." to "请输入数据密码继续。",
+    "Ask for the data password when returning to the app" to "回到应用时要求输入数据密码",
+    "Applies even when Windows remembers the password." to "即使 Windows 已记住密码也会生效。",
+    "Enter your data password to turn off the app lock." to "请输入数据密码以关闭软件锁。",
+    "Delete this todo?" to "删除这个待办？",
+    "Say what you need to say. Burn it to let it go for good, or seal it on this PC. " +
+        "Sealed words are protected by Windows and never exported or synced." to
+        "把想说的话写下来。焚烧它，让它彻底消失；或者封存在这台电脑上。封存的内容受 Windows 保护，不会导出或同步。",
+    "Sealed on this PC." to "已封存在这台电脑上。",
+    "Enter your data password to read sealed confessions." to "请输入数据密码查看封存的告解。",
+    "They will be permanently deleted from this PC." to "它们将从这台电脑上永久删除。",
 )

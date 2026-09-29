@@ -10,6 +10,10 @@ By **ced2711** · 中文名：**生活助手** · [Source](https://github.com/ce
 - Manual Income/Expense ledger entries, recurring entries, attachments, summaries, and close-fit trend charts.
 - Month, week, day, and agenda calendar views with daily net amounts and completed/incomplete Todo counts.
 - Long-term Notes with collapsible search and nested-folder controls, pinned notes, and multiple private file/image attachments.
+- Diary with one page per day, saved automatically; days with a page show a small green dot in the calendar.
+- Confessional: write something down, then burn it for good or seal it on this device only. Sealed words are encrypted with a device key (Android Keystore or Windows DPAPI) and are never backed up or synced; screenshots are blocked on Android.
+- Optional app lock, off by default: Android asks for fingerprint, face or screen lock, Windows for the data password, after the app has been in the background for a chosen time.
+- Choose which modules appear in the navigation menu. Hidden modules keep their data.
 - Encrypted local Vault for credentials and private notes, protected by Android system authentication.
 - Password-encrypted `.tlb` backup and full-replacement restore with validation and preview.
 - Responsive Today Todo widget, including wide horizontal layouts.
@@ -32,7 +36,8 @@ Sync transfers complete encrypted datasets. If both sides changed, choose which 
 - Package/application ID: `com.ced2711.lifetracker`
 - Minimum Android version: Android 8.0 / API 26
 - Target SDK: API 36; compile SDK: API 37
-- Local database: Room schema 6, with migrations from schemas 1 through 6
+- Local database: Room schema 7, with migrations from schemas 1 through 7
+- Backup snapshot format 5 adds diary pages. Older app versions cannot open backups or Drive revisions written in this format, so update Android and Windows together before syncing. Older backups remain readable.
 
 Life Assistant 1.7.0 is a display-name change from Life Tracker, not a new Android application. Install it over Life Tracker without uninstalling: the application ID, release certificate, launcher aliases, database, settings, Vault keys, and sync protocol remain unchanged. Windows retains the installer upgrade UUID and the `%APPDATA%/Life Tracker` data directory so existing encrypted data and remembered credentials remain available. The old name in internal paths is intentional compatibility, not unfinished branding.
 
