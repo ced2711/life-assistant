@@ -25,6 +25,7 @@
 ## Lighter
 
 - Android release APK: 18.4 MB → about 4 MB (code and resource shrinking).
+- Windows installer: about 104 MB → 51 MB (ProGuard shrinking of the release build).
 - Backups, cloud uploads and the Windows data file are compressed before encryption; text-heavy
   data shrinks more than five times.
 - Cloud sync keeps the 10 newest versions instead of every version ever uploaded, and only the

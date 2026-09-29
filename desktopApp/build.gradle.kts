@@ -124,6 +124,12 @@ val generateWindowsIcon = tasks.register("generateWindowsIcon") {
 compose.desktop {
     application {
         mainClass = "com.ced2711.lifetracker.desktop.MainKt"
+        buildTypes.release.proguard {
+            // Drops unused Compose code, notably most of the extended icon set.
+            isEnabled.set(true)
+            obfuscate.set(false)
+            configurationFiles.from(project.file("proguard-rules.pro"))
+        }
         nativeDistributions {
             targetFormats(TargetFormat.Exe, TargetFormat.Msi)
             packageName = "Life Assistant"
