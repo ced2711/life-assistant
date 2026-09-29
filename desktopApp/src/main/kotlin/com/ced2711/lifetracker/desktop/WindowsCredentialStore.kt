@@ -88,6 +88,7 @@ class WindowsCredentialStore(
         const val LOCAL_PASSWORD = "local_password"
         const val OAUTH_TOKEN = "google_oauth_token"
         const val OAUTH_CLIENT_SECRET = "google_oauth_client_secret"
+        const val GITHUB_TOKEN = "github_token"
 
         fun isWindows(): Boolean = System.getProperty("os.name").startsWith("Windows", ignoreCase = true)
     }

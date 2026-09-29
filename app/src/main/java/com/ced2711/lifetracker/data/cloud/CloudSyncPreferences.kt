@@ -9,7 +9,16 @@ data class AndroidCloudSyncSettings(
     val automaticSync: Boolean,
     val attention: CloudSyncAttention?,
     val state: LocalCloudSyncState,
+    val provider: CloudProvider = CloudProvider.GOOGLE_DRIVE,
+    val gitHubClientId: String = "",
+    // owner/name of the private repository used when [provider] is GitHub.
+    val gitHubRepository: String = "",
 )
+
+enum class CloudProvider {
+    GOOGLE_DRIVE,
+    GITHUB,
+}
 
 enum class CloudSyncAttention {
     CONFLICT,
@@ -40,12 +49,28 @@ class CloudSyncPreferences(context: Context) {
                 lastContentFingerprint = preferences.getString(KEY_LAST_FINGERPRINT, null),
                 lastSyncAt = preferences.getLong(KEY_LAST_SYNC_AT, -1L).takeIf { it >= 0L },
             ),
+            provider = preferences.getString(KEY_PROVIDER, null)
+                ?.let { saved -> CloudProvider.entries.firstOrNull { it.name == saved } }
+                ?: CloudProvider.GOOGLE_DRIVE,
+            gitHubClientId = preferences.getString(KEY_GITHUB_CLIENT_ID, null).orEmpty(),
+            gitHubRepository = preferences.getString(KEY_GITHUB_REPOSITORY, null).orEmpty(),
         )
     }
 
     @Synchronized
     fun setEnabled(enabled: Boolean) {
         preferences.edit().putBoolean(KEY_ENABLED, enabled).apply()
+    }
+
+    @Synchronized
+    fun setProvider(provider: CloudProvider, gitHubClientId: String = "", gitHubRepository: String = "") {
+        check(
+            preferences.edit()
+                .putString(KEY_PROVIDER, provider.name)
+                .putString(KEY_GITHUB_CLIENT_ID, gitHubClientId)
+                .putString(KEY_GITHUB_REPOSITORY, gitHubRepository)
+                .commit(),
+        ) { "Could not save the cloud provider." }
     }
 
     @Synchronized
@@ -103,5 +128,8 @@ class CloudSyncPreferences(context: Context) {
         const val KEY_LAST_FINGERPRINT = "last_fingerprint"
         const val KEY_LAST_SYNC_AT = "last_sync_at"
         const val KEY_ATTENTION = "attention"
+        const val KEY_PROVIDER = "provider"
+        const val KEY_GITHUB_CLIENT_ID = "github_client_id"
+        const val KEY_GITHUB_REPOSITORY = "github_repository"
     }
 }

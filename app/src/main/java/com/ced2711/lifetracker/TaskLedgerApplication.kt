@@ -88,6 +88,12 @@ class AppContainer(application: Application) {
     )
     val cloudSyncPreferences = CloudSyncPreferences(application)
     val cloudSyncSecretStore = CloudSyncSecretStore(application)
+    val gitHubTokenStore = CloudSyncSecretStore(
+        context = application,
+        preferencesName = "life_assistant_github_token",
+        keyAlias = "life_assistant_github_token_v1",
+        minimumLength = 1,
+    )
     val googleDriveAuthorization = GoogleDriveAuthorization(application)
     val cloudSyncEngine = AndroidCloudSyncEngine(
         context = application,
@@ -95,6 +101,7 @@ class AppContainer(application: Application) {
         preferences = cloudSyncPreferences,
         secretStore = cloudSyncSecretStore,
         authorization = googleDriveAuthorization,
+        gitHubTokenStore = gitHubTokenStore,
         afterRestore = {
             WorkScheduler.rescheduleAfterSystemTimeChange(application)
             WidgetRefreshCoordinator.refresh(application)

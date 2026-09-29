@@ -12,6 +12,8 @@ import java.nio.file.StandardCopyOption
 import java.util.Properties
 import java.util.UUID
 
+enum class DesktopCloudProvider { GOOGLE_DRIVE, GITHUB }
+
 data class DesktopCloudConfig(
     val clientId: String,
     val automaticSync: Boolean,
@@ -21,6 +23,9 @@ data class DesktopCloudConfig(
     val visibleDestinations: Set<TopLevelDestination> = DefaultVisibleDestinations,
     val appLockEnabled: Boolean = false,
     val appLockTimeout: AppLockTimeout = AppLockTimeout.ONE_MINUTE,
+    val provider: DesktopCloudProvider = DesktopCloudProvider.GOOGLE_DRIVE,
+    val gitHubClientId: String = "",
+    val gitHubRepository: String = "",
 )
 
 class DesktopConfigStore(
@@ -64,6 +69,12 @@ class DesktopConfigStore(
             appLockTimeout = properties.getProperty(KEY_APP_LOCK_TIMEOUT)
                 ?.let { value -> AppLockTimeout.entries.firstOrNull { it.name == value } }
                 ?: AppLockTimeout.ONE_MINUTE,
+            provider = properties.getProperty(KEY_PROVIDER)
+                ?.let { value -> DesktopCloudProvider.entries.firstOrNull { it.name == value } }
+                ?: DesktopCloudProvider.GOOGLE_DRIVE,
+            gitHubClientId = properties.getProperty(KEY_GITHUB_CLIENT_ID)
+                ?: System.getenv("LIFE_ASSISTANT_GITHUB_CLIENT_ID").orEmpty(),
+            gitHubRepository = properties.getProperty(KEY_GITHUB_REPOSITORY).orEmpty(),
         )
     }
 
@@ -110,6 +121,15 @@ class DesktopConfigStore(
         val properties = load()
         properties.setProperty(KEY_APP_LOCK, enabled.toString())
         properties.setProperty(KEY_APP_LOCK_TIMEOUT, timeout.name)
+        save(properties)
+    }
+
+    @Synchronized
+    fun setProvider(provider: DesktopCloudProvider, gitHubClientId: String? = null, gitHubRepository: String? = null) {
+        val properties = load()
+        properties.setProperty(KEY_PROVIDER, provider.name)
+        gitHubClientId?.let { properties.setProperty(KEY_GITHUB_CLIENT_ID, it.trim()) }
+        gitHubRepository?.let { properties.setProperty(KEY_GITHUB_REPOSITORY, it.trim()) }
         save(properties)
     }
 
@@ -167,5 +187,8 @@ class DesktopConfigStore(
         const val KEY_HIDDEN_DESTINATIONS = "ui.hiddenDestinations"
         const val KEY_APP_LOCK = "security.appLock"
         const val KEY_APP_LOCK_TIMEOUT = "security.appLockTimeout"
+        const val KEY_PROVIDER = "cloud.provider"
+        const val KEY_GITHUB_CLIENT_ID = "github.clientId"
+        const val KEY_GITHUB_REPOSITORY = "github.repository"
     }
 }

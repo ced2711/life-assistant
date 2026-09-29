@@ -1,5 +1,11 @@
 package com.ced2711.lifetracker.desktop
 
+import java.net.URI
+import java.awt.datatransfer.StringSelection
+import java.awt.Toolkit
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -433,4 +439,69 @@ internal fun ConfessionalPage(store: DesktopConfessionStore, verifyPassword: (Ch
             dismissButton = { TextButton({ confirmBurnAll = false }) { Text(desktopText("Cancel")) } },
         )
     }
+}
+
+@Composable
+internal fun GitHubConnectDialog(
+    defaultClientId: String,
+    defaultRepository: String,
+    onDismiss: () -> Unit,
+    onConnect: (clientId: String, repository: String) -> Unit,
+) {
+    var clientId by remember { mutableStateOf(defaultClientId) }
+    var repository by remember { mutableStateOf(defaultRepository) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(desktopText("Connect GitHub")) },
+        text = {
+            Column(Modifier.widthIn(max = 560.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    desktopText(
+                        "Use a GitHub App with Device Flow on, installed only on one private repository with " +
+                            "Contents read and write permission. Use the same app and repository on Android.",
+                    ),
+                )
+                OutlinedTextField(clientId, { clientId = it.trim() }, label = { Text(desktopText("GitHub App Client ID")) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(repository, { repository = it }, label = { Text(desktopText("Private repository (owner/name, optional)")) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Text(
+                    desktopText("Your data password encrypts every backup before upload. Use the same password on every device."),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(desktopText("Cancel")) } },
+        confirmButton = {
+            Button(enabled = clientId.isNotBlank(), onClick = { onConnect(clientId, repository.trim()) }) {
+                Text(desktopText("Get sign-in code"))
+            }
+        },
+    )
+}
+
+@Composable
+internal fun GitHubCodeDialog(userCode: String, verificationUri: String, onCancel: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = {},
+        title = { Text(desktopText("Approve on GitHub")) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(desktopText("Open GitHub, sign in, and enter this code. This screen continues by itself once you approve."))
+                SelectionContainer {
+                    Text(userCode, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                }
+                Text(verificationUri, style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = {
+                        Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(userCode), null)
+                    }) { Text(desktopText("Copy code")) }
+                    Button(onClick = {
+                        runCatching { java.awt.Desktop.getDesktop().browse(URI(verificationUri)) }
+                    }) { Text(desktopText("Open GitHub")) }
+                }
+                LinearProgressIndicator(Modifier.fillMaxWidth())
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onCancel) { Text(desktopText("Cancel")) } },
+    )
 }

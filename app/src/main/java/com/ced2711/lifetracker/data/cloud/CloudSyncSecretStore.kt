@@ -11,14 +11,19 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-/** Stores the opt-in sync password encrypted by an app-owned Android Keystore key. */
-class CloudSyncSecretStore(context: Context) {
-    private val preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+/** Stores one opt-in secret (the sync password, or a GitHub token) under an app-owned Keystore key. */
+class CloudSyncSecretStore(
+    context: Context,
+    preferencesName: String = PREFERENCES_NAME,
+    private val keyAlias: String = KEY_ALIAS,
+    private val minimumLength: Int = 8,
+) {
+    private val preferences = context.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
     private val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
 
     @Synchronized
     fun save(password: CharArray) {
-        require(password.size >= 8)
+        require(password.size >= minimumLength)
         val plaintext = password.concatToString().toByteArray(StandardCharsets.UTF_8)
         try {
             val cipher = Cipher.getInstance(TRANSFORMATION).apply {
@@ -74,15 +79,15 @@ class CloudSyncSecretStore(context: Context) {
     @Synchronized
     fun clear() {
         preferences.edit().remove(KEY_IV).remove(KEY_CIPHERTEXT).commit()
-        runCatching { keyStore.deleteEntry(KEY_ALIAS) }
+        runCatching { keyStore.deleteEntry(keyAlias) }
     }
 
     private fun getOrCreateKey(): SecretKey {
-        (keyStore.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
+        (keyStore.getKey(keyAlias, null) as? SecretKey)?.let { return it }
         return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE).run {
             init(
                 KeyGenParameterSpec.Builder(
-                    KEY_ALIAS,
+                    keyAlias,
                     KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
                 )
                     .setBlockModes(KeyProperties.BLOCK_MODE_GCM)

@@ -35,6 +35,10 @@ android {
         versionName = "1.7.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Public GitHub App client ID used to prefill GitHub sync; not a secret.
+        val gitHubClientId = providers.gradleProperty("lifeassistant.github.clientId").orNull.orEmpty()
+        require(gitHubClientId.matches(Regex("[A-Za-z0-9._-]*"))) { "Invalid lifeassistant.github.clientId" }
+        buildConfigField("String", "GITHUB_CLIENT_ID", "\"$gitHubClientId\"")
         vectorDrawables.useSupportLibrary = true
     }
 
@@ -65,7 +69,9 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 removes unused code (notably most of the extended icon set) and resources.
+            isMinifyEnabled = true
+            isShrinkResources = true
             taskLedgerReleaseSigning?.let { signingConfig = it }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

@@ -193,7 +193,7 @@ fun LifeTrackerDesktopApp() {
     val credentials = remember { WindowsCredentialStore() }
     val config = remember { DesktopConfigStore() }
     val oauth = remember { DesktopGoogleOAuth(config, credentials) }
-    val cloud = remember { DesktopCloudSyncController(dataStore, config, oauth) }
+    val cloud = remember { DesktopCloudSyncController(dataStore, config, oauth, credentials = credentials) }
     val storeState by dataStore.state.collectAsDesktopState()
     var uiLanguage by remember { mutableStateOf(config.read().uiLanguage) }
     var appError by remember { mutableStateOf<String?>(null) }
@@ -1311,6 +1311,7 @@ private fun SettingsPage(
 ) {
     val scope = rememberSafeCoroutineScope()
     var connectDialog by remember { mutableStateOf(false) }
+    var gitHubDialog by remember { mutableStateOf(false) }
     var importCandidate by remember { mutableStateOf<File?>(null) }
     var importPassword by remember { mutableStateOf("") }
     var importPasswordVisible by remember { mutableStateOf(false) }
@@ -1330,14 +1331,14 @@ private fun SettingsPage(
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         PageHeader("Settings")
         Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.Cloud, null); Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { Text(desktopText("Google Drive sync"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold); Text(desktopText(if (cloudState.connected) "Connected" else "Not connected"), color = MaterialTheme.colorScheme.onSurfaceVariant) } }
-            Text(desktopText("Encrypted snapshots are stored in Life Assistant's private Google Drive app folder. Other Drive files are not accessible."))
-            Text(desktopText("Each upload creates a new encrypted version. Previous versions are kept; conflicts pause sync until you resolve them."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.Cloud, null); Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { Text(desktopText(when { !cloudState.connected -> "Cloud sync"; cloudState.provider == DesktopCloudProvider.GITHUB -> "GitHub sync"; else -> "Google Drive sync" }), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold); Text(if (cloudState.connected && cloudState.provider == DesktopCloudProvider.GITHUB) desktopText("Connected") + " · " + cloudState.gitHubRepository else desktopText(if (cloudState.connected) "Connected" else "Not connected"), color = MaterialTheme.colorScheme.onSurfaceVariant) } }
+            Text(desktopText("Encrypted snapshots are stored in Life Assistant's private Google Drive app folder or a private GitHub repository. Nothing else in those accounts is read."))
+            Text(desktopText("Each upload creates a new encrypted version. The 10 most recent versions are kept; conflicts pause sync until you resolve them."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (cloudState.connected) {
                 Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(desktopText("Automatic sync")); Text(desktopText("Off by default. When enabled, checks every 15 minutes while Life Assistant is running"), style = MaterialTheme.typography.bodySmall) }; Switch(cloudState.automaticSync, cloud::setAutomaticSync) }
                 cloudState.lastSyncAt?.let { Text(desktopLastSync(formatTimestamp(it), LocalUiLanguage.current), color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Button(enabled = !cloudState.syncing, onClick = { scope.launch { cloud.synchronize() } }) { Icon(Icons.Default.Refresh, null); Spacer(Modifier.width(8.dp)); Text(desktopText(if (cloudState.syncing) "Syncing…" else "Sync now")) }; TextButton(enabled = !cloudState.syncing, onClick = { scope.launch { cloud.disconnect() } }) { Text(desktopText("Disconnect / switch account")) } }
-            } else Button(onClick = { connectDialog = true }) { Text(desktopText("Connect Google Drive")) }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Button(enabled = !cloudState.syncing, onClick = { cloud.launch { synchronize() } }) { Icon(Icons.Default.Refresh, null); Spacer(Modifier.width(8.dp)); Text(desktopText(if (cloudState.syncing) "Syncing…" else "Sync now")) }; TextButton(enabled = !cloudState.syncing, onClick = { if (cloudState.provider == DesktopCloudProvider.GITHUB) gitHubDialog = true else connectDialog = true }) { Text(desktopText("Reconnect")) }; TextButton(enabled = !cloudState.syncing, onClick = { cloud.launch { disconnect() } }) { Text(desktopText("Disconnect / switch account")) } }
+            } else Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Button(enabled = !cloudState.syncing, onClick = { connectDialog = true }) { Text(desktopText("Connect Google Drive")) }; OutlinedButton(enabled = !cloudState.syncing, onClick = { gitHubDialog = true }) { Text(desktopText("Connect GitHub")) } }
         } }
         Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { Text(desktopText("Local security"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold); Text(desktopText("Local data is password-encrypted. Windows can remember the password using DPAPI for this Windows account.")); OutlinedButton(onClick = forgetLocalPassword) { Text(desktopText("Forget remembered password")) } } }
         Card(Modifier.fillMaxWidth()) {
@@ -1530,7 +1531,9 @@ private fun SettingsPage(
         }
         Text(desktopAppVersion(language), color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
-    if (connectDialog) GoogleConnectDialog(config.clientId, { connectDialog = false }) { clientId, clientSecret -> connectDialog = false; scope.launch { cloud.connect(clientId, clientSecret) } }
+    if (connectDialog) GoogleConnectDialog(config.clientId, { connectDialog = false }) { clientId, clientSecret -> connectDialog = false; cloud.launch { connect(clientId, clientSecret) } }
+    if (gitHubDialog) GitHubConnectDialog(config.gitHubClientId, config.gitHubRepository, { gitHubDialog = false }) { clientId, repository -> gitHubDialog = false; cloud.startGitHubConnect(clientId, repository) }
+    cloudState.gitHubCode?.let { code -> GitHubCodeDialog(code.userCode, code.verificationUri, cloud::cancelGitHubConnect) }
     importCandidate?.let { candidate ->
         AlertDialog(
             onDismissRequest = { importCandidate = null; importPassword = "" },
@@ -1606,7 +1609,7 @@ private fun loadLegalResource(path: String): String =
 @Composable
 private fun GoogleConnectDialog(defaultClientId: String, onDismiss: () -> Unit, onConnect: (String, CharArray) -> Unit) {
     var clientId by remember { mutableStateOf(defaultClientId) }; var secret by remember { mutableStateOf("") }; var visible by remember { mutableStateOf(false) }
-    AlertDialog(onDismissRequest = onDismiss, title = { Text(desktopText("Connect Google Drive")) }, text = { Column(Modifier.widthIn(max = 560.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) { Text(desktopText("A Google Cloud Desktop OAuth client from the same project as the Android app is required for this open-source build. Sign-in opens in your system browser.")); OutlinedTextField(clientId, { clientId = it.trim() }, label = { Text(desktopText("Desktop OAuth client ID")) }, modifier = Modifier.fillMaxWidth()); OutlinedTextField(secret, { secret = it }, label = { Text(desktopText("Desktop OAuth client secret (optional)")) }, modifier = Modifier.fillMaxWidth(), visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(), trailingIcon = { IconButton({ visible = !visible }) { Icon(if (visible) Icons.Default.VisibilityOff else Icons.Default.Visibility, null) } }); Text(desktopText("If supplied, the client secret is protected by Windows DPAPI. OAuth desktop secrets are application configuration, not a replacement for PKCE."), style = MaterialTheme.typography.bodySmall) } }, dismissButton = { TextButton(onClick = onDismiss) { Text(desktopText("Cancel")) } }, confirmButton = { Button(enabled = clientId.endsWith(".apps.googleusercontent.com"), onClick = { val transferred = secret.toCharArray(); secret = ""; onConnect(clientId, transferred) }) { Text(desktopText("Open Google sign-in")) } })
+    AlertDialog(onDismissRequest = onDismiss, title = { Text(desktopText("Connect Google Drive")) }, text = { Column(Modifier.widthIn(max = 560.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) { Text(desktopText("A Google Cloud Desktop OAuth client from the same project as the Android app is required for this open-source build. Sign-in opens in your system browser.")); OutlinedTextField(clientId, { clientId = it.trim() }, label = { Text(desktopText("Desktop OAuth client ID")) }, modifier = Modifier.fillMaxWidth()); OutlinedTextField(secret, { secret = it }, label = { Text(desktopText("Desktop OAuth client secret")) }, modifier = Modifier.fillMaxWidth(), visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(), trailingIcon = { IconButton({ visible = !visible }) { Icon(if (visible) Icons.Default.VisibilityOff else Icons.Default.Visibility, null) } }); Text(desktopText("Google requires the client secret for Desktop clients. It is protected by Windows DPAPI and is application configuration, not a replacement for PKCE."), style = MaterialTheme.typography.bodySmall) } }, dismissButton = { TextButton(onClick = onDismiss) { Text(desktopText("Cancel")) } }, confirmButton = { Button(enabled = clientId.endsWith(".apps.googleusercontent.com") && secret.isNotBlank(), onClick = { val transferred = secret.toCharArray(); secret = ""; onConnect(clientId, transferred) }) { Text(desktopText("Open Google sign-in")) } })
 }
 
 private fun chooseAndAttach(scope: kotlinx.coroutines.CoroutineScope, store: DesktopDataStore, ownerType: AttachmentOwnerType, ownerId: Long) {

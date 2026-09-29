@@ -43,6 +43,12 @@ private fun translateDynamicChinese(text: String): String {
     match("Active \\((\\d+)\\)")?.let { return "待完成（${it.groupValues[1]}）" }
     match("Completed \\((\\d+)\\)")?.let { return "已完成（${it.groupValues[1]}）" }
     match("(\\d+) notes")?.let { return "${it.groupValues[1]} 条笔记" }
+    match("The GitHub app cannot write to (.+)\\. Install it on that repository with Contents read and write permission\\.")?.let {
+        return "GitHub App 无法写入 ${it.groupValues[1]}。请把它安装到这个仓库，并授予 Contents 读写权限。"
+    }
+    match("The GitHub App can access several repositories \\((.+)\\)\\. Enter the one to use\\.")?.let {
+        return "GitHub App 可以访问多个仓库（${it.groupValues[1]}），请填写要使用的那一个。"
+    }
     match("(\\d+) of (\\d+) modules shown")?.let {
         return "显示 ${it.groupValues[1]}/${it.groupValues[2]} 个功能"
     }
@@ -757,4 +763,82 @@ private val zhHans = mapOf(
     "Sealed on this PC." to "已封存在这台电脑上。",
     "Enter your data password to read sealed confessions." to "请输入数据密码查看封存的告解。",
     "They will be permanently deleted from this PC." to "它们将从这台电脑上永久删除。",
+    // Cloud sync providers
+    "GitHub sync" to "GitHub 同步",
+    "Connect GitHub" to "连接 GitHub",
+    "Sync password-encrypted snapshots between Android and Windows through Google Drive's " +
+        "private app folder or a private GitHub repository. Cloud sync is optional; " +
+        "Life Assistant works offline by default." to
+        "通过 Google Drive 的私有应用文件夹或 GitHub 私有仓库，在 Android 和 Windows 之间同步用密码加密的快照。云同步是可选的，生活助手默认离线使用。",
+    "Each upload creates a new encrypted version. The 10 most recent versions are kept; " +
+        "conflicts pause sync." to "每次上传都会生成一个新的加密版本，只保留最近 10 个版本；出现冲突时会暂停同步。",
+    "Each upload creates a new encrypted version. The 10 most recent versions are kept; conflicts pause sync until you resolve them." to
+        "每次上传都会生成一个新的加密版本，只保留最近 10 个版本；出现冲突时会暂停同步，直到你处理冲突。",
+    "Google Drive needs Drive API access, package com.ced2711.lifetracker, and this " +
+        "build's signing SHA-1 registered in Google Cloud. Android and Windows must " +
+        "use the same Google Cloud project and account." to
+        "Google Drive 需要在 Google Cloud 中启用 Drive API，并登记包名 com.ced2711.lifetracker 和本版本的签名 SHA-1。Android 和 Windows 必须使用同一个 Google Cloud 项目和账号。",
+    "GitHub needs a GitHub App with Device Flow on, installed only on one private " +
+        "repository with Contents read and write permission. Use the same app and " +
+        "repository on every device." to
+        "GitHub 同步需要一个开启 Device Flow 的 GitHub App，只安装在一个私有仓库上，并授予 Contents 读写权限。所有设备使用同一个 App 和仓库。",
+    "Choose a sync password. You will enter the same password on Windows or a new device. " +
+        "Nobody can recover it for you." to "设置一个同步密码。在 Windows 或新设备上要输入同一个密码。任何人都无法帮你找回它。",
+    "GitHub App Client ID" to "GitHub App 客户端 ID",
+    "Private repository (owner/name, optional)" to "私有仓库（所有者/名称，可选）",
+    "Approve on GitHub" to "在 GitHub 上授权",
+    "Open GitHub, sign in, and enter this code. This screen continues by itself once you approve." to
+        "打开 GitHub 并登录，输入下面的代码。授权后此页面会自动继续。",
+    "Copy code" to "复制代码",
+    "Open GitHub" to "打开 GitHub",
+    "Get sign-in code" to "获取登录代码",
+    "No browser is available to open GitHub." to "没有可以打开 GitHub 的浏览器。",
+    "Encrypted snapshots are stored in Life Assistant's private Google Drive app folder or a private GitHub repository. Nothing else in those accounts is read." to
+        "加密快照保存在生活助手在 Google Drive 中的私有应用文件夹或 GitHub 私有仓库中，不会读取这些账号里的其他内容。",
+    "Use a GitHub App with Device Flow on, installed only on one private repository with " +
+        "Contents read and write permission. Use the same app and repository on Android." to
+        "使用一个开启 Device Flow 的 GitHub App，只安装在一个私有仓库上，并授予 Contents 读写权限。Android 上要使用同一个 App 和仓库。",
+    "Your data password encrypts every backup before upload. Use the same password on every device." to
+        "每个备份在上传前都会用你的数据密码加密。所有设备要使用同一个密码。",
+    "Desktop OAuth client secret" to "Desktop OAuth 客户端密钥",
+    "Google requires the client secret for Desktop clients. It is protected by Windows DPAPI and is application configuration, not a replacement for PKCE." to
+        "Google 要求桌面客户端提供客户端密钥。它由 Windows DPAPI 保护，属于应用配置，不能代替 PKCE。",
+    "GitHub connected." to "已连接 GitHub。",
+    "GitHub reconnected." to "已重新连接 GitHub。",
+    "GitHub connection cancelled." to "已取消连接 GitHub。",
+    "GitHub disconnected. Local data was kept." to "已断开 GitHub，本机数据已保留。",
+    "Cloud sync failed." to "云同步失败。",
+    "Cloud sync is disabled." to "云同步已关闭。",
+    "Both this device and the cloud backup changed." to "本设备和云端备份都有改动。",
+    "This PC and the cloud backup both changed." to "这台电脑和云端备份都有改动。",
+    "The cloud backup changed before upload. Sync again to review it." to "上传前云端备份发生了变化，请再次同步以查看。",
+    "The cloud backup changed before upload. Review the refreshed conflict." to "上传前云端备份发生了变化，请查看更新后的冲突。",
+    "The cloud backup changed while the conflict choice was open. Review the refreshed conflict." to
+        "处理冲突期间云端备份发生了变化，请查看更新后的冲突。",
+    "The cloud service could not be reached." to "无法连接云服务。",
+    "The cloud service timed out." to "云服务响应超时。",
+    "GitHub is not connected." to "尚未连接 GitHub。",
+    "GitHub is not connected. Reconnect GitHub." to "尚未连接 GitHub，请重新连接。",
+    "GitHub sign-in expired or was revoked. Reconnect GitHub." to "GitHub 登录已过期或已被撤销，请重新连接 GitHub。",
+    "GitHub's rate limit was reached. Try again in a few minutes." to "已达到 GitHub 的请求频率上限，请几分钟后再试。",
+    "Could not reach GitHub." to "无法连接 GitHub。",
+    "GitHub kept changing while saving. Sync again." to "保存期间 GitHub 上的数据一直在变化，请再次同步。",
+    "The GitHub code expired. Start again." to "GitHub 代码已过期，请重新开始。",
+    "GitHub authorization was cancelled." to "GitHub 授权已取消。",
+    "Device flow is off for this GitHub App. Turn on \"Enable Device Flow\" in its settings." to
+        "这个 GitHub App 没有开启 Device Flow，请在它的设置中打开“Enable Device Flow”。",
+    "GitHub did not recognize this Client ID." to "GitHub 无法识别这个客户端 ID。",
+    "Install the GitHub App on a private repository first." to "请先把 GitHub App 安装到一个私有仓库上。",
+    "Use a private repository. Backups are encrypted, but their history would be public." to
+        "请使用私有仓库。备份虽然是加密的，但它们的历史记录会公开。",
+    "Enter the repository as owner/name." to "请按“所有者/名称”的格式输入仓库。",
+    "Enter the GitHub App's Client ID (it starts with Iv)." to "请输入 GitHub App 的客户端 ID（以 Iv 开头）。",
+    "The backup is larger than GitHub's 100 MB file limit." to "备份超过了 GitHub 单个文件 100 MB 的上限。",
+    "The Google Drive API is not enabled in this Google Cloud project. Enable it, then sync again." to
+        "这个 Google Cloud 项目没有启用 Google Drive API，请启用后再同步。",
+    "Google Drive is limiting requests. Try again in a few minutes." to "Google Drive 正在限制请求，请几分钟后再试。",
+    "Your Google Drive storage is full." to "你的 Google Drive 存储空间已满。",
+    "Google requires the Desktop OAuth client secret. Enter it from the Google Cloud Console and try again." to
+        "Google 要求提供 Desktop OAuth 客户端密钥，请从 Google Cloud Console 复制后重试。",
+    "The GitHub backup no longer exists." to "这个 GitHub 备份已不存在。",
 )
