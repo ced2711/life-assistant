@@ -1,22 +1,26 @@
 # Creates a new Life Assistant release signing key and configures Gradle to use it.
 # Run it yourself in PowerShell:  powershell -ExecutionPolicy Bypass -File tools\setup-release-signing.ps1
 # With -GeneratePassword a random password is created and never displayed.
+# The key is stored in a life-assistant-signing folder next to the repository folder, outside git.
 # The password is written only to your personal Gradle properties file
-# (%USERPROFILE%\.gradle\gradle.properties), never to the repository.
+# (%GRADLE_USER_HOME%\gradle.properties, or %USERPROFILE%\.gradle when that is not set), never to the repository.
 param([switch]$GeneratePassword)
 
 $ErrorActionPreference = 'Stop'
 
-$signingDir = Join-Path $env:USERPROFILE '.life-assistant-signing'
+$signingDir = Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) 'life-assistant-signing'
 $keystore = Join-Path $signingDir 'life-assistant-release.p12'
 $alias = 'life-assistant'
-$gradleProperties = Join-Path $env:USERPROFILE '.gradle\gradle.properties'
+$gradleUserHome = if ($env:GRADLE_USER_HOME) { $env:GRADLE_USER_HOME } else { Join-Path $env:USERPROFILE '.gradle' }
+$gradleProperties = Join-Path $gradleUserHome 'gradle.properties'
 
 $keytool = $null
-foreach ($candidate in @($env:JAVA_HOME, (Get-ChildItem "$env:USERPROFILE\.jdks" -Directory -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName))) {
-    if ($candidate -and (Test-Path (Join-Path $candidate 'bin\keytool.exe'))) { $keytool = Join-Path $candidate 'bin\keytool.exe'; break }
+if ($env:JAVA_HOME -and (Test-Path (Join-Path $env:JAVA_HOME 'bin\keytool.exe'))) {
+    $keytool = Join-Path $env:JAVA_HOME 'bin\keytool.exe'
+} else {
+    $keytool = Get-Command keytool.exe -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Source
 }
-if (-not $keytool) { throw 'keytool.exe was not found. Install JDK 17 first.' }
+if (-not $keytool) { throw 'keytool.exe was not found. Install JDK 17 and set JAVA_HOME first.' }
 
 if (Test-Path $keystore) {
     Write-Host "A signing key already exists at $keystore. Refusing to overwrite it." -ForegroundColor Yellow
