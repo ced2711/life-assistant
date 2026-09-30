@@ -8,11 +8,13 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import androidx.work.WorkInfo
 import java.util.concurrent.TimeUnit
 
 object CloudSyncScheduler {
     private const val PERIODIC_WORK = "life_tracker_cloud_sync_periodic"
     private const val IMMEDIATE_WORK = "life_tracker_cloud_sync_now"
+    private const val FOLLOW_UP_WORK = "life_tracker_cloud_sync_follow_up"
     private const val TAG = "life_tracker_cloud_sync"
 
     private val constraints = Constraints.Builder()
@@ -35,10 +37,19 @@ object CloudSyncScheduler {
         )
     }
 
+    /**
+     * Requests a sync soon without ever cancelling one that is running: a request while a sync
+     * is waiting for network is merged into it, and a request during a running sync queues exactly
+     * one follow-up so changes made meanwhile are not missed. Call it off the main thread.
+     */
     fun enqueueNow(context: Context) {
-        WorkManager.getInstance(context.applicationContext).enqueueUniqueWork(
-            IMMEDIATE_WORK,
-            ExistingWorkPolicy.REPLACE,
+        val manager = WorkManager.getInstance(context.applicationContext)
+        val running = runCatching { manager.getWorkInfosForUniqueWork(IMMEDIATE_WORK).get() }
+            .getOrDefault(emptyList())
+            .any { it.state == WorkInfo.State.RUNNING }
+        manager.enqueueUniqueWork(
+            if (running) FOLLOW_UP_WORK else IMMEDIATE_WORK,
+            ExistingWorkPolicy.KEEP,
             OneTimeWorkRequestBuilder<CloudSyncWorker>()
                 .setConstraints(constraints)
                 .addTag(TAG)

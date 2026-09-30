@@ -11,6 +11,9 @@ import androidx.lifecycle.viewModelScope
 import com.ced2711.lifetracker.AppContainer
 import com.ced2711.lifetracker.cloudsync.CloudRevision
 import com.ced2711.lifetracker.cloudsync.ConflictResolution
+import com.ced2711.lifetracker.cloudsync.GitHubBackupStore
+import com.ced2711.lifetracker.cloudsync.GitHubDeviceAuthorization
+import com.ced2711.lifetracker.data.cloud.CloudProvider
 import com.ced2711.lifetracker.data.cloud.AndroidCloudSyncEngine
 import com.ced2711.lifetracker.data.cloud.AndroidCloudSyncResult
 import com.ced2711.lifetracker.data.cloud.CloudSyncPreferences
@@ -24,6 +27,7 @@ import com.ced2711.lifetracker.worker.CloudSyncScheduler
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -63,6 +67,9 @@ internal fun cloudConnectionFailureMessage(
     }
 }
 
+/** The code the user enters at GitHub to approve this device. */
+data class GitHubCodePrompt(val userCode: String, val verificationUri: String)
+
 data class CloudSyncUiState(
     val connected: Boolean = false,
     val automaticSync: Boolean = true,
@@ -74,6 +81,10 @@ data class CloudSyncUiState(
     val connectionError: String? = null,
     val conflict: CloudRevision? = null,
     val recoveryFiles: List<String> = emptyList(),
+    val provider: CloudProvider = CloudProvider.GOOGLE_DRIVE,
+    val gitHubRepository: String = "",
+    val gitHubClientId: String = "",
+    val gitHubPrompt: GitHubCodePrompt? = null,
 ) {
     val busy: Boolean get() = task != CloudSyncTask.NONE
 }
@@ -83,6 +94,8 @@ class CloudSyncViewModel internal constructor(
     private val preferences: CloudSyncPreferences,
     private val secretStore: CloudSyncSecretStore,
     private val authorization: GoogleDriveAuthorization,
+    private val gitHubTokenStore: CloudSyncSecretStore,
+    private val defaultGitHubClientId: String,
     private val scheduleAutomaticSync: (Boolean) -> Unit,
     private val contentResolver: ContentResolver,
 ) : ViewModel() {
@@ -99,6 +112,7 @@ class CloudSyncViewModel internal constructor(
     private var pendingResolution: ConflictResolution? = null
     private var pendingExpectedRemoteRevisionId: String? = null
     private var pendingReconnect = false
+    private var gitHubJob: Job? = null
 
     /** Copies already-encrypted bytes only; the original private recovery file is never removed. */
     fun exportRecovery(fileName: String, destination: Uri) {
@@ -161,6 +175,72 @@ class CloudSyncViewModel internal constructor(
         }
     }
 
+    /**
+     * Connects GitHub with the device flow: show a code, wait for approval, check the private
+     * repository, and only then save the token and sync password.
+     */
+    fun connectGitHub(password: CharArray, clientId: String, repository: String) {
+        if (password.size < MINIMUM_BACKUP_PASSWORD_LENGTH || _uiState.value.busy) {
+            password.fill('\u0000')
+            return
+        }
+        pendingPassword?.fill('\u0000')
+        pendingPassword = password
+        startGitHubAuthorization(clientId, repository, reconnecting = false)
+    }
+
+    fun cancelGitHubConnect() {
+        gitHubJob?.cancel()
+    }
+
+    private fun startGitHubAuthorization(clientId: String, repository: String, reconnecting: Boolean) {
+        val authorization = try {
+            GitHubDeviceAuthorization(clientId.trim())
+        } catch (error: IllegalArgumentException) {
+            handleConnectionFailure(error, false)
+            return
+        }
+        _uiState.update { it.copy(task = CloudSyncTask.CONNECTING, message = null, connectionError = null) }
+        gitHubJob = viewModelScope.launch {
+            try {
+                val code = authorization.start()
+                _uiState.update { it.copy(gitHubPrompt = GitHubCodePrompt(code.userCode, code.verificationUri)) }
+                val token = authorization.awaitToken(code)
+                _uiState.update { it.copy(gitHubPrompt = null) }
+                val resolved = authorization.resolveRepository(token.accessToken, repository)
+                // Prove write access to the branch history before anything is saved.
+                GitHubBackupStore({ token.accessToken }, resolved).listRevisions()
+                gitHubTokenStore.save(token.accessToken.toCharArray())
+                if (reconnecting) {
+                    preferences.setProvider(CloudProvider.GITHUB, clientId.trim(), resolved.fullName)
+                    _uiState.value = readState().copy(task = CloudSyncTask.NONE, message = "GitHub reconnected.")
+                } else {
+                    val password = pendingPassword ?: error("Missing sync password")
+                    pendingPassword = null
+                    try {
+                        preferences.setEnabled(false)
+                        preferences.resetSyncLineage()
+                        preferences.setProvider(CloudProvider.GITHUB, clientId.trim(), resolved.fullName)
+                        secretStore.save(password)
+                        preferences.setEnabled(true)
+                        scheduleAutomaticSync(preferences.read().automaticSync)
+                    } finally {
+                        password.fill('\u0000')
+                    }
+                    _uiState.value = readState().copy(task = CloudSyncTask.NONE, message = "GitHub connected.")
+                }
+                syncNow()
+            } catch (cancelled: CancellationException) {
+                clearPendingPassword()
+                _uiState.update { it.copy(task = CloudSyncTask.NONE, gitHubPrompt = null, message = "GitHub connection cancelled.") }
+                throw cancelled
+            } catch (error: Throwable) {
+                _uiState.update { it.copy(gitHubPrompt = null) }
+                handleConnectionFailure(error, false)
+            }
+        }
+    }
+
     fun markConsentDispatched(requestId: Long): Boolean {
         val request = _consentRequest.value ?: return false
         if (!shouldDispatchCloudConsent(request.id, requestId, request.dispatched)) return false
@@ -197,6 +277,11 @@ class CloudSyncViewModel internal constructor(
 
     fun reconnect() {
         if (!_uiState.value.connected || _uiState.value.busy) return
+        val settings = preferences.read()
+        if (settings.provider == CloudProvider.GITHUB) {
+            startGitHubAuthorization(settings.gitHubClientId, settings.gitHubRepository, reconnecting = true)
+            return
+        }
         pendingReconnect = true
         _uiState.update {
             it.copy(task = CloudSyncTask.CONNECTING, message = null, connectionError = null)
@@ -290,11 +375,14 @@ class CloudSyncViewModel internal constructor(
         pendingExpectedRemoteRevisionId = null
         _authenticationRequest.value = null
         _consentRequest.value = null
+        val provider = preferences.read().provider
         secretStore.clear()
         preferences.clearConnection()
+        gitHubTokenStore.clear()
+        preferences.setProvider(CloudProvider.GOOGLE_DRIVE)
         scheduleAutomaticSync(false)
         _uiState.value = readState().copy(
-            message = "Google Drive disconnected. Local data was kept.",
+            message = if (provider == CloudProvider.GITHUB) "GitHub disconnected. Local data was kept." else "Google Drive disconnected. Local data was kept.",
             connectionError = null,
         )
     }
@@ -310,6 +398,7 @@ class CloudSyncViewModel internal constructor(
     }
 
     override fun onCleared() {
+        gitHubJob?.cancel()
         clearPendingPassword()
         super.onCleared()
     }
@@ -363,7 +452,7 @@ class CloudSyncViewModel internal constructor(
                 pendingResolution = null
                 pendingExpectedRemoteRevisionId = null
                 preferences.setAttention(CloudSyncAttention.FAILED)
-                _uiState.update { it.copy(task = CloudSyncTask.NONE, message = "Google Drive sync failed.") }
+                _uiState.update { it.copy(task = CloudSyncTask.NONE, message = "Cloud sync failed.") }
             }
         }
     }
@@ -380,7 +469,7 @@ class CloudSyncViewModel internal constructor(
         )
         when (result) {
             AndroidCloudSyncResult.Disabled ->
-                _uiState.value = readState().copy(message = "Google Drive sync is disabled.")
+                _uiState.value = readState().copy(message = "Cloud sync is disabled.")
             AndroidCloudSyncResult.UpToDate ->
                 _uiState.value = readState().copy(message = "Already up to date.")
             is AndroidCloudSyncResult.Uploaded ->
@@ -391,7 +480,7 @@ class CloudSyncViewModel internal constructor(
                 _uiState.value = readState().copy(
                     task = CloudSyncTask.NONE,
                     conflict = result.remote,
-                    message = "Both this device and Google Drive changed.",
+                    message = "Both this device and the cloud backup changed.",
                 )
             is AndroidCloudSyncResult.NeedsVaultUnlock -> {
                 _uiState.update { it.copy(task = CloudSyncTask.SYNCING) }
@@ -420,6 +509,9 @@ class CloudSyncViewModel internal constructor(
             lastSyncAt = value.state.lastSyncAt,
             attention = value.attention,
             recoveryFiles = engine.recoveryFiles().map { it.name },
+            provider = value.provider,
+            gitHubRepository = value.gitHubRepository,
+            gitHubClientId = value.gitHubClientId.ifBlank { defaultGitHubClientId },
         )
     }
 
@@ -431,7 +523,11 @@ class CloudSyncViewModel internal constructor(
     private fun handleConnectionFailure(error: Throwable, authorizationComplete: Boolean) {
         clearPendingPassword()
         pendingReconnect = false
-        val message = cloudConnectionFailureMessage(error, authorizationComplete)
+        val message = if (error is com.ced2711.lifetracker.cloudsync.CloudAuthorizationException || error is com.ced2711.lifetracker.cloudsync.CloudTransportException || error is IllegalArgumentException) {
+            error.message ?: "Cloud connection failed."
+        } else {
+            cloudConnectionFailureMessage(error, authorizationComplete)
+        }
         _uiState.update {
             it.copy(
                 task = CloudSyncTask.NONE,
@@ -450,6 +546,8 @@ class CloudSyncViewModel internal constructor(
                 preferences = container.cloudSyncPreferences,
                 secretStore = container.cloudSyncSecretStore,
                 authorization = container.googleDriveAuthorization,
+                gitHubTokenStore = container.gitHubTokenStore,
+                defaultGitHubClientId = com.ced2711.lifetracker.BuildConfig.GITHUB_CLIENT_ID,
                 contentResolver = container.appContext.contentResolver,
                 scheduleAutomaticSync = { enabled ->
                     CloudSyncScheduler.update(container.appContext, enabled)

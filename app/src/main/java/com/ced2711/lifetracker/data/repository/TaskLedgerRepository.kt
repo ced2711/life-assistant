@@ -5,6 +5,7 @@ import androidx.room.withTransaction
 import com.ced2711.lifetracker.data.monotonicMutationTimestamp
 import com.ced2711.lifetracker.data.persistedDeadlineTimestamp
 import com.ced2711.lifetracker.data.local.CategoryEntity
+import com.ced2711.lifetracker.data.local.DiaryEntryEntity
 import com.ced2711.lifetracker.data.local.LedgerEntryEntity
 import com.ced2711.lifetracker.data.local.LedgerOccurrenceExceptionEntity
 import com.ced2711.lifetracker.data.local.LedgerSeriesEntity
@@ -18,6 +19,8 @@ import com.ced2711.lifetracker.data.local.TodoReminderEntity
 import com.ced2711.lifetracker.data.local.TodoSeriesEntity
 import com.ced2711.lifetracker.data.local.TodoSeriesSubtaskEntity
 import com.ced2711.lifetracker.domain.model.AttachmentOwnerType
+import com.ced2711.lifetracker.domain.model.DiaryDraft
+import com.ced2711.lifetracker.domain.model.MAX_DIARY_LENGTH
 import com.ced2711.lifetracker.domain.model.LedgerDraft
 import com.ced2711.lifetracker.domain.model.LedgerSaveResult
 import com.ced2711.lifetracker.domain.model.NoteDraft
@@ -89,6 +92,7 @@ class TaskLedgerRepository(
     val ledgerSeries = dao.observeLedgerSeries()
     val noteFolders = dao.observeNoteFolders()
     val notes = dao.observeNotes()
+    val diaryEntries = dao.observeDiaryEntries()
 
     fun activeTodosForDeadlineDay(epochDay: Long) =
         dao.observeActiveTodosForDeadlineDay(epochDay)
@@ -223,6 +227,42 @@ class TaskLedgerRepository(
         )
         dao.deleteNoteById(noteId)
     }
+
+    /** Saves the page for [DiaryDraft.epochDay]; a blank body removes it. Returns whether a page remains. */
+    suspend fun saveDiaryEntry(draft: DiaryDraft): Boolean = database.withTransaction {
+        require(draft.body.length <= MAX_DIARY_LENGTH) { "Diary entry is too long" }
+        val existing = dao.getDiaryEntry(draft.epochDay)
+        when {
+            draft.body.isBlank() -> {
+                if (existing != null) dao.deleteDiaryEntry(draft.epochDay)
+                false
+            }
+            existing == null -> {
+                val now = monotonicMutationTimestamp(wallClockMillis())
+                dao.insertDiaryEntry(
+                    DiaryEntryEntity(
+                        epochDay = draft.epochDay,
+                        body = draft.body,
+                        createdAt = now,
+                        updatedAt = now,
+                    ),
+                )
+                true
+            }
+            existing.body == draft.body -> true
+            else -> {
+                val updatedAt = monotonicMutationTimestamp(
+                    wallClockMillis(),
+                    existing.createdAt,
+                    existing.updatedAt,
+                )
+                dao.updateDiaryEntry(existing.copy(body = draft.body, updatedAt = updatedAt))
+                true
+            }
+        }
+    }
+
+    suspend fun deleteDiaryEntry(epochDay: Long) = dao.deleteDiaryEntry(epochDay)
 
     suspend fun saveTodo(
         draft: TodoDraft,
@@ -981,6 +1021,17 @@ class TaskLedgerRepository(
             seriesId,
             monotonicMutationTimestamp(wallClockMillis(), series.createdAt, series.updatedAt),
         )
+    }
+
+    /**
+     * Removes a stopped schedule from the Recurring list. The entries it already created stay,
+     * detached into ordinary entries; its skip markers go with it.
+     */
+    suspend fun deleteStoppedLedgerSeries(seriesId: Long) = database.withTransaction {
+        val series = requireNotNull(dao.getLedgerSeries(seriesId)) { "Ledger series does not exist" }
+        require(!series.active) { "Stop the schedule before deleting it" }
+        dao.detachLedgerSeriesEntries(seriesId, monotonicMutationTimestamp(wallClockMillis()))
+        check(dao.deleteStoppedLedgerSeries(seriesId) == 1) { "Ledger series could not be deleted" }
     }
 
     suspend fun deactivateTodoSeries(seriesId: Long) = database.withTransaction {

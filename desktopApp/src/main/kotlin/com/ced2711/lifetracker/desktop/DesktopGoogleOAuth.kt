@@ -354,6 +354,11 @@ internal object DesktopOAuthDiagnostics {
         return when (error) {
             "invalid_client", "unauthorized_client", "deleted_client" ->
                 "Google rejected this OAuth client. Check the Desktop OAuth client ID/secret and that the client is enabled."
+            "invalid_request" -> if (responseBody.contains("client_secret", ignoreCase = true)) {
+                "Google requires the Desktop OAuth client secret. Enter it from the Google Cloud Console and try again."
+            } else {
+                "Google rejected the sign-in request. Check the Desktop OAuth client settings."
+            }
             "invalid_grant" -> "Google rejected the authorization code or refresh token. Reconnect Google Drive."
             "access_denied" -> "Google denied Drive access. Choose an account that can use this app and try again."
             "org_internal", "admin_policy_enforced", "disallowed_useragent" ->

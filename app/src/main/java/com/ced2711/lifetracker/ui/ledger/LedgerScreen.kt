@@ -52,6 +52,9 @@ fun LedgerScreen(
     isWide: Boolean = false,
     quickAddRequestToken: String? = null,
     onQuickAddRequestHandled: (String) -> Unit = {},
+    // An entry opened from elsewhere (the Calendar) is shown in the Entries page editor.
+    requestedEntryId: Long? = null,
+    onRequestedEntryHandled: (Long) -> Unit = {},
 ) {
     val uiOperations: LedgerUiOperationsViewModel = composeViewModel()
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -77,6 +80,9 @@ fun LedgerScreen(
 
     LaunchedEffect(quickAddRequestToken) {
         if (quickAddRequestToken != null) pageName = LedgerPage.ENTRIES.name
+    }
+    LaunchedEffect(requestedEntryId) {
+        if (requestedEntryId != null) pageName = LedgerPage.ENTRIES.name
     }
 
     LaunchedEffect(viewModel, uiLanguage) {
@@ -190,6 +196,8 @@ fun LedgerScreen(
                     uiOperations = uiOperations,
                     quickAddRequestToken = quickAddRequestToken,
                     onQuickAddRequestHandled = onQuickAddRequestHandled,
+                    requestedEditId = requestedEntryId,
+                    onRequestedEditHandled = onRequestedEntryHandled,
                 )
 
                 LedgerPage.STATISTICS -> LedgerStatisticsPage(
@@ -203,6 +211,7 @@ fun LedgerScreen(
                     series = series,
                     contentPadding = PaddingValues(bottom = 24.dp),
                     onStop = viewModel::stopLedgerSeries,
+                    onDelete = viewModel::deleteStoppedLedgerSeries,
                     onEditRule = { seriesId, effectiveEpochDay, draft, onSaved, onFailure ->
                         viewModel.editLedgerSeriesForFuture(
                             seriesId = seriesId,

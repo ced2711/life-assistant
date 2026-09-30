@@ -3,9 +3,11 @@ package com.ced2711.lifetracker
 import android.app.Application
 import com.ced2711.lifetracker.data.attachment.AttachmentStore
 import com.ced2711.lifetracker.data.backup.BackupRepository
+import com.ced2711.lifetracker.data.confession.ConfessionStore
 import com.ced2711.lifetracker.data.cloud.AndroidCloudSyncEngine
 import com.ced2711.lifetracker.data.cloud.CloudSyncPreferences
 import com.ced2711.lifetracker.data.cloud.CloudSyncSecretStore
+import com.ced2711.lifetracker.data.cloud.CloudSyncStatusMonitor
 import com.ced2711.lifetracker.data.cloud.GoogleDriveAuthorization
 import com.ced2711.lifetracker.data.local.TaskLedgerDatabase
 import com.ced2711.lifetracker.data.repository.TaskLedgerRepository
@@ -14,8 +16,13 @@ import com.ced2711.lifetracker.data.vault.VaultClipboard
 import com.ced2711.lifetracker.data.vault.VaultKeyManager
 import com.ced2711.lifetracker.data.vault.VaultRepository
 import com.ced2711.lifetracker.launcher.LauncherIconMoodCoordinator
+import com.ced2711.lifetracker.ui.lock.AppLockController
 import com.ced2711.lifetracker.worker.WorkScheduler
 import com.ced2711.lifetracker.worker.CloudSyncScheduler
+import com.ced2711.lifetracker.worker.CloudSyncTrigger
+import android.os.Handler
+import android.os.Looper
+import androidx.lifecycle.ProcessLifecycleOwner
 import com.ced2711.lifetracker.widget.WidgetRefreshCoordinator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -60,8 +67,25 @@ class TaskLedgerApplication : Application() {
                         CloudSyncScheduler.enqueueNow(this@TaskLedgerApplication)
                     }
                 }
+                runCatching { startCloudSyncTrigger() }
             },
         )
+    }
+
+    // Near-real-time sync: after local edits, on opening the app, and periodically while it is open.
+    private fun startCloudSyncTrigger() {
+        val trigger = CloudSyncTrigger(
+            scope = processScope,
+            automaticSyncEnabled = {
+                container.cloudSyncPreferences.read().let { it.enabled && it.automaticSync }
+            },
+            requestSync = { CloudSyncScheduler.enqueueNow(this) },
+            onLocalChangeObserved = container.cloudSyncStatus::markLocalChange,
+        )
+        trigger.start(container.database)
+        Handler(Looper.getMainLooper()).post {
+            ProcessLifecycleOwner.get().lifecycle.addObserver(trigger)
+        }
     }
 
     override fun onCreate() {
@@ -86,6 +110,12 @@ class AppContainer(application: Application) {
     )
     val cloudSyncPreferences = CloudSyncPreferences(application)
     val cloudSyncSecretStore = CloudSyncSecretStore(application)
+    val gitHubTokenStore = CloudSyncSecretStore(
+        context = application,
+        preferencesName = "life_assistant_github_token",
+        keyAlias = "life_assistant_github_token_v1",
+        minimumLength = 1,
+    )
     val googleDriveAuthorization = GoogleDriveAuthorization(application)
     val cloudSyncEngine = AndroidCloudSyncEngine(
         context = application,
@@ -93,10 +123,22 @@ class AppContainer(application: Application) {
         preferences = cloudSyncPreferences,
         secretStore = cloudSyncSecretStore,
         authorization = googleDriveAuthorization,
+        gitHubTokenStore = gitHubTokenStore,
         afterRestore = {
             WorkScheduler.rescheduleAfterSystemTimeChange(application)
             WidgetRefreshCoordinator.refresh(application)
         },
+    )
+    val confessionStore = ConfessionStore(application)
+    val cloudSyncStatus = CloudSyncStatusMonitor(
+        engine = cloudSyncEngine,
+        preferences = cloudSyncPreferences,
+        hasSyncPassword = cloudSyncSecretStore::hasSecret,
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+    )
+    val appLock = AppLockController(
+        settings = settingsRepository.settings,
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
     )
     // ClipboardManager construction requires a Looper on API 26. Startup recovery builds the
     // rest of this container on a background dispatcher, while clipboard access is UI-only.

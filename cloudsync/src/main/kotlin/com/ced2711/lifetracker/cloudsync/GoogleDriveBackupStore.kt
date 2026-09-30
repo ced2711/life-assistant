@@ -115,7 +115,7 @@ class GoogleDriveBackupStore(
                     .get(),
             ).build()
             client.newCall(request).execute().use { response ->
-                ensureSuccess(response.code, response.message)
+                ensureSuccess(response)
                 val body = response.body ?: throw CloudTransportException("Google Drive returned an empty backup.")
                 temporary.outputStream().buffered().use { output -> body.byteStream().use { input ->
                     val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
@@ -152,14 +152,14 @@ class GoogleDriveBackupStore(
                 .url(apiBaseUrl.resolve("drive/v3/files/$fileId")!!)
                 .delete(),
         ).build()
-        client.newCall(request).execute().use { response -> ensureSuccess(response.code, response.message) }
+        client.newCall(request).execute().use { response -> ensureSuccess(response) }
     }
 
     private suspend fun executeJson(builder: Request.Builder): JsonObject {
         val request = authorized(builder).build()
         try {
             client.newCall(request).execute().use { response ->
-                ensureSuccess(response.code, response.message)
+                ensureSuccess(response)
                 val text = response.body?.string()
                     ?: throw CloudTransportException("Google Drive returned an empty response.")
                 return json.parseToJsonElement(text).jsonObject
@@ -181,14 +181,11 @@ class GoogleDriveBackupStore(
         return builder.header("Authorization", "Bearer $token")
     }
 
-    private fun ensureSuccess(code: Int, message: String) {
-        when {
-            code in 200..299 -> Unit
-            code == 401 || code == 403 -> throw CloudAuthorizationException(
-                "Google Drive authorization expired or was revoked.",
-            )
-            else -> throw CloudTransportException("Google Drive request failed ($code $message).")
-        }
+    private fun ensureSuccess(response: okhttp3.Response) {
+        val code = response.code
+        if (code in 200..299) return
+        val reason = driveErrorReason(response.peekBody(8_192).string())
+        throw googleDriveFailure(code, reason, response.message)
     }
 
     private fun parseRevision(element: JsonElement): CloudRevision? {
@@ -253,4 +250,25 @@ class GoogleDriveBackupStore(
         val JSON_MEDIA_TYPE = "application/json; charset=UTF-8".toMediaType()
         val MULTIPART_RELATED = "multipart/related".toMediaType()
     }
+}
+
+/** The first `error.errors[].reason` (or `error.status`) from a Google API error body. */
+internal fun driveErrorReason(body: String): String? = runCatching {
+    val error = Json.parseToJsonElement(body).jsonObject["error"]?.jsonObject ?: return null
+    error["errors"]?.jsonArray?.firstOrNull()?.jsonObject?.get("reason")?.jsonPrimitive?.contentOrNull
+        ?: error["status"]?.jsonPrimitive?.contentOrNull
+}.getOrNull()
+
+/** Only real sign-in problems ask the user to reconnect; setup and quota problems say what to fix. */
+internal fun googleDriveFailure(code: Int, reason: String?, message: String): Exception = when {
+    reason == "accessNotConfigured" || reason == "SERVICE_DISABLED" -> CloudTransportException(
+        "The Google Drive API is not enabled in this Google Cloud project. Enable it, then sync again.",
+    )
+    reason in setOf("rateLimitExceeded", "userRateLimitExceeded", "RESOURCE_EXHAUSTED") || code == 429 ->
+        CloudTransportException("Google Drive is limiting requests. Try again in a few minutes.")
+    reason == "storageQuotaExceeded" -> CloudTransportException("Your Google Drive storage is full.")
+    code == 401 || reason in setOf("authError", "insufficientPermissions", "PERMISSION_DENIED") ->
+        CloudAuthorizationException("Google Drive authorization expired or was revoked.")
+    code == 403 -> CloudTransportException("Google Drive refused the request (${reason ?: "forbidden"}).")
+    else -> CloudTransportException("Google Drive request failed ($code $message).")
 }

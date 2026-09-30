@@ -1,6 +1,7 @@
 package com.ced2711.lifetracker.data.backup
 
 import com.ced2711.lifetracker.data.local.CategoryEntity
+import com.ced2711.lifetracker.data.local.DiaryEntryEntity
 import com.ced2711.lifetracker.data.local.LedgerEntryEntity
 import com.ced2711.lifetracker.data.local.LedgerOccurrenceExceptionEntity
 import com.ced2711.lifetracker.data.local.LedgerSeriesEntity
@@ -100,6 +101,12 @@ object BackupCodec {
                     writeLong(e.id); nullableLong(e.folderId); string(e.title, budget)
                     string(e.body, budget); writeBoolean(e.pinned); writeLong(e.createdAt)
                     writeLong(e.updatedAt)
+                }
+            }
+            if (snapshot.formatVersion >= BackupLimits.DIARY_SNAPSHOT_VERSION) {
+                out.list(snapshot.diaryEntries) { e ->
+                    writeLong(e.id); writeLong(e.epochDay); string(e.body, budget)
+                    writeLong(e.createdAt); writeLong(e.updatedAt)
                 }
             }
             out.flush()
@@ -219,6 +226,19 @@ object BackupCodec {
                     } else {
                         emptyList()
                     },
+                    diaryEntries = if (version >= BackupLimits.DIARY_SNAPSHOT_VERSION) {
+                        input.list(budget) {
+                            DiaryEntryEntity(
+                                id = readLong(),
+                                epochDay = readLong(),
+                                body = string(budget),
+                                createdAt = readLong(),
+                                updatedAt = readLong(),
+                            )
+                        }
+                    } else {
+                        emptyList()
+                    },
                 )
                 if (input.read() != -1) throw InvalidBackupException("Unexpected trailing snapshot data.")
                 return snapshot.validate()
@@ -250,7 +270,7 @@ private fun DataOutputStream.settings(
     writeBoolean(value.notificationsEnabled); writeInt(value.defaultAllDayReminderMinute)
     list(value.defaultReminderOffsetsMinutes.sorted()) { writeLong(it) }
     list(TodoQuickAddField.entries.filter(value.todoQuickAddFields::contains)) { enum(it, budget) }
-    enum(value.lastDestination, budget)
+    enum(persistableDestination(value.lastDestination, formatVersion), budget)
     if (formatVersion >= BackupLimits.ACCENT_COLOR_SNAPSHOT_VERSION) {
         enum(value.accentColor, budget)
     }
@@ -262,13 +282,24 @@ private fun DataInputStream.settings(budget: DecodeBudget, formatVersion: Int) =
     defaultReminderOffsetsMinutes = smallList(100) { readLong() }.toSet(),
     // SettingsRepository also ignores names introduced by versions it does not understand.
     todoQuickAddFields = decodeTodoQuickAddFields(smallList(100) { string(budget) }),
-    lastDestination = enum<TopLevelDestination>(budget),
+    // A module added by a newer version must not make the whole backup unreadable.
+    lastDestination = string(budget).let { saved ->
+        TopLevelDestination.entries.firstOrNull { it.name == saved } ?: TopLevelDestination.TODO
+    },
     accentColor = if (formatVersion >= BackupLimits.ACCENT_COLOR_SNAPSHOT_VERSION) {
         enum<AccentColor>(budget)
     } else {
         AccentColor.TEAL
     },
 )
+
+// Formats before the diary release only know the original four modules.
+private fun persistableDestination(destination: TopLevelDestination, formatVersion: Int): TopLevelDestination =
+    if (formatVersion < BackupLimits.DIARY_SNAPSHOT_VERSION && destination.ordinal > TopLevelDestination.NOTES.ordinal) {
+        TopLevelDestination.TODO
+    } else {
+        destination
+    }
 
 internal fun decodeTodoQuickAddFields(savedNames: List<String>): Set<TodoQuickAddField> =
     savedNames.mapNotNull { saved -> TodoQuickAddField.entries.firstOrNull { it.name == saved } }.toSet()

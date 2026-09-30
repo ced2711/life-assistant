@@ -18,6 +18,9 @@ fun uiLocale(language: UiLanguage): Locale = when (language) {
 fun translateUiText(text: String, language: UiLanguage): String {
     if (language == UiLanguage.ENGLISH || text.isEmpty()) return text
     zhHans[text]?.let { return it }
+    // Button labels such as " Stop" carry spacing next to an icon; keep it around the translation.
+    val trimmed = text.trim()
+    if (trimmed.isNotEmpty() && trimmed != text) zhHans[trimmed]?.let { return text.replace(trimmed, it) }
     return translateDynamicChinese(text)
 }
 
@@ -43,6 +46,15 @@ private fun translateDynamicChinese(text: String): String {
     match("Active \\((\\d+)\\)")?.let { return "待完成（${it.groupValues[1]}）" }
     match("Completed \\((\\d+)\\)")?.let { return "已完成（${it.groupValues[1]}）" }
     match("(\\d+) notes")?.let { return "${it.groupValues[1]} 条笔记" }
+    match("The GitHub app cannot write to (.+)\\. Install it on that repository with Contents read and write permission\\.")?.let {
+        return "GitHub App 无法写入 ${it.groupValues[1]}。请把它安装到这个仓库，并授予 Contents 读写权限。"
+    }
+    match("The GitHub App can access several repositories \\((.+)\\)\\. Enter the one to use\\.")?.let {
+        return "GitHub App 可以访问多个仓库（${it.groupValues[1]}），请填写要使用的那一个。"
+    }
+    match("(\\d+) of (\\d+) modules shown")?.let {
+        return "显示 ${it.groupValues[1]}/${it.groupValues[2]} 个功能"
+    }
     match("(\\d+) reminders")?.let { return "${it.groupValues[1]} 个提醒" }
     match("(\\d+) categories selected")?.let { return "已选择 ${it.groupValues[1]} 个分类" }
     match("(\\d+) of 10 files")?.let { return "${it.groupValues[1]}/10 个文件" }
@@ -273,6 +285,13 @@ private val zhHans = mapOf(
     "Runs periodically when a network is available" to "有网络时定期运行",
     "Syncing…" to "正在同步…",
     "Sync now" to "立即同步",
+    "Up to date" to "已是最新",
+    "Changes not synced yet" to "有更改尚未同步",
+    "Sync needs attention" to "同步需要处理",
+    "Tap to sync both ways now" to "点击立即双向同步",
+    "Tap to open sync settings" to "点击打开同步设置",
+    "Last synced" to "上次同步",
+    "Never synced" to "尚未同步",
     "Disconnect" to "断开连接",
     "Connecting…" to "正在连接…",
     "Connect Google Drive" to "连接 Google Drive",
@@ -291,8 +310,8 @@ private val zhHans = mapOf(
     "Local sync recovery" to "本机同步恢复副本",
     "Export" to "导出",
     "Could not create the cloud recovery directory." to "无法创建同步恢复副本目录，本机数据未被替换。",
-    "Before using a cloud version, Life Assistant keeps an encrypted local recovery copy. Export a copy and use Restore backup to recover it with its original sync password. Copies are not deleted automatically." to
-        "使用云端版本前，生活助手 会保留一份加密的本机恢复副本。导出副本后，可通过“恢复备份”输入创建时的同步密码找回数据。副本不会自动删除。",
+    "Before using a cloud version, Life Assistant keeps an encrypted local recovery copy. Export a copy and use Restore backup to recover it with its original sync password. The 5 most recent copies are kept." to
+        "使用云端版本前，生活助手 会保留一份加密的本机恢复副本。导出副本后，可通过“恢复备份”输入创建时的同步密码找回数据。只保留最近 5 份副本。",
     "Hide recovery copies" to "收起恢复副本",
     "Show recovery copies" to "显示恢复副本",
     "Encrypted recovery copy exported. Restore it with the sync password used when it was created." to "加密恢复副本已导出，请使用创建时的同步密码恢复。",
@@ -690,4 +709,157 @@ private val zhHans = mapOf(
     "Website" to "网站",
     "Enter at least one field. Passwords stay encrypted on this device." to "请至少填写一项，密码会加密保存在本机。",
     "Select an entry or use Add." to "请选择一个条目或点击添加。",
+    // Diary
+    "Diary" to "日记",
+    "Diary entries" to "日记",
+    "Previous day" to "前一天",
+    "Next day" to "后一天",
+    "Delete diary entry" to "删除日记",
+    "How was your day?" to "今天过得怎么样？",
+    "Saved automatically. Clearing the text removes the entry." to "自动保存。清空内容即删除这篇日记。",
+    "No diary entries yet" to "还没有日记",
+    "Delete this diary entry?" to "删除这篇日记？",
+    "No diary entry" to "没有日记",
+    "Open diary" to "查看日记",
+    "Write diary" to "写日记",
+    // Confessional
+    "Confessional" to "告解室",
+    "Say what you need to say. Burn it to let it go for good, or seal it on this device. " +
+        "Nothing here is backed up or synced, and screenshots are blocked." to
+        "把想说的话写下来。焚烧它，让它彻底消失；或者封存在这台设备上。这里的内容不会备份或同步，也无法截屏。",
+    "Write it down…" to "写下来……",
+    "Burn" to "焚烧",
+    "Seal" to "封存",
+    "Burned. It's gone." to "已焚烧，它消失了。",
+    "Sealed on this device." to "已封存在这台设备上。",
+    "Open sealed confessions" to "打开封存的告解",
+    "Sealed confessions" to "封存的告解",
+    "Burn all" to "全部焚烧",
+    "Burn every sealed confession?" to "焚烧所有封存的告解？",
+    "They will be permanently deleted from this device." to "它们将从这台设备上永久删除。",
+    "Something went wrong" to "出错了",
+    "The confessional is full. Burn some sealed entries first." to "告解室已满，请先焚烧一些封存的内容。",
+    // App lock and menu
+    "Unlock Life Assistant" to "解锁生活助手",
+    "Life Assistant is locked" to "生活助手已锁定",
+    "Use your fingerprint, face or screen lock to continue." to "请使用指纹、面部或锁屏密码继续。",
+    "This device has no screen lock, so the app lock cannot verify you. Set a screen lock to protect the app." to
+        "此设备没有设置锁屏，软件锁无法验证你的身份。请设置锁屏来保护应用。",
+    "App lock" to "软件锁",
+    "Ask for fingerprint, face or screen lock when opening the app" to "打开应用时需要指纹、面部或锁屏密码验证",
+    "Lock after leaving the app" to "离开应用后锁定",
+    "Immediately" to "立即",
+    "After 1 minute" to "1 分钟后",
+    "After 5 minutes" to "5 分钟后",
+    "Set a screen lock on this device first." to "请先为此设备设置锁屏。",
+    "Turn on app lock" to "开启软件锁",
+    "Turn off app lock" to "关闭软件锁",
+    "Menu" to "菜单",
+    "Modules in menu" to "菜单显示的功能",
+    "All modules" to "全部功能",
+    "Hidden modules keep their data. At least one module stays visible." to "隐藏的功能会保留数据，至少保留一个功能可见。",
+    // Windows-only texts live here too: the "(.+) to (.+)" range rule would otherwise rewrite
+    // any sentence containing " to " before the desktop table is consulted.
+    "Confirm" to "确认",
+    "The password is incorrect." to "密码不正确。",
+    "Enter your data password to continue." to "请输入数据密码继续。",
+    "Ask for the data password when returning to the app" to "回到应用时要求输入数据密码",
+    "Applies even when Windows remembers the password." to "即使 Windows 已记住密码也会生效。",
+    "Enter your data password to turn off the app lock." to "请输入数据密码以关闭软件锁。",
+    "Delete this todo?" to "删除这个待办？",
+    "Say what you need to say. Burn it to let it go for good, or seal it on this PC. " +
+        "Sealed words are protected by Windows and never exported or synced." to
+        "把想说的话写下来。焚烧它，让它彻底消失；或者封存在这台电脑上。封存的内容受 Windows 保护，不会导出或同步。",
+    "Sealed on this PC." to "已封存在这台电脑上。",
+    "Enter your data password to read sealed confessions." to "请输入数据密码查看封存的告解。",
+    "They will be permanently deleted from this PC." to "它们将从这台电脑上永久删除。",
+    // Cloud sync providers
+    "GitHub sync" to "GitHub 同步",
+    "Syncs a few seconds after each change, when you open the app, and about every 15 minutes in the background." to
+        "每次修改后几秒内同步，打开应用时同步，后台约每 15 分钟同步一次。",
+    "Syncs a few seconds after each change, when the window is focused, and every 2 minutes while Life Assistant is open." to
+        "每次修改后几秒内同步，切回窗口时同步，生活助手打开期间每 2 分钟同步一次。",
+    "The cloud backup has conflicting changes. Open Backup & sync to choose a version." to
+        "云端备份有冲突的修改，请打开“备份与同步”选择要保留的版本。",
+    "Delete this stopped schedule?" to "删除这个已停止的定期流水？",
+    "It disappears from Recurring. Entries it already created stay in your ledger." to
+        "它会从“定期流水”中移除，已经生成的流水记录会保留。",
+    "View or edit ledger entry" to "查看或编辑流水",
+    "Local .tlb, Google Drive or GitHub" to "本地 .tlb、Google Drive 或 GitHub",
+    "Connect GitHub" to "连接 GitHub",
+    "Sync password-encrypted snapshots between Android and Windows through Google Drive's " +
+        "private app folder or a private GitHub repository. Cloud sync is optional; " +
+        "Life Assistant works offline by default." to
+        "通过 Google Drive 的私有应用文件夹或 GitHub 私有仓库，在 Android 和 Windows 之间同步用密码加密的快照。云同步是可选的，生活助手默认离线使用。",
+    "Each upload creates a new encrypted version. The 10 most recent versions are kept; " +
+        "conflicts pause sync." to "每次上传都会生成一个新的加密版本，只保留最近 10 个版本；出现冲突时会暂停同步。",
+    "Each upload creates a new encrypted version. The 10 most recent versions are kept; conflicts pause sync until you resolve them." to
+        "每次上传都会生成一个新的加密版本，只保留最近 10 个版本；出现冲突时会暂停同步，直到你处理冲突。",
+    "Google Drive needs Drive API access, package com.ced2711.lifetracker, and this " +
+        "build's signing SHA-1 registered in Google Cloud. Android and Windows must " +
+        "use the same Google Cloud project and account." to
+        "Google Drive 需要在 Google Cloud 中启用 Drive API，并登记包名 com.ced2711.lifetracker 和本版本的签名 SHA-1。Android 和 Windows 必须使用同一个 Google Cloud 项目和账号。",
+    "GitHub needs a GitHub App with Device Flow on, installed only on one private " +
+        "repository with Contents read and write permission. Use the same app and " +
+        "repository on every device." to
+        "GitHub 同步需要一个开启 Device Flow 的 GitHub App，只安装在一个私有仓库上，并授予 Contents 读写权限。所有设备使用同一个 App 和仓库。",
+    "Choose a sync password. You will enter the same password on Windows or a new device. " +
+        "Nobody can recover it for you." to "设置一个同步密码。在 Windows 或新设备上要输入同一个密码。任何人都无法帮你找回它。",
+    "GitHub App Client ID" to "GitHub App 客户端 ID",
+    "Private repository (owner/name, optional)" to "私有仓库（所有者/名称，可选）",
+    "Approve on GitHub" to "在 GitHub 上授权",
+    "Open GitHub, sign in, and enter this code. This screen continues by itself once you approve." to
+        "打开 GitHub 并登录，输入下面的代码。授权后此页面会自动继续。",
+    "Copy code" to "复制代码",
+    "Open GitHub" to "打开 GitHub",
+    "Get sign-in code" to "获取登录代码",
+    "No browser is available to open GitHub." to "没有可以打开 GitHub 的浏览器。",
+    "Encrypted snapshots are stored in Life Assistant's private Google Drive app folder or a private GitHub repository. Nothing else in those accounts is read." to
+        "加密快照保存在生活助手在 Google Drive 中的私有应用文件夹或 GitHub 私有仓库中，不会读取这些账号里的其他内容。",
+    "Use a GitHub App with Device Flow on, installed only on one private repository with " +
+        "Contents read and write permission. Use the same app and repository on Android." to
+        "使用一个开启 Device Flow 的 GitHub App，只安装在一个私有仓库上，并授予 Contents 读写权限。Android 上要使用同一个 App 和仓库。",
+    "Your data password encrypts every backup before upload. Use the same password on every device." to
+        "每个备份在上传前都会用你的数据密码加密。所有设备要使用同一个密码。",
+    "Desktop OAuth client secret" to "Desktop OAuth 客户端密钥",
+    "Google requires the client secret for Desktop clients. It is protected by Windows DPAPI and is application configuration, not a replacement for PKCE." to
+        "Google 要求桌面客户端提供客户端密钥。它由 Windows DPAPI 保护，属于应用配置，不能代替 PKCE。",
+    "GitHub connected." to "已连接 GitHub。",
+    "GitHub reconnected." to "已重新连接 GitHub。",
+    "GitHub connection cancelled." to "已取消连接 GitHub。",
+    "GitHub disconnected. Local data was kept." to "已断开 GitHub，本机数据已保留。",
+    "Cloud sync failed." to "云同步失败。",
+    "Cloud sync is disabled." to "云同步已关闭。",
+    "Both this device and the cloud backup changed." to "本设备和云端备份都有改动。",
+    "This PC and the cloud backup both changed." to "这台电脑和云端备份都有改动。",
+    "The cloud backup changed before upload. Sync again to review it." to "上传前云端备份发生了变化，请再次同步以查看。",
+    "The cloud backup changed before upload. Review the refreshed conflict." to "上传前云端备份发生了变化，请查看更新后的冲突。",
+    "The cloud backup changed while the conflict choice was open. Review the refreshed conflict." to
+        "处理冲突期间云端备份发生了变化，请查看更新后的冲突。",
+    "The cloud service could not be reached." to "无法连接云服务。",
+    "The cloud service timed out." to "云服务响应超时。",
+    "GitHub is not connected." to "尚未连接 GitHub。",
+    "GitHub is not connected. Reconnect GitHub." to "尚未连接 GitHub，请重新连接。",
+    "GitHub sign-in expired or was revoked. Reconnect GitHub." to "GitHub 登录已过期或已被撤销，请重新连接 GitHub。",
+    "GitHub's rate limit was reached. Try again in a few minutes." to "已达到 GitHub 的请求频率上限，请几分钟后再试。",
+    "Could not reach GitHub." to "无法连接 GitHub。",
+    "GitHub kept changing while saving. Sync again." to "保存期间 GitHub 上的数据一直在变化，请再次同步。",
+    "The GitHub code expired. Start again." to "GitHub 代码已过期，请重新开始。",
+    "GitHub authorization was cancelled." to "GitHub 授权已取消。",
+    "Device flow is off for this GitHub App. Turn on \"Enable Device Flow\" in its settings." to
+        "这个 GitHub App 没有开启 Device Flow，请在它的设置中打开“Enable Device Flow”。",
+    "GitHub did not recognize this Client ID." to "GitHub 无法识别这个客户端 ID。",
+    "Install the GitHub App on a private repository first." to "请先把 GitHub App 安装到一个私有仓库上。",
+    "Use a private repository. Backups are encrypted, but their history would be public." to
+        "请使用私有仓库。备份虽然是加密的，但它们的历史记录会公开。",
+    "Enter the repository as owner/name." to "请按“所有者/名称”的格式输入仓库。",
+    "Enter the GitHub App's Client ID (it starts with Iv)." to "请输入 GitHub App 的客户端 ID（以 Iv 开头）。",
+    "The backup is larger than GitHub's 100 MB file limit." to "备份超过了 GitHub 单个文件 100 MB 的上限。",
+    "The Google Drive API is not enabled in this Google Cloud project. Enable it, then sync again." to
+        "这个 Google Cloud 项目没有启用 Google Drive API，请启用后再同步。",
+    "Google Drive is limiting requests. Try again in a few minutes." to "Google Drive 正在限制请求，请几分钟后再试。",
+    "Your Google Drive storage is full." to "你的 Google Drive 存储空间已满。",
+    "Google requires the Desktop OAuth client secret. Enter it from the Google Cloud Console and try again." to
+        "Google 要求提供 Desktop OAuth 客户端密钥，请从 Google Cloud Console 复制后重试。",
+    "The GitHub backup no longer exists." to "这个 GitHub 备份已不存在。",
 )

@@ -1,6 +1,9 @@
 package com.ced2711.lifetracker.desktop
 
 import com.ced2711.lifetracker.cloudsync.LocalCloudSyncState
+import com.ced2711.lifetracker.domain.model.AppLockTimeout
+import com.ced2711.lifetracker.domain.model.DefaultHiddenDestinations
+import com.ced2711.lifetracker.domain.model.DefaultVisibleDestinations
 import com.ced2711.lifetracker.domain.model.TopLevelDestination
 import com.ced2711.lifetracker.domain.model.UiLanguage
 import java.io.File
@@ -9,12 +12,20 @@ import java.nio.file.StandardCopyOption
 import java.util.Properties
 import java.util.UUID
 
+enum class DesktopCloudProvider { GOOGLE_DRIVE, GITHUB }
+
 data class DesktopCloudConfig(
     val clientId: String,
     val automaticSync: Boolean,
     val syncState: LocalCloudSyncState,
     val uiLanguage: UiLanguage = UiLanguage.ENGLISH,
     val lastDestination: TopLevelDestination = TopLevelDestination.TODO,
+    val visibleDestinations: Set<TopLevelDestination> = DefaultVisibleDestinations,
+    val appLockEnabled: Boolean = false,
+    val appLockTimeout: AppLockTimeout = AppLockTimeout.ONE_MINUTE,
+    val provider: DesktopCloudProvider = DesktopCloudProvider.GOOGLE_DRIVE,
+    val gitHubClientId: String = "",
+    val gitHubRepository: String = "",
 )
 
 class DesktopConfigStore(
@@ -44,6 +55,26 @@ class DesktopConfigStore(
             lastDestination = properties.getProperty(KEY_LAST_DESTINATION)
                 ?.let { value -> runCatching { TopLevelDestination.valueOf(value) }.getOrNull() }
                 ?: TopLevelDestination.TODO,
+            // Hidden rather than visible modules are stored so modules added later start visible.
+            // No saved choice yet means the defaults; an empty saved value means every module is shown.
+            visibleDestinations = (
+                properties.getProperty(KEY_HIDDEN_DESTINATIONS)
+                    ?: DefaultHiddenDestinations.joinToString(",") { it.name }
+                )
+                .split(',')
+                .map(String::trim)
+                .toSet()
+                .let { hidden -> TopLevelDestination.entries.filterNot { it.name in hidden }.toSet() },
+            appLockEnabled = properties.getProperty(KEY_APP_LOCK)?.toBooleanStrictOrNull() ?: false,
+            appLockTimeout = properties.getProperty(KEY_APP_LOCK_TIMEOUT)
+                ?.let { value -> AppLockTimeout.entries.firstOrNull { it.name == value } }
+                ?: AppLockTimeout.ONE_MINUTE,
+            provider = properties.getProperty(KEY_PROVIDER)
+                ?.let { value -> DesktopCloudProvider.entries.firstOrNull { it.name == value } }
+                ?: DesktopCloudProvider.GOOGLE_DRIVE,
+            gitHubClientId = properties.getProperty(KEY_GITHUB_CLIENT_ID)
+                ?: System.getenv("LIFE_ASSISTANT_GITHUB_CLIENT_ID").orEmpty(),
+            gitHubRepository = properties.getProperty(KEY_GITHUB_REPOSITORY).orEmpty(),
         )
     }
 
@@ -72,6 +103,33 @@ class DesktopConfigStore(
     fun setLastDestination(value: TopLevelDestination) {
         val properties = load()
         properties.setProperty(KEY_LAST_DESTINATION, value.name)
+        save(properties)
+    }
+
+    @Synchronized
+    fun setVisibleDestinations(value: Set<TopLevelDestination>) {
+        val properties = load()
+        properties.setProperty(
+            KEY_HIDDEN_DESTINATIONS,
+            TopLevelDestination.entries.filterNot(value::contains).joinToString(",") { it.name },
+        )
+        save(properties)
+    }
+
+    @Synchronized
+    fun setAppLock(enabled: Boolean, timeout: AppLockTimeout) {
+        val properties = load()
+        properties.setProperty(KEY_APP_LOCK, enabled.toString())
+        properties.setProperty(KEY_APP_LOCK_TIMEOUT, timeout.name)
+        save(properties)
+    }
+
+    @Synchronized
+    fun setProvider(provider: DesktopCloudProvider, gitHubClientId: String? = null, gitHubRepository: String? = null) {
+        val properties = load()
+        properties.setProperty(KEY_PROVIDER, provider.name)
+        gitHubClientId?.let { properties.setProperty(KEY_GITHUB_CLIENT_ID, it.trim()) }
+        gitHubRepository?.let { properties.setProperty(KEY_GITHUB_REPOSITORY, it.trim()) }
         save(properties)
     }
 
@@ -126,5 +184,11 @@ class DesktopConfigStore(
         const val KEY_LAST_SYNC_AT = "cloud.lastSyncAt"
         const val KEY_UI_LANGUAGE = "ui.language"
         const val KEY_LAST_DESTINATION = "ui.lastDestination"
+        const val KEY_HIDDEN_DESTINATIONS = "ui.hiddenDestinations"
+        const val KEY_APP_LOCK = "security.appLock"
+        const val KEY_APP_LOCK_TIMEOUT = "security.appLockTimeout"
+        const val KEY_PROVIDER = "cloud.provider"
+        const val KEY_GITHUB_CLIENT_ID = "github.clientId"
+        const val KEY_GITHUB_REPOSITORY = "github.repository"
     }
 }

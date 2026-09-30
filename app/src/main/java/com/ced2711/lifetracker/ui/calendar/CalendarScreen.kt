@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -42,6 +43,8 @@ import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
 import com.ced2711.lifetracker.ui.localization.uiLocale
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -66,6 +69,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ced2711.lifetracker.data.local.DiaryEntryEntity
 import com.ced2711.lifetracker.data.local.LedgerEntryEntity
 import com.ced2711.lifetracker.data.local.TodoEntity
 import com.ced2711.lifetracker.data.settings.AppSettings
@@ -73,6 +77,7 @@ import com.ced2711.lifetracker.domain.format.UserFormatting
 import com.ced2711.lifetracker.domain.model.LedgerType
 import com.ced2711.lifetracker.domain.model.TimeFormatOption
 import com.ced2711.lifetracker.ui.TaskLedgerViewModel
+import com.ced2711.lifetracker.domain.model.diaryPreview
 import java.math.BigDecimal
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -116,12 +121,23 @@ fun CalendarScreen(
     onOpenTodo: (Long) -> Unit,
     modifier: Modifier = Modifier,
     isWide: Boolean = false,
+    onOpenDiary: (Long) -> Unit = {},
+    showDiary: Boolean = true,
+    onOpenLedgerEntry: (Long) -> Unit = {},
 ) {
     val activeTodos by viewModel.activeTodos.collectAsStateWithLifecycle()
+    val diaryEntries by viewModel.diaryEntries.collectAsStateWithLifecycle()
+    val diary = remember(diaryEntries, showDiary, onOpenDiary) {
+        if (showDiary) CalendarDiary(diaryEntries.associateBy(DiaryEntryEntity::epochDay), onOpenDiary) else null
+    }
     val completedTodos by viewModel.completedTodos.collectAsStateWithLifecycle()
     val entries by viewModel.ledgerEntries.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
 
+    CompositionLocalProvider(
+        LocalCalendarDiary provides diary,
+        LocalOpenLedgerEntry provides onOpenLedgerEntry,
+    ) {
     CalendarContent(
         todos = (activeTodos + completedTodos).filter { it.deadlineEpochDay != null },
         entries = entries,
@@ -131,6 +147,7 @@ fun CalendarScreen(
         onOpenTodo = onOpenTodo,
         modifier = modifier,
     )
+    }
 }
 
 @Composable
@@ -523,6 +540,7 @@ private fun MonthDayCell(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val hasDiary = LocalCalendarDiary.current?.entriesByDay?.containsKey(date.toEpochDay()) == true
     val shape = RoundedCornerShape(10.dp)
     val containerColor = if (isSelected) {
         MaterialTheme.colorScheme.primaryContainer
@@ -545,6 +563,7 @@ private fun MonthDayCell(
         append(", $completedTodoCount completed")
         append(", $incompleteTodoCount incomplete")
         if (hasEntries) append(", net ${formatAmount(netCents)}") else append(", no ledger entries")
+        if (hasDiary) append(", has a diary entry")
     }
 
     Column(
@@ -573,6 +592,16 @@ private fun MonthDayCell(
                 color = dayColor,
                 style = MaterialTheme.typography.labelLarge,
             )
+            if (hasDiary) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(end = 2.dp)
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(diaryDotColor()),
+                )
+            }
         }
         Box(
             modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -864,6 +893,9 @@ private fun DayDetails(
             }
         }
 
+        LocalCalendarDiary.current?.let { diary ->
+            DiaryDetail(entry = diary.entriesByDay[date.toEpochDay()], onOpen = { diary.onOpen(date.toEpochDay()) })
+        }
         DetailSection(title = "Todos", emptyText = "No todos", isEmpty = todos.isEmpty()) {
             todos.sortedWith(compareBy<TodoEntity> { it.deadlineMinute ?: -1 }.thenBy { it.title })
                 .forEach { todo ->
@@ -973,8 +1005,17 @@ private fun TodoRow(
 @Composable
 private fun LedgerRow(entry: LedgerEntryEntity, use24HourTime: Boolean) {
     val signedCents = if (entry.type == LedgerType.EXPENSE) -entry.amountCents else entry.amountCents
+    val openEntry = LocalOpenLedgerEntry.current
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(
+                onClickLabel = "View or edit ledger entry",
+                role = Role.Button,
+                onClick = { openEntry(entry.id) },
+            )
+            .padding(horizontal = 8.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -1122,3 +1163,45 @@ private const val MONTH_GRID_BASE_ROW_HEIGHT_DP = 76f
 private const val MONTH_GRID_MIN_WIDTH_DP = 360f
 private const val MONTH_CELL_TEXT_LINE_HEIGHT_DP = 36f
 private const val MONTH_CELL_FIXED_HEIGHT_DP = 17f
+
+/** Diary pages shown in the calendar; null when the Diary module is hidden. */
+private class CalendarDiary(
+    val entriesByDay: Map<Long, DiaryEntryEntity>,
+    val onOpen: (Long) -> Unit,
+)
+
+private val LocalCalendarDiary = staticCompositionLocalOf<CalendarDiary?> { null }
+
+@Composable
+private fun diaryDotColor(): Color = incomeColor()
+
+@Composable
+private fun DiaryDetail(entry: DiaryEntryEntity?, onOpen: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(if (entry != null) diaryDotColor() else MaterialTheme.colorScheme.outlineVariant),
+        )
+        Text(
+            text = entry?.let { diaryPreview(it.body) } ?: localizedText("No diary entry"),
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (entry != null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 8.dp),
+        )
+        TextButton(onClick = onOpen) {
+            Text(localizedText(if (entry != null) "Open diary" else "Write diary"))
+        }
+    }
+}
+
+/** Opens a ledger entry in the Ledger editor; tapping a ledger row in any calendar view uses it. */
+private val LocalOpenLedgerEntry = staticCompositionLocalOf<(Long) -> Unit> { {} }

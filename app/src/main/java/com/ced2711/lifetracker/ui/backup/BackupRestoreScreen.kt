@@ -1,5 +1,12 @@
 package com.ced2711.lifetracker.ui.backup
 
+import androidx.core.net.toUri
+import com.ced2711.lifetracker.data.cloud.CloudProvider
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.foundation.layout.FlowRow
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -105,6 +112,7 @@ fun BackupRestoreScreen(
     var pendingSubmission by remember { mutableStateOf<BackupRestoreTask?>(null) }
     var reviewStep by remember { mutableStateOf(RestoreReviewStep.PREVIEW) }
     var connectCloudRequested by remember { mutableStateOf(false) }
+    var connectGitHubRequested by remember { mutableStateOf(false) }
     var recoveryFileName by rememberSaveable { mutableStateOf<String?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     val uiLanguage = LocalUiLanguage.current
@@ -204,6 +212,7 @@ fun BackupRestoreScreen(
                 CloudSyncCard(
                     state = cloudState,
                     onConnect = { connectCloudRequested = true },
+                    onConnectGitHub = { connectGitHubRequested = true },
                     onSync = { cloudViewModel.syncNow() },
                     onAutomaticChange = cloudViewModel::setAutomaticSync,
                     onReconnect = cloudViewModel::reconnect,
@@ -332,6 +341,25 @@ fun BackupRestoreScreen(
         )
     }
 
+    if (connectGitHubRequested) {
+        CloudSyncPasswordDialog(
+            title = "Connect GitHub",
+            initialClientId = cloudState.gitHubClientId,
+            initialRepository = cloudState.gitHubRepository,
+            showGitHubFields = true,
+            onDismiss = { connectGitHubRequested = false },
+            onConnect = { password -> password.fill('\u0000') },
+            onConnectGitHub = { password, clientId, repository ->
+                connectGitHubRequested = false
+                cloudViewModel.connectGitHub(password, clientId, repository)
+            },
+        )
+    }
+
+    cloudState.gitHubPrompt?.let { prompt ->
+        GitHubCodeDialog(prompt = prompt, onCancel = cloudViewModel::cancelGitHubConnect)
+    }
+
     cloudState.conflict?.let {
         CloudConflictDialog(
             onKeepLocal = { cloudViewModel.syncNow(ConflictResolution.KEEP_LOCAL) },
@@ -374,6 +402,7 @@ fun BackupRestoreScreen(
 private fun CloudSyncCard(
     state: CloudSyncUiState,
     onConnect: () -> Unit,
+    onConnectGitHub: () -> Unit,
     onSync: () -> Unit,
     onAutomaticChange: (Boolean) -> Unit,
     onReconnect: () -> Unit,
@@ -396,13 +425,24 @@ private fun CloudSyncCard(
                     Icon(Icons.Outlined.Cloud, null, modifier = Modifier.padding(10.dp).size(28.dp))
                 }
                 Column(modifier = Modifier.weight(1f)) {
+                    val gitHub = state.connected && state.provider == CloudProvider.GITHUB
                     Text(
-                        localizedText("Google Drive sync"),
+                        localizedText(
+                            when {
+                                !state.connected -> "Cloud sync"
+                                gitHub -> "GitHub sync"
+                                else -> "Google Drive sync"
+                            },
+                        ),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
-                        localizedText(if (state.connected) "Connected" else "Not connected"),
+                        when {
+                            gitHub -> localizedText("Connected") + " · " + state.gitHubRepository
+                            state.connected -> localizedText("Connected")
+                            else -> localizedText("Not connected")
+                        },
                         color = if (state.connected) {
                             MaterialTheme.colorScheme.primary
                         } else {
@@ -413,37 +453,43 @@ private fun CloudSyncCard(
             }
             Text(
                 localizedText(
-                    "Sync password-encrypted snapshots through Life Assistant's private app folder. " +
-                        "The app cannot see other files in your Google Drive.",
+                    "Sync password-encrypted snapshots between Android and Windows through Google Drive's " +
+                        "private app folder or a private GitHub repository. Cloud sync is optional; " +
+                        "Life Assistant works offline by default.",
                 ),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
                 localizedText(
-                    "Each upload creates a new encrypted version. Previous versions are kept; " +
+                    "Each upload creates a new encrypted version. The 10 most recent versions are kept; " +
                         "conflicts pause sync.",
                 ),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Text(
-                localizedText(
-                    "Google Drive is optional. Life Assistant works offline by default; enable Drive " +
-                        "only when you want encrypted backups shared between Android and Windows.",
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                localizedText(
-                    "Setup requires Drive API access, package com.ced2711.lifetracker, and the " +
-                        "release signing SHA-1 listed in the setup guide. Android and Windows must " +
-                        "use the same Google Cloud project and account.",
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (!state.connected || state.provider == CloudProvider.GOOGLE_DRIVE) {
+                Text(
+                    localizedText(
+                        "Google Drive needs Drive API access, package com.ced2711.lifetracker, and this " +
+                            "build's signing SHA-1 registered in Google Cloud. Android and Windows must " +
+                            "use the same Google Cloud project and account.",
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (!state.connected || state.provider == CloudProvider.GITHUB) {
+                Text(
+                    localizedText(
+                        "GitHub needs a GitHub App with Device Flow on, installed only on one private " +
+                            "repository with Contents read and write permission. Use the same app and " +
+                            "repository on every device.",
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             state.connectionError?.let { error ->
                 Text(
                     localizedText(error),
@@ -468,7 +514,7 @@ private fun CloudSyncCard(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(localizedText("Automatic sync"), style = MaterialTheme.typography.titleSmall)
                         Text(
-                            localizedText("Runs periodically when a network is available"),
+                            localizedText("Syncs a few seconds after each change, when you open the app, and about every 15 minutes in the background."),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -535,8 +581,17 @@ private fun CloudSyncCard(
                     }
                 }
             } else {
-                Button(enabled = !state.busy, onClick = onConnect) {
-                    Text(localizedText(if (state.busy) "Connecting…" else "Connect Google Drive"))
+                // FlowRow keeps both choices readable on narrow cover screens and small windows.
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Button(enabled = !state.busy, onClick = onConnect) {
+                        Text(localizedText(if (state.busy) "Connecting…" else "Connect Google Drive"))
+                    }
+                    OutlinedButton(enabled = !state.busy, onClick = onConnectGitHub) {
+                        Text(localizedText("Connect GitHub"))
+                    }
                 }
             }
         }
@@ -550,7 +605,7 @@ private fun CloudRecoveryCard(files: List<String>, enabled: Boolean, onExport: (
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(localizedText("Local sync recovery"), style = MaterialTheme.typography.titleMedium)
             Text(
-                localizedText("Before using a cloud version, Life Assistant keeps an encrypted local recovery copy. Export a copy and use Restore backup to recover it with its original sync password. Copies are not deleted automatically."),
+                localizedText("Before using a cloud version, Life Assistant keeps an encrypted local recovery copy. Export a copy and use Restore backup to recover it with its original sync password. The 5 most recent copies are kept."),
                 style = MaterialTheme.typography.bodySmall,
             )
             TextButton(onClick = { expanded = !expanded }) {
@@ -573,15 +628,23 @@ private fun CloudRecoveryCard(files: List<String>, enabled: Boolean, onExport: (
 }
 
 @Composable
-private fun CloudSyncPasswordDialog(
+internal fun CloudSyncPasswordDialog(
     onDismiss: () -> Unit,
     onConnect: (CharArray) -> Unit,
+    title: String = "Connect Google Drive",
+    showGitHubFields: Boolean = false,
+    initialClientId: String = "",
+    initialRepository: String = "",
+    onConnectGitHub: (CharArray, String, String) -> Unit = { password, _, _ -> onConnect(password) },
 ) {
     var password by remember { mutableStateOf("") }
     var confirmation by remember { mutableStateOf("") }
     var visible by remember { mutableStateOf(false) }
     var submitted by remember { mutableStateOf(false) }
+    var clientId by rememberSaveable { mutableStateOf(initialClientId) }
+    var repository by rememberSaveable { mutableStateOf(initialRepository) }
     val issue = if (submitted) exportPasswordIssue(password, confirmation) else null
+    val clientIdMissing = showGitHubFields && submitted && clientId.isBlank()
     val dismiss = {
         password = ""
         confirmation = ""
@@ -589,15 +652,33 @@ private fun CloudSyncPasswordDialog(
     }
     HingeSafeAlertDialog(
         onDismissRequest = dismiss,
-        title = { Text(localizedText("Connect Google Drive")) },
+        title = { Text(localizedText(title)) },
         text = {
+            // HingeSafeAlertDialog already scrolls its body; a second vertical scroll here crashes.
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
                     localizedText(
                         "Choose a sync password. You will enter the same password on Windows or a new device. " +
-                            "Google cannot recover it.",
+                            "Nobody can recover it for you.",
                     ),
                 )
+                if (showGitHubFields) {
+                    OutlinedTextField(
+                        value = clientId,
+                        onValueChange = { clientId = it.trim(); submitted = false },
+                        label = { Text(localizedText("GitHub App Client ID")) },
+                        singleLine = true,
+                        isError = clientIdMissing,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = repository,
+                        onValueChange = { repository = it },
+                        label = { Text(localizedText("Private repository (owner/name, optional)")) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
                 PasswordField(
                     value = password,
                     label = "Sync password",
@@ -623,14 +704,59 @@ private fun CloudSyncPasswordDialog(
         confirmButton = {
             Button(onClick = {
                 submitted = true
-                if (exportPasswordIssue(password, confirmation) == null) {
+                if (exportPasswordIssue(password, confirmation) == null && !(showGitHubFields && clientId.isBlank())) {
                     val transferred = password.toCharArray()
                     password = ""
                     confirmation = ""
-                    onConnect(transferred)
+                    if (showGitHubFields) onConnectGitHub(transferred, clientId, repository) else onConnect(transferred)
                 }
             }) { Text(localizedText("Connect")) }
         },
+    )
+}
+
+@Composable
+private fun GitHubCodeDialog(prompt: GitHubCodePrompt, onCancel: () -> Unit) {
+    val context = LocalContext.current
+    val uiLanguage = LocalUiLanguage.current
+    HingeSafeAlertDialog(
+        onDismissRequest = {},
+        title = { Text(localizedText("Approve on GitHub")) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(localizedText("Open GitHub, sign in, and enter this code. This screen continues by itself once you approve."))
+                Text(
+                    prompt.userCode,
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                )
+                Text(prompt.verificationUri, style = MaterialTheme.typography.bodySmall)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = {
+                        val clipboard = context.getSystemService(android.content.ClipboardManager::class.java)
+                        clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("GitHub code", prompt.userCode))
+                    }) { Text(localizedText("Copy code")) }
+                    Button(onClick = {
+                        runCatching {
+                            context.startActivity(
+                                android.content.Intent(android.content.Intent.ACTION_VIEW, prompt.verificationUri.toUri())
+                                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                            )
+                        }.onFailure {
+                            android.widget.Toast.makeText(
+                                context,
+                                translateUiText("No browser is available to open GitHub.", uiLanguage),
+                                android.widget.Toast.LENGTH_LONG,
+                            ).show()
+                        }
+                    }) { Text(localizedText("Open GitHub")) }
+                }
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onCancel) { Text(localizedText("Cancel")) } },
     )
 }
 
@@ -1018,6 +1144,7 @@ private fun RestorePreviewDialog(
                 PreviewValue("Todos", preview.todoCount.toString())
                 PreviewValue("Ledger entries", preview.ledgerCount.toString())
                 PreviewValue("Notes", preview.noteCount.toString())
+                PreviewValue("Diary entries", preview.diaryCount.toString())
                 PreviewValue("Vault entries", preview.vaultCount.toString())
                 PreviewValue(
                     "Attachments",

@@ -4,6 +4,9 @@ import android.content.Context
 import com.ced2711.lifetracker.cloudsync.CloudBackupStore
 import com.ced2711.lifetracker.cloudsync.CloudRevision
 import com.ced2711.lifetracker.cloudsync.ConflictResolution
+import com.ced2711.lifetracker.cloudsync.CloudAuthorizationException
+import com.ced2711.lifetracker.cloudsync.GitHubBackupStore
+import com.ced2711.lifetracker.cloudsync.GitHubRepository
 import com.ced2711.lifetracker.cloudsync.GoogleDriveBackupStore
 import com.ced2711.lifetracker.cloudsync.NewCloudRevision
 import com.ced2711.lifetracker.cloudsync.SyncDecision
@@ -11,6 +14,7 @@ import com.ced2711.lifetracker.cloudsync.cloudRevisionHeadIds
 import com.ced2711.lifetracker.cloudsync.cloudRevisionHeads
 import com.ced2711.lifetracker.cloudsync.decideSyncAction
 import com.ced2711.lifetracker.cloudsync.latestCloudRevision
+import com.ced2711.lifetracker.cloudsync.prunableCloudRevisions
 import com.ced2711.lifetracker.data.backup.BackupRepository
 import com.ced2711.lifetracker.data.backup.BackupDataChangedException
 import com.ced2711.lifetracker.data.backup.BackupRestoreResult
@@ -26,6 +30,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -49,6 +56,7 @@ class AndroidCloudSyncEngine(
     private val preferences: CloudSyncPreferences,
     private val secretStore: CloudSyncSecretStore,
     private val authorization: GoogleDriveAuthorization,
+    private val gitHubTokenStore: CloudSyncSecretStore? = null,
     private val afterRestore: suspend () -> Unit,
     private val now: () -> Long = System::currentTimeMillis,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
@@ -56,7 +64,10 @@ class AndroidCloudSyncEngine(
 ) {
     private val cacheDirectory = File(context.cacheDir, "cloud-sync")
     private val recoveryDirectory = File(context.filesDir, CLOUD_RECOVERY_DIRECTORY)
-    private val store = cloudStore ?: GoogleDriveBackupStore(authorization)
+    private val injectedStore = cloudStore
+    private val driveStore by lazy { GoogleDriveBackupStore(authorization) }
+    // Chosen at the start of each sync from the configured provider; guarded by [syncMutex].
+    private lateinit var store: CloudBackupStore
     private val syncMutex = Mutex()
 
     /** App-private encrypted recovery snapshots, newest first, for user-initiated export. */
@@ -77,9 +88,14 @@ class AndroidCloudSyncEngine(
         vaultSession: VaultSession? = null,
         conflictResolution: ConflictResolution? = null,
         expectedRemoteRevisionId: String? = null,
-    ): AndroidCloudSyncResult = syncMutex.withLock { withContext(ioDispatcher) {
+    ): AndroidCloudSyncResult = syncMutex.withLock { trackActivity { withContext(ioDispatcher) {
         val settings = preferences.read()
         if (!settings.enabled) return@withContext AndroidCloudSyncResult.Disabled
+        store = try {
+            injectedStore ?: storeFor(settings)
+        } catch (error: IllegalArgumentException) {
+            return@withContext AndroidCloudSyncResult.Failed(error.message ?: "The GitHub repository name is invalid.")
+        }
         val password = secretStore.load()
             ?: return@withContext AndroidCloudSyncResult.Failed("The saved sync password is unavailable.")
         try {
@@ -150,7 +166,45 @@ class AndroidCloudSyncEngine(
         } finally {
             password.fill('\u0000')
         }
-    } }
+    } } }
+
+    private val _running = MutableStateFlow(false)
+
+    /** True while a sync runs, whoever started it (the app, the worker, or the sync button). */
+    val running: StateFlow<Boolean> = _running.asStateFlow()
+
+    private val _finishedSyncs = MutableStateFlow(0L)
+
+    /** Increments after every sync so observers re-read the recorded sync state. */
+    val finishedSyncs: StateFlow<Long> = _finishedSyncs.asStateFlow()
+
+    private inline fun <T> trackActivity(block: () -> T): T {
+        _running.value = true
+        try {
+            return block()
+        } finally {
+            _running.value = false
+            _finishedSyncs.value += 1
+        }
+    }
+
+    private fun storeFor(settings: AndroidCloudSyncSettings): CloudBackupStore = when (settings.provider) {
+        CloudProvider.GOOGLE_DRIVE -> driveStore
+        CloudProvider.GITHUB -> GitHubBackupStore(
+            tokenProvider = {
+                val token = gitHubTokenStore?.load() ?: throw CloudAuthorizationException("GitHub is not connected. Reconnect GitHub.")
+                try { token.concatToString() } finally { token.fill('\u0000') }
+            },
+            repository = GitHubRepository.parse(settings.gitHubRepository),
+        )
+    }
+
+    /** Old revisions only cost cloud space; keep recent history and never touch competing tips. */
+    private suspend fun pruneOldRevisions(revisions: List<CloudRevision>) {
+        runCatching {
+            prunableCloudRevisions(revisions, keepCount = KEPT_CLOUD_REVISIONS).forEach { store.deleteRevision(it.fileId) }
+        }
+    }
 
     private suspend fun upload(
         password: CharArray,
@@ -188,7 +242,7 @@ class AndroidCloudSyncEngine(
             if (cloudRevisionHeadIds(preflightRevisions) != expectedHeadIds) {
                 val changedRemote = latestCloudRevision(preflightRevisions) ?: remote
                     ?: return AndroidCloudSyncResult.Failed(
-                        "Google Drive changed before upload. Sync again to review it.",
+                        "The cloud backup changed before upload. Sync again to review it.",
                     )
                 return AndroidCloudSyncResult.Conflict(changedRemote)
             }
@@ -209,6 +263,7 @@ class AndroidCloudSyncEngine(
                 )
             }
             preferences.recordSuccessfulSync(revision.fileId, fingerprint, now())
+            pruneOldRevisions(postflightRevisions)
             return AndroidCloudSyncResult.Uploaded(revision)
         } finally {
             if (encrypted.exists()) encrypted.delete()
@@ -340,6 +395,7 @@ class AndroidCloudSyncEngine(
             // and Windows use different local dirty-check fingerprints (logical snapshot versus
             // encrypted-file SHA-256), so only the applied Android fingerprint belongs in the
             // Android sync baseline.
+            pruneOldRevisions(postflightRevisions)
             preferences.recordSuccessfulSync(revision.fileId, fingerprint, now())
             runCatching { afterRestore() }
             return AndroidCloudSyncResult.Downloaded(revision, result)
@@ -388,6 +444,7 @@ class AndroidCloudSyncEngine(
             } catch (_: AtomicMoveNotSupportedException) {
                 Files.move(temporary.toPath(), destination.toPath())
             }
+            recoveryFiles().drop(KEPT_RECOVERY_COPIES).forEach(File::delete)
             return destination
         } finally {
             if (temporary.exists()) temporary.delete()
@@ -417,13 +474,15 @@ class AndroidCloudSyncEngine(
     }
 
     private fun Throwable.safeCloudMessage(): String = when (this) {
-        is java.net.UnknownHostException -> "Google Drive could not be reached."
-        is java.net.SocketTimeoutException -> "Google Drive timed out."
-        else -> message?.takeIf { it.length in 1..160 } ?: "Google Drive sync failed."
+        is java.net.UnknownHostException -> "The cloud service could not be reached."
+        is java.net.SocketTimeoutException -> "The cloud service timed out."
+        else -> message?.takeIf { it.length in 1..200 } ?: "Cloud sync failed."
     }
 
     private companion object {
         const val CLOUD_RECOVERY_DIRECTORY = "cloud-recovery"
+        const val KEPT_CLOUD_REVISIONS = 10
+        const val KEPT_RECOVERY_COPIES = 5
         const val CLOUD_RECOVERY_FILE_PREFIX = "life-tracker-cloud-recovery-"
     }
 }

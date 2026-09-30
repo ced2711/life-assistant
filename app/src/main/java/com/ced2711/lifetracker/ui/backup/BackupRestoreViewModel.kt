@@ -547,6 +547,7 @@ private fun BackupPreview.toUiPreview(createdAtLabel: String) = BackupRestorePre
     attachmentBytes = attachmentBytes,
     totalBytes = totalBytes,
     noteCount = noteCount,
+    diaryCount = diaryCount,
 )
 
 private fun prepareRestoreNotice(failure: Throwable): BackupRestoreNotice = when (failure) {

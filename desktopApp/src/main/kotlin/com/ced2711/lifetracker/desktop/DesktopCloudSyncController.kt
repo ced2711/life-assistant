@@ -3,6 +3,11 @@ package com.ced2711.lifetracker.desktop
 import com.ced2711.lifetracker.cloudsync.CloudBackupStore
 import com.ced2711.lifetracker.cloudsync.CloudRevision
 import com.ced2711.lifetracker.cloudsync.ConflictResolution
+import com.ced2711.lifetracker.cloudsync.CloudAuthorizationException
+import com.ced2711.lifetracker.cloudsync.GitHubBackupStore
+import com.ced2711.lifetracker.cloudsync.GitHubDeviceAuthorization
+import com.ced2711.lifetracker.cloudsync.GitHubDeviceCode
+import com.ced2711.lifetracker.cloudsync.GitHubRepository
 import com.ced2711.lifetracker.cloudsync.GoogleDriveBackupStore
 import com.ced2711.lifetracker.cloudsync.NewCloudRevision
 import com.ced2711.lifetracker.cloudsync.SyncDecision
@@ -10,6 +15,7 @@ import com.ced2711.lifetracker.cloudsync.cloudRevisionHeadIds
 import com.ced2711.lifetracker.cloudsync.cloudRevisionHeads
 import com.ced2711.lifetracker.cloudsync.decideSyncAction
 import com.ced2711.lifetracker.cloudsync.latestCloudRevision
+import com.ced2711.lifetracker.cloudsync.prunableCloudRevisions
 import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
@@ -19,6 +25,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -30,6 +40,13 @@ data class DesktopCloudUiState(
     val lastSyncAt: Long? = null,
     val message: String? = null,
     val conflict: CloudRevision? = null,
+    val provider: DesktopCloudProvider = DesktopCloudProvider.GOOGLE_DRIVE,
+    val gitHubRepository: String = "",
+    // Shown while the user approves this PC on GitHub.
+    val gitHubCode: GitHubDeviceCode? = null,
+    // Local data differs from what was last synced.
+    val pendingChanges: Boolean = false,
+    val lastSyncFailed: Boolean = false,
 )
 
 class DesktopCloudSyncController(
@@ -38,22 +55,91 @@ class DesktopCloudSyncController(
     private val oauth: DesktopGoogleOAuth,
     private val now: () -> Long = System::currentTimeMillis,
     cloudStore: CloudBackupStore? = null,
-    private val connectionStatus: () -> Boolean = oauth::isConnected,
+    private val credentials: WindowsCredentialStore? = null,
+    private val connectionStatus: (() -> Boolean)? = null,
+    private val editDebounceMillis: Long = EDIT_DEBOUNCE_MILLIS,
+    private val pollIntervalMillis: Long = AUTOMATIC_INTERVAL_MILLIS,
 ) {
-    private val drive = cloudStore ?: GoogleDriveBackupStore(oauth)
+    private val injectedStore = cloudStore
+    private val googleDrive by lazy { GoogleDriveBackupStore(oauth) }
+    private var appScope: CoroutineScope? = null
+
+    // The provider is read per operation so switching providers never mixes histories.
+    private val drive: CloudBackupStore
+        get() = injectedStore ?: configStore.read().let { config ->
+            when (config.provider) {
+                DesktopCloudProvider.GOOGLE_DRIVE -> googleDrive
+                DesktopCloudProvider.GITHUB -> GitHubBackupStore(
+                    tokenProvider = { gitHubToken() },
+                    repository = GitHubRepository.parse(config.gitHubRepository),
+                )
+            }
+        }
+
+    private fun gitHubToken(): String {
+        val token = credentials?.load(WindowsCredentialStore.GITHUB_TOKEN)
+            ?: throw CloudAuthorizationException("GitHub is not connected. Reconnect GitHub.")
+        return try { token.concatToString() } finally { token.fill('\u0000') }
+    }
+
+    private fun isConnected(): Boolean = connectionStatus?.invoke() ?: when (configStore.read().provider) {
+        DesktopCloudProvider.GOOGLE_DRIVE -> oauth.isConnected()
+        DesktopCloudProvider.GITHUB -> credentials?.exists(WindowsCredentialStore.GITHUB_TOKEN) == true &&
+            configStore.read().gitHubRepository.isNotBlank()
+    }
+
+    /**
+     * Runs sign-in and sync in the app-wide scope, so leaving the Settings page no longer cancels
+     * a browser sign-in or an upload halfway through.
+     */
+    fun launch(block: suspend DesktopCloudSyncController.() -> Unit) {
+        val scope = appScope ?: return
+        scope.launch { block() }
+    }
     private val _state = MutableStateFlow(readState())
     val state: StateFlow<DesktopCloudUiState> = _state.asStateFlow()
     private var automaticJob: Job? = null
+    @Volatile private var lastAutomaticAttemptAt = 0L
 
     fun start(scope: CoroutineScope) {
+        appScope = scope
         automaticJob?.cancel()
         automaticJob = scope.launch {
-            if (_state.value.connected && _state.value.automaticSync) synchronize()
-            while (isActive) {
-                delay(AUTOMATIC_INTERVAL_MILLIS)
-                if (_state.value.connected && _state.value.automaticSync) synchronize()
+            launch { refreshPendingChanges() }
+            // Periodic check so changes from the other device arrive while this app is open.
+            launch {
+                while (isActive) {
+                    syncWhenIdle()
+                    delay(pollIntervalMillis)
+                }
             }
+            // Sync shortly after local edits. The sync itself runs outside collectLatest, so a
+            // download that changes local data cannot cancel the sync that caused it.
+            dataStore.state
+                .map { (it as? DesktopStoreState.Open)?.snapshot }
+                .distinctUntilChanged()
+                .drop(1)
+                .collectLatest {
+                    refreshPendingChanges()
+                    delay(editDebounceMillis)
+                    scope.launch { syncWhenIdle() }
+                }
         }
+    }
+
+    /** Called when the window regains focus: catch up, but not more than twice a minute. */
+    fun onWindowFocused() {
+        val scope = appScope ?: return
+        if (now() - lastAutomaticAttemptAt < FOCUS_SYNC_MIN_INTERVAL_MILLIS) return
+        scope.launch { syncWhenIdle() }
+    }
+
+    /** Runs an automatic sync, waiting for a sync already in progress instead of skipping. */
+    private suspend fun syncWhenIdle() {
+        if (!_state.value.connected || !_state.value.automaticSync) return
+        while (_state.value.syncing) delay(500)
+        lastAutomaticAttemptAt = now()
+        synchronize()
     }
 
     suspend fun connect(clientId: String, clientSecret: CharArray) {
@@ -64,6 +150,8 @@ class DesktopCloudSyncController(
         _state.update { it.copy(syncing = true, message = null) }
         try {
             oauth.connect(clientId, clientSecret)
+            configStore.setProvider(DesktopCloudProvider.GOOGLE_DRIVE)
+            configStore.setAutomaticSync(true)
             // The consent may point at a different Google account. Keep the previous lineage until
             // consent succeeds, then force a safe first-sync comparison for the newly selected account.
             configStore.clearSyncState()
@@ -79,10 +167,61 @@ class DesktopCloudSyncController(
         }
     }
 
+    private var gitHubJob: Job? = null
+
+    /** Device-flow sign-in; the code to enter at GitHub is published in [state] meanwhile. */
+    suspend fun connectGitHub(clientId: String, repository: String) {
+        if (_state.value.syncing) return
+        _state.update { it.copy(syncing = true, message = null) }
+        try {
+            val authorization = GitHubDeviceAuthorization(clientId.trim())
+            val code = authorization.start()
+            _state.update { it.copy(gitHubCode = code) }
+            val token = authorization.awaitToken(code)
+            _state.update { it.copy(gitHubCode = null) }
+            val resolved = authorization.resolveRepository(token.accessToken, repository)
+            GitHubBackupStore({ token.accessToken }, resolved).listRevisions()
+            requireNotNull(credentials) { "Secure credential storage is unavailable." }
+                .save(WindowsCredentialStore.GITHUB_TOKEN, token.accessToken.toCharArray())
+            val sameRepository = configStore.read().let {
+                it.provider == DesktopCloudProvider.GITHUB && it.gitHubRepository == resolved.fullName
+            }
+            configStore.setProvider(DesktopCloudProvider.GITHUB, clientId.trim(), resolved.fullName)
+            configStore.setAutomaticSync(true)
+            // Reconnecting to the same repository keeps the sync baseline, so no false conflict.
+            if (!sameRepository) configStore.clearSyncState()
+            _state.value = readState().copy(message = "GitHub connected.")
+            synchronize()
+        } catch (cancelled: CancellationException) {
+            _state.value = readState().copy(message = "GitHub connection cancelled.")
+            throw cancelled
+        } catch (error: Throwable) {
+            _state.value = readState().copy(message = error.safeMessage())
+        }
+    }
+
+    fun startGitHubConnect(clientId: String, repository: String) {
+        val scope = appScope ?: return
+        gitHubJob?.cancel()
+        gitHubJob = scope.launch { connectGitHub(clientId, repository) }
+    }
+
+    fun cancelGitHubConnect() {
+        gitHubJob?.cancel()
+    }
+
     suspend fun disconnect() {
         if (_state.value.syncing) return
-        runCatching { oauth.disconnect() }
-        _state.value = readState().copy(message = "Google Drive disconnected. Local data was kept.")
+        val provider = configStore.read().provider
+        if (provider == DesktopCloudProvider.GITHUB) {
+            credentials?.delete(WindowsCredentialStore.GITHUB_TOKEN)
+            configStore.clearSyncState()
+            configStore.setProvider(DesktopCloudProvider.GOOGLE_DRIVE)
+            _state.value = readState().copy(message = "GitHub disconnected. Local data was kept.")
+        } else {
+            runCatching { oauth.disconnect() }
+            _state.value = readState().copy(message = "Google Drive disconnected. Local data was kept.")
+        }
     }
 
     fun setAutomaticSync(enabled: Boolean) {
@@ -107,7 +246,7 @@ class DesktopCloudSyncController(
             if (resolution != null && remote?.fileId != approvedConflictId) {
                 _state.value = readState().copy(
                     conflict = remote,
-                    message = "Google Drive changed while the conflict choice was open. Review the refreshed conflict.",
+                    message = "The cloud backup changed while the conflict choice was open. Review the refreshed conflict.",
                 )
                 return
             }
@@ -134,7 +273,7 @@ class DesktopCloudSyncController(
                     _state.value = readState().copy(
                         syncing = false,
                         conflict = requireNotNull(remote),
-                        message = "This PC and Google Drive both changed.",
+                        message = "This PC and the cloud backup both changed.",
                     )
                 }
                 decision == SyncDecision.Conflict && resolution == ConflictResolution.KEEP_LOCAL ->
@@ -151,8 +290,18 @@ class DesktopCloudSyncController(
             _state.value = readState().copy(conflict = previousConflict)
             throw cancelled
         } catch (error: Throwable) {
-            _state.value = readState().copy(message = error.safeMessage())
+            _state.value = readState().copy(message = error.safeMessage(), lastSyncFailed = true)
         }
+        refreshPendingChanges()
+    }
+
+    /** Compares the local data file with the one recorded at the last sync. */
+    private suspend fun refreshPendingChanges() {
+        if (!_state.value.connected) return
+        val pending = runCatching {
+            dataStore.localFingerprint() != configStore.read().syncState.lastContentFingerprint
+        }.getOrDefault(false)
+        _state.update { if (it.syncing) it else it.copy(pendingChanges = pending) }
     }
 
     fun dismissConflict() {
@@ -252,7 +401,7 @@ class DesktopCloudSyncController(
         if (cloudRevisionHeadIds(preflightRevisions) != expectedHeadIds) {
             _state.value = readState().copy(
                 conflict = latestCloudRevision(preflightRevisions) ?: remote,
-                message = "Google Drive changed before upload. Review the refreshed conflict.",
+                message = "The cloud backup changed before upload. Review the refreshed conflict.",
             )
             return null
         }
@@ -275,6 +424,7 @@ class DesktopCloudSyncController(
             return null
         }
         if (recordBaseline) configStore.recordSync(revision.fileId, fingerprint, now())
+        runCatching { prunableCloudRevisions(refreshed, keepCount = KEPT_CLOUD_REVISIONS).forEach { drive.deleteRevision(it.fileId) } }
         if (successMessage != null) {
             _state.value = readState().copy(message = successMessage)
         }
@@ -323,20 +473,25 @@ class DesktopCloudSyncController(
     private fun readState(): DesktopCloudUiState {
         val config = configStore.read()
         return DesktopCloudUiState(
-            connected = connectionStatus(),
+            connected = isConnected(),
+            provider = config.provider,
+            gitHubRepository = config.gitHubRepository,
             automaticSync = config.automaticSync,
             lastSyncAt = config.syncState.lastSyncAt,
         )
     }
 
     private fun Throwable.safeMessage(): String = when (this) {
-        is java.net.UnknownHostException -> "Google Drive could not be reached."
-        is java.net.SocketTimeoutException -> "Google Drive timed out."
+        is java.net.UnknownHostException -> "The cloud service could not be reached."
+        is java.net.SocketTimeoutException -> "The cloud service timed out."
         is IllegalArgumentException -> message ?: "Cloud sync settings are invalid."
-        else -> message?.takeIf { it.length in 1..180 } ?: "Google Drive sync failed."
+        else -> message?.takeIf { it.length in 1..220 } ?: "Cloud sync failed."
     }
 
-    private companion object {
-        const val AUTOMATIC_INTERVAL_MILLIS = 15L * 60L * 1_000L
+    companion object {
+        const val AUTOMATIC_INTERVAL_MILLIS = 2L * 60L * 1_000L
+        const val EDIT_DEBOUNCE_MILLIS = 8_000L
+        const val FOCUS_SYNC_MIN_INTERVAL_MILLIS = 30_000L
+        const val KEPT_CLOUD_REVISIONS = 10
     }
 }

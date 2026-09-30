@@ -28,6 +28,7 @@ sourceSets {
             include("com/ced2711/lifetracker/domain/model/AppIdentity.kt")
             include("com/ced2711/lifetracker/domain/model/TodoOrganization.kt")
             include("com/ced2711/lifetracker/domain/model/VaultModels.kt")
+            include("com/ced2711/lifetracker/domain/model/ConfessionModels.kt")
             include("com/ced2711/lifetracker/domain/date/SmartDateParser.kt")
             include("com/ced2711/lifetracker/domain/format/UserFormatting.kt")
             include("com/ced2711/lifetracker/ui/theme/TaskLedgerTheme.kt")
@@ -57,14 +58,14 @@ dependencies {
     testImplementation(libs.junit)
 }
 
-val prepareLegalResources by tasks.registering(Sync::class) {
+val prepareLegalResources = tasks.register<Sync>("prepareLegalResources") {
     from(rootProject.file("LICENSE"), rootProject.file("ADDITIONAL_PERMISSIONS.md"), rootProject.file("NOTICE"))
     into(layout.buildDirectory.dir("generated/legal-resources/legal"))
 }
 tasks.named("processResources") { dependsOn(prepareLegalResources) }
 
 val windowsIconFile = layout.buildDirectory.file("generated/icons/life-assistant.ico")
-val generateWindowsIcon by tasks.registering {
+val generateWindowsIcon = tasks.register("generateWindowsIcon") {
     outputs.file(windowsIconFile)
     doLast {
         val target = windowsIconFile.get().asFile
@@ -123,10 +124,16 @@ val generateWindowsIcon by tasks.registering {
 compose.desktop {
     application {
         mainClass = "com.ced2711.lifetracker.desktop.MainKt"
+        buildTypes.release.proguard {
+            // Drops unused Compose code, notably most of the extended icon set.
+            isEnabled.set(true)
+            obfuscate.set(false)
+            configurationFiles.from(project.file("proguard-rules.pro"))
+        }
         nativeDistributions {
             targetFormats(TargetFormat.Exe, TargetFormat.Msi)
             packageName = "Life Assistant"
-            packageVersion = "1.7.1"
+            packageVersion = "1.8.0"
             description = "Private life planning, ledger, calendar, notes, and vault"
             vendor = "ced2711"
             copyright = "Copyright 2026 ced2711"

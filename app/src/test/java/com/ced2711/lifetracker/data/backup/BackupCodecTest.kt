@@ -244,6 +244,7 @@ private fun BackupSnapshot.withoutNotesForLegacy(version: Int) = copy(
     formatVersion = version,
     noteFolders = emptyList(),
     notes = emptyList(),
+    diaryEntries = emptyList(),
     attachments = attachments.filter { it.ownerType != com.ced2711.lifetracker.domain.model.AttachmentOwnerType.NOTE },
 )
 

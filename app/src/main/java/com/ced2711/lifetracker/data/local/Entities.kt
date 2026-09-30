@@ -305,6 +305,18 @@ data class NoteEntity(
     val updatedAt: Long = createdAt,
 )
 
+@Entity(
+    tableName = "diary_entries",
+    indices = [Index(value = ["epochDay"], unique = true)],
+)
+data class DiaryEntryEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val epochDay: Long,
+    val body: String,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = createdAt,
+)
+
 data class DailyLedgerTotal(
     val epochDay: Long,
     val incomeCents: Long,

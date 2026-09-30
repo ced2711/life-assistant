@@ -111,6 +111,15 @@ internal fun fullBackupSnapshot(): BackupSnapshot {
                 updatedAt = 118,
             ),
         ),
+        diaryEntries = listOf(
+            com.ced2711.lifetracker.data.local.DiaryEntryEntity(
+                id = 95,
+                epochDay = 20_000,
+                body = "今天的日记 ✓ diary",
+                createdAt = 119,
+                updatedAt = 120,
+            ),
+        ),
     )
 }
 

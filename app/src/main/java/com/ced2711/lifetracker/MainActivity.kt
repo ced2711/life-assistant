@@ -42,8 +42,14 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ced2711.lifetracker.domain.model.TopLevelDestination
+import com.ced2711.lifetracker.domain.model.normalizeVisibleDestinations
+import com.ced2711.lifetracker.domain.model.resolveVisibleDestination
 import com.ced2711.lifetracker.ui.TaskLedgerViewModel
+import com.ced2711.lifetracker.ui.confessional.ConfessionalScreen
+import com.ced2711.lifetracker.ui.diary.DiaryScreen
+import com.ced2711.lifetracker.ui.lock.AppLockScreen
 import com.ced2711.lifetracker.ui.adaptive.AdaptiveTaskLedgerScaffold
+import com.ced2711.lifetracker.ui.adaptive.TopBarSyncStatus
 import com.ced2711.lifetracker.ui.adaptive.LocalSafePaneLayout
 import com.ced2711.lifetracker.ui.adaptive.collectFoldingFeature
 import com.ced2711.lifetracker.ui.adaptive.hideAppStatusBar
@@ -137,6 +143,23 @@ class MainActivity : FragmentActivity() {
             }
 
             val settings by viewModel.settings.collectAsStateWithLifecycle()
+            val appLock = (application as TaskLedgerApplication).container.appLock
+            val appLocked by appLock.locked.collectAsStateWithLifecycle()
+            LaunchedEffect(settings.appLockEnabled) {
+                // Keep app content out of the recent-apps preview while the lock is on.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    setRecentsScreenshotEnabled(!settings.appLockEnabled)
+                }
+            }
+            if (appLocked != false) {
+                CompositionLocalProvider(LocalUiLanguage provides settings.uiLanguage) {
+                    TaskLedgerTheme(settings.themeMode, settings.accentColor) {
+                        if (appLocked == true) AppLockScreen(appLock) else Surface(Modifier.fillMaxSize()) {}
+                    }
+                }
+                return@setContent
+            }
+            val visibleDestinations = normalizeVisibleDestinations(settings.visibleDestinations)
             val backupUiState by backupRestoreViewModel.uiState.collectAsStateWithLifecycle()
             val backupAuthentication by
                 backupRestoreViewModel.authenticationRequest.collectAsStateWithLifecycle()
@@ -178,11 +201,29 @@ class MainActivity : FragmentActivity() {
                     TopLevelDestination.TODO
                 widgetQuickAddAction == WidgetNavigation.ACTION_OPEN_LEDGER ->
                     TopLevelDestination.LEDGER
-                else -> selectedOverride
-                    ?.let { value -> TopLevelDestination.entries.firstOrNull { it.name == value } }
-                    ?: settings.lastDestination
+                else -> resolveVisibleDestination(
+                    preferred = selectedOverride
+                        ?.let { value -> TopLevelDestination.entries.firstOrNull { it.name == value } }
+                        ?: settings.lastDestination,
+                    visible = visibleDestinations,
+                )
             }
+            var requestedDiaryDay by rememberSaveable { mutableStateOf<Long?>(null) }
+            var requestedLedgerEntryId by rememberSaveable { mutableStateOf<Long?>(null) }
             val foldingFeature by collectFoldingFeature(this)
+            val cloudIndicator by (application as TaskLedgerApplication).container.cloudSyncStatus
+                .indicator.collectAsStateWithLifecycle()
+            // A sync started from the top bar that needs a decision or an unlock continues on the Backup screen.
+            var topBarSyncAwaitingResult by remember { mutableStateOf(false) }
+            LaunchedEffect(topBarSyncAwaitingResult, cloudAuthentication != null, cloudSyncUiState.conflict != null, showBackup) {
+                if (showBackup) {
+                    topBarSyncAwaitingResult = false
+                } else if (topBarSyncAwaitingResult &&
+                    (cloudAuthentication != null || cloudSyncUiState.conflict != null)
+                ) {
+                    auxiliaryName = AuxiliaryScreen.BACKUP.name
+                }
+            }
 
             LaunchedEffect(pendingCloudSyncOpen) {
                 if (pendingCloudSyncOpen) {
@@ -216,7 +257,9 @@ class MainActivity : FragmentActivity() {
                 }
             }
 
+            // The confessional never allows screenshots or a recent-apps preview of its words.
             val protectWindow = showVault ||
+                (auxiliary == null && selected == TopLevelDestination.CONFESSIONAL) ||
                 (showBackup && (
                     backupSensitive || backupAuthentication != null || cloudAuthentication != null
                 ))
@@ -336,6 +379,7 @@ class MainActivity : FragmentActivity() {
             CompositionLocalProvider(LocalUiLanguage provides settings.uiLanguage) {
                 TaskLedgerTheme(settings.themeMode, settings.accentColor) {
                     AdaptiveTaskLedgerScaffold(
+                    destinations = visibleDestinations,
                     selected = selected,
                     onSelected = { destination ->
                         if (!showBackup ||
@@ -367,6 +411,19 @@ class MainActivity : FragmentActivity() {
                         null -> null
                     },
                     foldingFeature = foldingFeature,
+                    syncStatus = cloudIndicator?.let { indicator ->
+                        TopBarSyncStatus(
+                            indicator = indicator,
+                            onSync = {
+                                topBarSyncAwaitingResult = true
+                                cloudSyncViewModel.syncNow()
+                            },
+                            onOpenSettings = {
+                                if (showVault) vaultViewModel.lock()
+                                auxiliaryName = AuxiliaryScreen.BACKUP.name
+                            },
+                        )
+                    },
                 ) { contentPadding ->
                     BoxWithConstraints(
                         modifier = Modifier
@@ -385,6 +442,7 @@ class MainActivity : FragmentActivity() {
                                     auxiliaryName = AuxiliaryScreen.VAULT.name
                                 },
                                 onOpenBackup = { auxiliaryName = AuxiliaryScreen.BACKUP.name },
+                                appLock = appLock,
                                 onDefaultReminderOffsetsChange =
                                     viewModel::setDefaultReminderOffsetsMinutes,
                                 modifier = Modifier.fillMaxSize(),
@@ -458,6 +516,10 @@ class MainActivity : FragmentActivity() {
                                             selectedOverride = TopLevelDestination.LEDGER.name
                                             auxiliaryName = null
                                         },
+                                        requestedEntryId = requestedLedgerEntryId,
+                                        onRequestedEntryHandled = { handledId ->
+                                            if (requestedLedgerEntryId == handledId) requestedLedgerEntryId = null
+                                        },
                                     )
                                     TopLevelDestination.CALENDAR -> CalendarScreen(
                                         viewModel = viewModel,
@@ -467,6 +529,31 @@ class MainActivity : FragmentActivity() {
                                             auxiliaryName = null
                                             viewModel.setLastDestination(TopLevelDestination.TODO)
                                         },
+                                        onOpenDiary = { epochDay ->
+                                            requestedDiaryDay = epochDay
+                                            selectedOverride = TopLevelDestination.DIARY.name
+                                            auxiliaryName = null
+                                            viewModel.setLastDestination(TopLevelDestination.DIARY)
+                                        },
+                                        showDiary = TopLevelDestination.DIARY in visibleDestinations,
+                                        onOpenLedgerEntry = { entryId ->
+                                            requestedLedgerEntryId = entryId
+                                            selectedOverride = TopLevelDestination.LEDGER.name
+                                            auxiliaryName = null
+                                            viewModel.setLastDestination(TopLevelDestination.LEDGER)
+                                        },
+                                        modifier = Modifier.fillMaxSize(),
+                                        isWide = isWide,
+                                    )
+                                    TopLevelDestination.DIARY -> DiaryScreen(
+                                        viewModel = viewModel,
+                                        requestedEpochDay = requestedDiaryDay,
+                                        onRequestedDayHandled = { requestedDiaryDay = null },
+                                        modifier = Modifier.fillMaxSize(),
+                                        isWide = isWide,
+                                    )
+                                    TopLevelDestination.CONFESSIONAL -> ConfessionalScreen(
+                                        store = (application as TaskLedgerApplication).container.confessionStore,
                                         modifier = Modifier.fillMaxSize(),
                                         isWide = isWide,
                                     )
@@ -520,6 +607,16 @@ class MainActivity : FragmentActivity() {
             .onHostWindowFocusChanged(hasFocus)
     }
 
+    override fun onStart() {
+        super.onStart()
+        if (
+            (application as TaskLedgerApplication).startupRecoveryCoordinator.state.value
+                is StartupRecoveryState.Ready
+        ) {
+            (application as TaskLedgerApplication).container.appLock.onForeground()
+        }
+    }
+
     override fun onStop() {
         (application as TaskLedgerApplication).container.vaultClipboard
             .onHostWindowFocusChanged(false)
@@ -532,6 +629,7 @@ class MainActivity : FragmentActivity() {
                 ?.usesExternalDeviceCredentialPrompt(Build.VERSION.SDK_INT) == true
             if (!isChangingConfigurations && !showingExternalCredentialPrompt) {
                 vaultViewModel.lock(clearOwnedClipboard = false)
+                (application as TaskLedgerApplication).container.appLock.onBackground()
             }
         }
         super.onStop()

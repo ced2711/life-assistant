@@ -3,13 +3,25 @@ package com.ced2711.lifetracker.data.cloud
 import android.content.Context
 import com.ced2711.lifetracker.cloudsync.LocalCloudSyncState
 import java.util.UUID
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 
 data class AndroidCloudSyncSettings(
     val enabled: Boolean,
     val automaticSync: Boolean,
     val attention: CloudSyncAttention?,
     val state: LocalCloudSyncState,
+    val provider: CloudProvider = CloudProvider.GOOGLE_DRIVE,
+    val gitHubClientId: String = "",
+    // owner/name of the private repository used when [provider] is GitHub.
+    val gitHubRepository: String = "",
 )
+
+enum class CloudProvider {
+    GOOGLE_DRIVE,
+    GITHUB,
+}
 
 enum class CloudSyncAttention {
     CONFLICT,
@@ -20,6 +32,14 @@ enum class CloudSyncAttention {
 
 class CloudSyncPreferences(context: Context) {
     private val preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+
+    /** Emits once at start and after every change, from any writer (app, worker, sync button). */
+    fun changes(): Flow<Unit> = callbackFlow {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> trySend(Unit) }
+        preferences.registerOnSharedPreferenceChangeListener(listener)
+        trySend(Unit)
+        awaitClose { preferences.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
 
     @Synchronized
     fun read(): AndroidCloudSyncSettings {
@@ -40,12 +60,28 @@ class CloudSyncPreferences(context: Context) {
                 lastContentFingerprint = preferences.getString(KEY_LAST_FINGERPRINT, null),
                 lastSyncAt = preferences.getLong(KEY_LAST_SYNC_AT, -1L).takeIf { it >= 0L },
             ),
+            provider = preferences.getString(KEY_PROVIDER, null)
+                ?.let { saved -> CloudProvider.entries.firstOrNull { it.name == saved } }
+                ?: CloudProvider.GOOGLE_DRIVE,
+            gitHubClientId = preferences.getString(KEY_GITHUB_CLIENT_ID, null).orEmpty(),
+            gitHubRepository = preferences.getString(KEY_GITHUB_REPOSITORY, null).orEmpty(),
         )
     }
 
     @Synchronized
     fun setEnabled(enabled: Boolean) {
         preferences.edit().putBoolean(KEY_ENABLED, enabled).apply()
+    }
+
+    @Synchronized
+    fun setProvider(provider: CloudProvider, gitHubClientId: String = "", gitHubRepository: String = "") {
+        check(
+            preferences.edit()
+                .putString(KEY_PROVIDER, provider.name)
+                .putString(KEY_GITHUB_CLIENT_ID, gitHubClientId)
+                .putString(KEY_GITHUB_REPOSITORY, gitHubRepository)
+                .commit(),
+        ) { "Could not save the cloud provider." }
     }
 
     @Synchronized
@@ -103,5 +139,8 @@ class CloudSyncPreferences(context: Context) {
         const val KEY_LAST_FINGERPRINT = "last_fingerprint"
         const val KEY_LAST_SYNC_AT = "last_sync_at"
         const val KEY_ATTENTION = "attention"
+        const val KEY_PROVIDER = "provider"
+        const val KEY_GITHUB_CLIENT_ID = "github_client_id"
+        const val KEY_GITHUB_REPOSITORY = "github_repository"
     }
 }

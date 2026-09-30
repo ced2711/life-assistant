@@ -25,8 +25,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         NoteEntity::class,
         VaultEntryEntity::class,
         RestoreCommitEntity::class,
+        DiaryEntryEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -227,6 +228,26 @@ abstract class TaskLedgerDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `diary_entries` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `epochDay` INTEGER NOT NULL,
+                        `body` TEXT NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+                database.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_diary_entries_epochDay` " +
+                        "ON `diary_entries` (`epochDay`)",
+                )
+            }
+        }
+
         fun getInstance(context: Context): TaskLedgerDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
@@ -239,6 +260,7 @@ abstract class TaskLedgerDatabase : RoomDatabase() {
                     MIGRATION_3_4,
                     MIGRATION_4_5,
                     MIGRATION_5_6,
+                    MIGRATION_6_7,
                 )
                 .build()
                 .also { instance = it }

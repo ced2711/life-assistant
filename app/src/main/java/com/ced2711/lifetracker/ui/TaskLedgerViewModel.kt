@@ -10,7 +10,9 @@ import com.ced2711.lifetracker.data.repository.DeleteUndoResult
 import com.ced2711.lifetracker.data.settings.AppSettings
 import com.ced2711.lifetracker.domain.model.DateFormatOption
 import com.ced2711.lifetracker.domain.model.AccentColor
+import com.ced2711.lifetracker.domain.model.AppLockTimeout
 import com.ced2711.lifetracker.domain.model.AttachmentOwnerType
+import com.ced2711.lifetracker.domain.model.DiaryDraft
 import com.ced2711.lifetracker.domain.model.LedgerDraft
 import com.ced2711.lifetracker.domain.model.LedgerSaveResult
 import com.ced2711.lifetracker.domain.model.NoteDraft
@@ -93,6 +95,11 @@ class TaskLedgerViewModel(private val container: AppContainer) : ViewModel() {
         emptyList(),
     )
     val notes = repository.notes.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        emptyList(),
+    )
+    val diaryEntries = repository.diaryEntries.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
         emptyList(),
@@ -294,6 +301,7 @@ class TaskLedgerViewModel(private val container: AppContainer) : ViewModel() {
     }
     fun stopTodoSeries(id: Long) = launchAction { repository.deactivateTodoSeries(id) }
     fun stopLedgerSeries(id: Long) = launchAction { repository.deactivateLedgerSeries(id) }
+    fun deleteStoppedLedgerSeries(id: Long) = launchAction { repository.deleteStoppedLedgerSeries(id) }
 
     fun addNoteFolder(
         name: String,
@@ -320,6 +328,15 @@ class TaskLedgerViewModel(private val container: AppContainer) : ViewModel() {
         onSaved: (Long) -> Unit = {},
         onFailure: (String) -> Unit = {},
     ) = launchAction(onFailure) { onSaved(repository.saveNote(draft)) }
+
+    fun saveDiaryEntry(
+        draft: DiaryDraft,
+        onSaved: (Boolean) -> Unit = {},
+        onFailure: (String) -> Unit = {},
+    ) = launchAction(onFailure) { onSaved(repository.saveDiaryEntry(draft)) }
+
+    fun deleteDiaryEntry(epochDay: Long, onFailure: (String) -> Unit = {}) =
+        launchAction(onFailure) { repository.deleteDiaryEntry(epochDay) }
 
     fun deleteNote(
         noteId: Long,
@@ -363,6 +380,12 @@ class TaskLedgerViewModel(private val container: AppContainer) : ViewModel() {
         launchAction { settingsRepository.setTodoQuickAddFields(value) }
     fun setLastDestination(value: TopLevelDestination) =
         launchAction { settingsRepository.setLastDestination(value) }
+    fun setVisibleDestinations(value: Set<TopLevelDestination>) =
+        launchAction { settingsRepository.setVisibleDestinations(value) }
+    fun setAppLockEnabled(value: Boolean) =
+        launchAction { settingsRepository.setAppLockEnabled(value) }
+    fun setAppLockTimeout(value: AppLockTimeout) =
+        launchAction { settingsRepository.setAppLockTimeout(value) }
 
     fun addAttachments(
         ownerType: AttachmentOwnerType,

@@ -374,6 +374,16 @@ interface TaskLedgerDao {
     @Query("SELECT * FROM ledger_series ORDER BY createdAt DESC")
     fun observeLedgerSeries(): Flow<List<LedgerSeriesEntity>>
 
+    /** Turns a schedule's generated entries into ordinary entries so they outlive the schedule. */
+    @Query(
+        "UPDATE ledger_entries SET seriesId = NULL, occurrenceEpochDay = NULL, " +
+            "updatedAt = MAX(updatedAt, :updatedAt) WHERE seriesId = :seriesId",
+    )
+    suspend fun detachLedgerSeriesEntries(seriesId: Long, updatedAt: Long)
+
+    @Query("DELETE FROM ledger_series WHERE id = :seriesId AND active = 0")
+    suspend fun deleteStoppedLedgerSeries(seriesId: Long): Int
+
     @Query("UPDATE ledger_series SET active = 0, updatedAt = :updatedAt WHERE id = :seriesId")
     suspend fun deactivateLedgerSeries(seriesId: Long, updatedAt: Long)
 
@@ -468,6 +478,21 @@ interface TaskLedgerDao {
 
     @Query("DELETE FROM notes WHERE id = :noteId")
     suspend fun deleteNoteById(noteId: Long)
+
+    @Query("SELECT * FROM diary_entries ORDER BY epochDay DESC")
+    fun observeDiaryEntries(): Flow<List<DiaryEntryEntity>>
+
+    @Query("SELECT * FROM diary_entries WHERE epochDay = :epochDay LIMIT 1")
+    suspend fun getDiaryEntry(epochDay: Long): DiaryEntryEntity?
+
+    @Insert
+    suspend fun insertDiaryEntry(entry: DiaryEntryEntity): Long
+
+    @Update
+    suspend fun updateDiaryEntry(entry: DiaryEntryEntity)
+
+    @Query("DELETE FROM diary_entries WHERE epochDay = :epochDay")
+    suspend fun deleteDiaryEntry(epochDay: Long)
 
     @Query("SELECT * FROM attachments WHERE ownerType = :ownerType AND ownerId = :ownerId AND pendingDeleteAt IS NULL ORDER BY createdAt")
     fun observeAttachments(ownerType: String, ownerId: Long): Flow<List<AttachmentEntity>>

@@ -18,6 +18,60 @@ import org.junit.Test
 
 class DesktopCloudSyncControllerTest {
     @Test
+    fun localEditsAreUploadedShortlyAfterTheLastChange() = runBlocking {
+        withController(editDebounceMillis = 150) { controller, dataStore, _, cloud ->
+            controller.setAutomaticSync(true)
+            val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default)
+            try {
+                controller.start(scope)
+                waitUntil { cloud.uploadCount == 1 && !controller.state.value.syncing }
+
+                assertTrue(dataStore.addCategory("Groceries"))
+                assertTrue(dataStore.addCategory("Travel"))
+                waitUntil { cloud.uploadCount == 2 && !controller.state.value.syncing }
+                kotlinx.coroutines.delay(500)
+                assertEquals("two quick edits upload once", 2, cloud.uploadCount)
+            } finally {
+                scope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
+            }
+        }
+    }
+
+    @Test
+    fun headerIndicatorShowsPendingEditsUntilTheManualSyncAndFailures() = runBlocking {
+        withController(editDebounceMillis = 60_000) { controller, dataStore, _, cloud ->
+            val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default)
+            try {
+                controller.synchronize()
+                assertEquals(DesktopSyncIndicator.UP_TO_DATE, desktopSyncIndicator(controller.state.value))
+                controller.start(scope)
+
+                assertTrue(dataStore.addCategory("Groceries"))
+                waitUntil { controller.state.value.pendingChanges }
+                assertEquals(DesktopSyncIndicator.PENDING, desktopSyncIndicator(controller.state.value))
+
+                // The header button runs a normal two-way sync.
+                controller.synchronize()
+                assertEquals(2, cloud.uploadCount)
+                assertEquals(DesktopSyncIndicator.UP_TO_DATE, desktopSyncIndicator(controller.state.value))
+
+                assertTrue(dataStore.addCategory("Travel"))
+                cloud.onList = { _, _ -> throw java.net.UnknownHostException() }
+                controller.synchronize()
+                assertEquals(DesktopSyncIndicator.NEEDS_ATTENTION, desktopSyncIndicator(controller.state.value))
+                assertTrue("the unsynced edit is still known", controller.state.value.pendingChanges)
+            } finally {
+                scope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
+            }
+        }
+    }
+
+    private suspend fun waitUntil(condition: () -> Boolean) {
+        repeat(100) { if (condition()) return; kotlinx.coroutines.delay(50) }
+        throw AssertionError("condition was not met in time")
+    }
+
+    @Test
     fun firstUploadStopsWhenCloudBecomesNonEmptyDuringSnapshotCreation() = runBlocking {
         withController { controller, dataStore, configStore, cloud ->
             assertTrue(dataStore.addCategory("Local"))
@@ -193,6 +247,7 @@ class DesktopCloudSyncControllerTest {
     }
 
     private suspend fun withController(
+        editDebounceMillis: Long = DesktopCloudSyncController.EDIT_DEBOUNCE_MILLIS,
         block: suspend (
             DesktopCloudSyncController,
             DesktopDataStore,
@@ -215,6 +270,8 @@ class DesktopCloudSyncControllerTest {
                 now = { 123L },
                 cloudStore = cloud,
                 connectionStatus = { true },
+                editDebounceMillis = editDebounceMillis,
+                pollIntervalMillis = 60 * 60_000L,
             )
             block(controller, dataStore, configStore, cloud)
         } finally {
