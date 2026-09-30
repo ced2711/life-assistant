@@ -37,6 +37,35 @@ class DesktopCloudSyncControllerTest {
         }
     }
 
+    @Test
+    fun headerIndicatorShowsPendingEditsUntilTheManualSyncAndFailures() = runBlocking {
+        withController(editDebounceMillis = 60_000) { controller, dataStore, _, cloud ->
+            val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default)
+            try {
+                controller.synchronize()
+                assertEquals(DesktopSyncIndicator.UP_TO_DATE, desktopSyncIndicator(controller.state.value))
+                controller.start(scope)
+
+                assertTrue(dataStore.addCategory("Groceries"))
+                waitUntil { controller.state.value.pendingChanges }
+                assertEquals(DesktopSyncIndicator.PENDING, desktopSyncIndicator(controller.state.value))
+
+                // The header button runs a normal two-way sync.
+                controller.synchronize()
+                assertEquals(2, cloud.uploadCount)
+                assertEquals(DesktopSyncIndicator.UP_TO_DATE, desktopSyncIndicator(controller.state.value))
+
+                assertTrue(dataStore.addCategory("Travel"))
+                cloud.onList = { _, _ -> throw java.net.UnknownHostException() }
+                controller.synchronize()
+                assertEquals(DesktopSyncIndicator.NEEDS_ATTENTION, desktopSyncIndicator(controller.state.value))
+                assertTrue("the unsynced edit is still known", controller.state.value.pendingChanges)
+            } finally {
+                scope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
+            }
+        }
+    }
+
     private suspend fun waitUntil(condition: () -> Boolean) {
         repeat(100) { if (condition()) return; kotlinx.coroutines.delay(50) }
         throw AssertionError("condition was not met in time")

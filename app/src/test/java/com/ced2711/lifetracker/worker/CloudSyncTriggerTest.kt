@@ -14,6 +14,7 @@ import org.junit.Test
 class CloudSyncTriggerTest {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val requests = AtomicInteger()
+    private val observedChanges = AtomicInteger()
     private var enabled = true
     private val owner = object : LifecycleOwner {
         override val lifecycle: Lifecycle get() = error("not used by the trigger")
@@ -23,6 +24,7 @@ class CloudSyncTriggerTest {
         scope = scope,
         automaticSyncEnabled = { enabled },
         requestSync = { requests.incrementAndGet() },
+        onLocalChangeObserved = { observedChanges.incrementAndGet() },
         editDebounceMillis = 150,
         foregroundPollMillis = poll,
     )
@@ -37,6 +39,16 @@ class CloudSyncTriggerTest {
         assertEquals(0, requests.get())
         Thread.sleep(400)
         assertEquals(1, requests.get())
+    }
+
+    @Test
+    fun localEditsReachTheStatusIndicatorEvenWhenAutomaticSyncIsOff() {
+        enabled = false
+        val trigger = trigger()
+        trigger.onLocalChange()
+        Thread.sleep(300)
+        assertEquals(1, observedChanges.get())
+        assertEquals(0, requests.get())
     }
 
     @Test

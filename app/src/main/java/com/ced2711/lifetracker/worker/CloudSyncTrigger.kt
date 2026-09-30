@@ -21,6 +21,7 @@ class CloudSyncTrigger(
     private val scope: CoroutineScope,
     private val automaticSyncEnabled: () -> Boolean,
     private val requestSync: () -> Unit,
+    private val onLocalChangeObserved: () -> Unit = {},
     private val editDebounceMillis: Long = EDIT_DEBOUNCE_MILLIS,
     private val foregroundPollMillis: Long = FOREGROUND_POLL_MILLIS,
 ) : DefaultLifecycleObserver {
@@ -37,6 +38,7 @@ class CloudSyncTrigger(
 
     @Synchronized
     fun onLocalChange() {
+        onLocalChangeObserved()
         if (!automaticSyncEnabled()) return
         pendingEditSync?.cancel()
         pendingEditSync = scope.launch {

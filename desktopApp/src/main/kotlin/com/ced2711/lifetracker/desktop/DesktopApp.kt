@@ -449,6 +449,11 @@ private fun DesktopHome(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Spacer(Modifier.weight(1f))
+                        DesktopSyncStatusButton(
+                            state = cloudState,
+                            onSync = { cloud.launch { synchronize() } },
+                            onOpenSettings = { destination = DesktopDestination.SETTINGS },
+                        )
                         if (destination == DesktopDestination.SETTINGS || destination == DesktopDestination.VAULT) {
                             IconButton(onClick = { navigate(mainDestinations.first()) }) {
                                 Icon(Icons.Default.ChevronLeft, desktopText("Back"))

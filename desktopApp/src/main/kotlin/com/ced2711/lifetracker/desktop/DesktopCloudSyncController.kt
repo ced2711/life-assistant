@@ -44,6 +44,9 @@ data class DesktopCloudUiState(
     val gitHubRepository: String = "",
     // Shown while the user approves this PC on GitHub.
     val gitHubCode: GitHubDeviceCode? = null,
+    // Local data differs from what was last synced.
+    val pendingChanges: Boolean = false,
+    val lastSyncFailed: Boolean = false,
 )
 
 class DesktopCloudSyncController(
@@ -102,6 +105,7 @@ class DesktopCloudSyncController(
         appScope = scope
         automaticJob?.cancel()
         automaticJob = scope.launch {
+            launch { refreshPendingChanges() }
             // Periodic check so changes from the other device arrive while this app is open.
             launch {
                 while (isActive) {
@@ -116,6 +120,7 @@ class DesktopCloudSyncController(
                 .distinctUntilChanged()
                 .drop(1)
                 .collectLatest {
+                    refreshPendingChanges()
                     delay(editDebounceMillis)
                     scope.launch { syncWhenIdle() }
                 }
@@ -285,8 +290,18 @@ class DesktopCloudSyncController(
             _state.value = readState().copy(conflict = previousConflict)
             throw cancelled
         } catch (error: Throwable) {
-            _state.value = readState().copy(message = error.safeMessage())
+            _state.value = readState().copy(message = error.safeMessage(), lastSyncFailed = true)
         }
+        refreshPendingChanges()
+    }
+
+    /** Compares the local data file with the one recorded at the last sync. */
+    private suspend fun refreshPendingChanges() {
+        if (!_state.value.connected) return
+        val pending = runCatching {
+            dataStore.localFingerprint() != configStore.read().syncState.lastContentFingerprint
+        }.getOrDefault(false)
+        _state.update { if (it.syncing) it else it.copy(pendingChanges = pending) }
     }
 
     fun dismissConflict() {

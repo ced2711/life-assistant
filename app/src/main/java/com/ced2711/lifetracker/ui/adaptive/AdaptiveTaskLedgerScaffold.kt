@@ -96,6 +96,7 @@ fun AdaptiveTaskLedgerScaffold(
     modifier: Modifier = Modifier,
     foldingFeature: FoldingFeature? = null,
     destinations: List<TopLevelDestination> = TopLevelDestination.entries,
+    syncStatus: TopBarSyncStatus? = null,
     content: @Composable (PaddingValues) -> Unit,
 ) {
     val effectiveAuxiliaryTitle = if (isSettings) auxiliaryTitle ?: "Settings" else null
@@ -133,6 +134,7 @@ fun AdaptiveTaskLedgerScaffold(
             LocalSafePaneLayout provides safePaneLayout,
             LocalAuxiliaryTitle provides effectiveAuxiliaryTitle,
             LocalNavigationDestinations provides destinations,
+            LocalTopBarSyncStatus provides syncStatus,
         ) {
             FoldAwareScaffold(
                 safePaneLayout = safePaneLayout,
@@ -559,6 +561,7 @@ private fun TaskLedgerTopBar(
     compact: Boolean,
 ) {
     val auxiliaryTitle = LocalAuxiliaryTitle.current
+    val syncStatus = LocalTopBarSyncStatus.current
     val island = LocalHeaderCutoutIsland.current
     val density = LocalDensity.current
     var barBounds by remember { mutableStateOf<CutoutIsland?>(null) }
@@ -570,7 +573,7 @@ private fun TaskLedgerTopBar(
                 barRight = bounds.right,
                 barBottom = bounds.bottom,
                 titleStart = 16.dp.roundToPx(),
-                trailingWidth = 52.dp.roundToPx(),
+                trailingWidth = (if (syncStatus == null) 52.dp else 100.dp).roundToPx(),
                 minimumTitleWidth = 48.dp.roundToPx(),
                 gap = 8.dp.roundToPx(),
                 island = island,
@@ -608,6 +611,7 @@ private fun TaskLedgerTopBar(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            syncStatus?.let { CloudSyncStatusButton(it) }
             IconButton(onClick = onSettings) {
                 Icon(
                     imageVector = if (isSettings) {

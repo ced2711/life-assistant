@@ -49,6 +49,7 @@ import com.ced2711.lifetracker.ui.confessional.ConfessionalScreen
 import com.ced2711.lifetracker.ui.diary.DiaryScreen
 import com.ced2711.lifetracker.ui.lock.AppLockScreen
 import com.ced2711.lifetracker.ui.adaptive.AdaptiveTaskLedgerScaffold
+import com.ced2711.lifetracker.ui.adaptive.TopBarSyncStatus
 import com.ced2711.lifetracker.ui.adaptive.LocalSafePaneLayout
 import com.ced2711.lifetracker.ui.adaptive.collectFoldingFeature
 import com.ced2711.lifetracker.ui.adaptive.hideAppStatusBar
@@ -210,6 +211,19 @@ class MainActivity : FragmentActivity() {
             var requestedDiaryDay by rememberSaveable { mutableStateOf<Long?>(null) }
             var requestedLedgerEntryId by rememberSaveable { mutableStateOf<Long?>(null) }
             val foldingFeature by collectFoldingFeature(this)
+            val cloudIndicator by (application as TaskLedgerApplication).container.cloudSyncStatus
+                .indicator.collectAsStateWithLifecycle()
+            // A sync started from the top bar that needs a decision or an unlock continues on the Backup screen.
+            var topBarSyncAwaitingResult by remember { mutableStateOf(false) }
+            LaunchedEffect(topBarSyncAwaitingResult, cloudAuthentication != null, cloudSyncUiState.conflict != null, showBackup) {
+                if (showBackup) {
+                    topBarSyncAwaitingResult = false
+                } else if (topBarSyncAwaitingResult &&
+                    (cloudAuthentication != null || cloudSyncUiState.conflict != null)
+                ) {
+                    auxiliaryName = AuxiliaryScreen.BACKUP.name
+                }
+            }
 
             LaunchedEffect(pendingCloudSyncOpen) {
                 if (pendingCloudSyncOpen) {
@@ -397,6 +411,19 @@ class MainActivity : FragmentActivity() {
                         null -> null
                     },
                     foldingFeature = foldingFeature,
+                    syncStatus = cloudIndicator?.let { indicator ->
+                        TopBarSyncStatus(
+                            indicator = indicator,
+                            onSync = {
+                                topBarSyncAwaitingResult = true
+                                cloudSyncViewModel.syncNow()
+                            },
+                            onOpenSettings = {
+                                if (showVault) vaultViewModel.lock()
+                                auxiliaryName = AuxiliaryScreen.BACKUP.name
+                            },
+                        )
+                    },
                 ) { contentPadding ->
                     BoxWithConstraints(
                         modifier = Modifier

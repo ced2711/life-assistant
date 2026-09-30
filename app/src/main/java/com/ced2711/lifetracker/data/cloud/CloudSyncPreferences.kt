@@ -3,6 +3,9 @@ package com.ced2711.lifetracker.data.cloud
 import android.content.Context
 import com.ced2711.lifetracker.cloudsync.LocalCloudSyncState
 import java.util.UUID
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 
 data class AndroidCloudSyncSettings(
     val enabled: Boolean,
@@ -29,6 +32,14 @@ enum class CloudSyncAttention {
 
 class CloudSyncPreferences(context: Context) {
     private val preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+
+    /** Emits once at start and after every change, from any writer (app, worker, sync button). */
+    fun changes(): Flow<Unit> = callbackFlow {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> trySend(Unit) }
+        preferences.registerOnSharedPreferenceChangeListener(listener)
+        trySend(Unit)
+        awaitClose { preferences.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
 
     @Synchronized
     fun read(): AndroidCloudSyncSettings {

@@ -7,6 +7,7 @@ import com.ced2711.lifetracker.data.confession.ConfessionStore
 import com.ced2711.lifetracker.data.cloud.AndroidCloudSyncEngine
 import com.ced2711.lifetracker.data.cloud.CloudSyncPreferences
 import com.ced2711.lifetracker.data.cloud.CloudSyncSecretStore
+import com.ced2711.lifetracker.data.cloud.CloudSyncStatusMonitor
 import com.ced2711.lifetracker.data.cloud.GoogleDriveAuthorization
 import com.ced2711.lifetracker.data.local.TaskLedgerDatabase
 import com.ced2711.lifetracker.data.repository.TaskLedgerRepository
@@ -79,6 +80,7 @@ class TaskLedgerApplication : Application() {
                 container.cloudSyncPreferences.read().let { it.enabled && it.automaticSync }
             },
             requestSync = { CloudSyncScheduler.enqueueNow(this) },
+            onLocalChangeObserved = container.cloudSyncStatus::markLocalChange,
         )
         trigger.start(container.database)
         Handler(Looper.getMainLooper()).post {
@@ -128,6 +130,12 @@ class AppContainer(application: Application) {
         },
     )
     val confessionStore = ConfessionStore(application)
+    val cloudSyncStatus = CloudSyncStatusMonitor(
+        engine = cloudSyncEngine,
+        preferences = cloudSyncPreferences,
+        hasSyncPassword = cloudSyncSecretStore::hasSecret,
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+    )
     val appLock = AppLockController(
         settings = settingsRepository.settings,
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),

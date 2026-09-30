@@ -30,6 +30,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -85,7 +88,7 @@ class AndroidCloudSyncEngine(
         vaultSession: VaultSession? = null,
         conflictResolution: ConflictResolution? = null,
         expectedRemoteRevisionId: String? = null,
-    ): AndroidCloudSyncResult = syncMutex.withLock { withContext(ioDispatcher) {
+    ): AndroidCloudSyncResult = syncMutex.withLock { trackActivity { withContext(ioDispatcher) {
         val settings = preferences.read()
         if (!settings.enabled) return@withContext AndroidCloudSyncResult.Disabled
         store = try {
@@ -163,7 +166,27 @@ class AndroidCloudSyncEngine(
         } finally {
             password.fill('\u0000')
         }
-    } }
+    } } }
+
+    private val _running = MutableStateFlow(false)
+
+    /** True while a sync runs, whoever started it (the app, the worker, or the sync button). */
+    val running: StateFlow<Boolean> = _running.asStateFlow()
+
+    private val _finishedSyncs = MutableStateFlow(0L)
+
+    /** Increments after every sync so observers re-read the recorded sync state. */
+    val finishedSyncs: StateFlow<Long> = _finishedSyncs.asStateFlow()
+
+    private inline fun <T> trackActivity(block: () -> T): T {
+        _running.value = true
+        try {
+            return block()
+        } finally {
+            _running.value = false
+            _finishedSyncs.value += 1
+        }
+    }
 
     private fun storeFor(settings: AndroidCloudSyncSettings): CloudBackupStore = when (settings.provider) {
         CloudProvider.GOOGLE_DRIVE -> driveStore
