@@ -47,6 +47,29 @@ class CloudSyncDecisionTest {
         assertEquals(SyncDecision.UpToDate, decideSyncAction(fingerprintA, false, state, revision("base")))
     }
 
+    @Test
+    fun prunedHistoryDownloadsWhenThisDeviceHasNoChanges() {
+        // The version this device last saw was pruned; the newest head points at a missing parent.
+        val head = revision("head").copy(baseRevisionId = "pruned-parent")
+        val state = LocalCloudSyncState("device", lastRevisionId = "old-pruned", lastContentFingerprint = fingerprintA)
+        assertEquals(SyncDecision.Download, decideSyncAction(fingerprintA, false, state, listOf(head)))
+    }
+
+    @Test
+    fun prunedHistoryStillAsksWhenThisDeviceChanged() {
+        val head = revision("head").copy(baseRevisionId = "pruned-parent")
+        val state = LocalCloudSyncState("device", lastRevisionId = "old-pruned", lastContentFingerprint = fingerprintA)
+        assertEquals(SyncDecision.Conflict, decideSyncAction(fingerprintB, false, state, listOf(head)))
+    }
+
+    @Test
+    fun anUnrelatedCompleteHistoryIsStillAConflict() {
+        // Nothing is missing here, so this is a genuinely different lineage, not pruning.
+        val head = revision("head")
+        val state = LocalCloudSyncState("device", lastRevisionId = "elsewhere", lastContentFingerprint = fingerprintA)
+        assertEquals(SyncDecision.Conflict, decideSyncAction(fingerprintA, false, state, listOf(head)))
+    }
+
     private fun revision(id: String) = CloudRevision(
         fileId = id,
         fileName = "$id.tlb",

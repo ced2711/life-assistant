@@ -140,16 +140,23 @@ fun decideSyncAction(
         pending.add(remote.fileId)
         val visited = mutableSetOf<String>()
         var descendant = false
+        // Old versions are pruned, so the chain back to this device's last version can end early.
+        var lineageTruncated = false
         while (pending.isNotEmpty()) {
             val id = pending.removeFirst()
             if (id == state.lastRevisionId) { descendant = true; break }
             if (!visited.add(id)) continue
-            byId[id]?.let { row ->
-                row.baseRevisionId?.let(pending::addLast)
-                row.mergedRevisionIds.forEach(pending::addLast)
+            val row = byId[id]
+            if (row == null) {
+                lineageTruncated = true
+                continue
             }
+            row.baseRevisionId?.let(pending::addLast)
+            row.mergedRevisionIds.forEach(pending::addLast)
         }
-        if (!descendant) return SyncDecision.Conflict
+        // Without local changes, a newer cloud version whose history was pruned is safe to take;
+        // with local changes the decision above is already a conflict and still asks the user.
+        if (!descendant && !(lineageTruncated && decision == SyncDecision.Download)) return SyncDecision.Conflict
     }
     return decision
 }
