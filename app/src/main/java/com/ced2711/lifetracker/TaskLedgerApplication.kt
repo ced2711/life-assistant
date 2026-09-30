@@ -18,6 +18,10 @@ import com.ced2711.lifetracker.launcher.LauncherIconMoodCoordinator
 import com.ced2711.lifetracker.ui.lock.AppLockController
 import com.ced2711.lifetracker.worker.WorkScheduler
 import com.ced2711.lifetracker.worker.CloudSyncScheduler
+import com.ced2711.lifetracker.worker.CloudSyncTrigger
+import android.os.Handler
+import android.os.Looper
+import androidx.lifecycle.ProcessLifecycleOwner
 import com.ced2711.lifetracker.widget.WidgetRefreshCoordinator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -62,8 +66,24 @@ class TaskLedgerApplication : Application() {
                         CloudSyncScheduler.enqueueNow(this@TaskLedgerApplication)
                     }
                 }
+                runCatching { startCloudSyncTrigger() }
             },
         )
+    }
+
+    // Near-real-time sync: after local edits, on opening the app, and periodically while it is open.
+    private fun startCloudSyncTrigger() {
+        val trigger = CloudSyncTrigger(
+            scope = processScope,
+            automaticSyncEnabled = {
+                container.cloudSyncPreferences.read().let { it.enabled && it.automaticSync }
+            },
+            requestSync = { CloudSyncScheduler.enqueueNow(this) },
+        )
+        trigger.start(container.database)
+        Handler(Looper.getMainLooper()).post {
+            ProcessLifecycleOwner.get().lifecycle.addObserver(trigger)
+        }
     }
 
     override fun onCreate() {

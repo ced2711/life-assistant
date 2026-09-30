@@ -43,7 +43,7 @@ class CloudSyncWorker(
 
             is AndroidCloudSyncResult.Conflict -> {
                 container.cloudSyncPreferences.setAttention(CloudSyncAttention.CONFLICT)
-                notifyAttention("Google Drive has conflicting changes. Open Backup & sync to choose a version.")
+                notifyAttention("The cloud backup has conflicting changes. Open Backup & sync to choose a version.")
                 Result.success()
             }
             is AndroidCloudSyncResult.NeedsVaultUnlock -> {

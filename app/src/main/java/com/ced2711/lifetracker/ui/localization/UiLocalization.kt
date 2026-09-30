@@ -768,6 +768,12 @@ private val zhHans = mapOf(
     "They will be permanently deleted from this PC." to "它们将从这台电脑上永久删除。",
     // Cloud sync providers
     "GitHub sync" to "GitHub 同步",
+    "Syncs a few seconds after each change, when you open the app, and about every 15 minutes in the background." to
+        "每次修改后几秒内同步，打开应用时同步，后台约每 15 分钟同步一次。",
+    "Syncs a few seconds after each change, when the window is focused, and every 2 minutes while Life Assistant is open." to
+        "每次修改后几秒内同步，切回窗口时同步，生活助手打开期间每 2 分钟同步一次。",
+    "The cloud backup has conflicting changes. Open Backup & sync to choose a version." to
+        "云端备份有冲突的修改，请打开“备份与同步”选择要保留的版本。",
     "Delete this stopped schedule?" to "删除这个已停止的定期流水？",
     "It disappears from Recurring. Entries it already created stay in your ledger." to
         "它会从“定期流水”中移除，已经生成的流水记录会保留。",

@@ -25,6 +25,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -50,6 +54,8 @@ class DesktopCloudSyncController(
     cloudStore: CloudBackupStore? = null,
     private val credentials: WindowsCredentialStore? = null,
     private val connectionStatus: (() -> Boolean)? = null,
+    private val editDebounceMillis: Long = EDIT_DEBOUNCE_MILLIS,
+    private val pollIntervalMillis: Long = AUTOMATIC_INTERVAL_MILLIS,
 ) {
     private val injectedStore = cloudStore
     private val googleDrive by lazy { GoogleDriveBackupStore(oauth) }
@@ -90,17 +96,45 @@ class DesktopCloudSyncController(
     private val _state = MutableStateFlow(readState())
     val state: StateFlow<DesktopCloudUiState> = _state.asStateFlow()
     private var automaticJob: Job? = null
+    @Volatile private var lastAutomaticAttemptAt = 0L
 
     fun start(scope: CoroutineScope) {
         appScope = scope
         automaticJob?.cancel()
         automaticJob = scope.launch {
-            if (_state.value.connected && _state.value.automaticSync) synchronize()
-            while (isActive) {
-                delay(AUTOMATIC_INTERVAL_MILLIS)
-                if (_state.value.connected && _state.value.automaticSync) synchronize()
+            // Periodic check so changes from the other device arrive while this app is open.
+            launch {
+                while (isActive) {
+                    syncWhenIdle()
+                    delay(pollIntervalMillis)
+                }
             }
+            // Sync shortly after local edits. The sync itself runs outside collectLatest, so a
+            // download that changes local data cannot cancel the sync that caused it.
+            dataStore.state
+                .map { (it as? DesktopStoreState.Open)?.snapshot }
+                .distinctUntilChanged()
+                .drop(1)
+                .collectLatest {
+                    delay(editDebounceMillis)
+                    scope.launch { syncWhenIdle() }
+                }
         }
+    }
+
+    /** Called when the window regains focus: catch up, but not more than twice a minute. */
+    fun onWindowFocused() {
+        val scope = appScope ?: return
+        if (now() - lastAutomaticAttemptAt < FOCUS_SYNC_MIN_INTERVAL_MILLIS) return
+        scope.launch { syncWhenIdle() }
+    }
+
+    /** Runs an automatic sync, waiting for a sync already in progress instead of skipping. */
+    private suspend fun syncWhenIdle() {
+        if (!_state.value.connected || !_state.value.automaticSync) return
+        while (_state.value.syncing) delay(500)
+        lastAutomaticAttemptAt = now()
+        synchronize()
     }
 
     suspend fun connect(clientId: String, clientSecret: CharArray) {
@@ -112,6 +146,7 @@ class DesktopCloudSyncController(
         try {
             oauth.connect(clientId, clientSecret)
             configStore.setProvider(DesktopCloudProvider.GOOGLE_DRIVE)
+            configStore.setAutomaticSync(true)
             // The consent may point at a different Google account. Keep the previous lineage until
             // consent succeeds, then force a safe first-sync comparison for the newly selected account.
             configStore.clearSyncState()
@@ -147,6 +182,7 @@ class DesktopCloudSyncController(
                 it.provider == DesktopCloudProvider.GITHUB && it.gitHubRepository == resolved.fullName
             }
             configStore.setProvider(DesktopCloudProvider.GITHUB, clientId.trim(), resolved.fullName)
+            configStore.setAutomaticSync(true)
             // Reconnecting to the same repository keeps the sync baseline, so no false conflict.
             if (!sameRepository) configStore.clearSyncState()
             _state.value = readState().copy(message = "GitHub connected.")
@@ -437,8 +473,10 @@ class DesktopCloudSyncController(
         else -> message?.takeIf { it.length in 1..220 } ?: "Cloud sync failed."
     }
 
-    private companion object {
-        const val AUTOMATIC_INTERVAL_MILLIS = 15L * 60L * 1_000L
+    companion object {
+        const val AUTOMATIC_INTERVAL_MILLIS = 2L * 60L * 1_000L
+        const val EDIT_DEBOUNCE_MILLIS = 8_000L
+        const val FOCUS_SYNC_MIN_INTERVAL_MILLIS = 30_000L
         const val KEPT_CLOUD_REVISIONS = 10
     }
 }

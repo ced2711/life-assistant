@@ -14,6 +14,7 @@
 - **Delete from the todo editor**, with Undo on Android.
 - **Edit ledger entries from the Calendar**: tap a ledger row in any calendar view to open it in the Ledger editor.
 - **Delete stopped recurring entries**: a stopped schedule can be removed from Recurring; the entries it already created stay.
+- **Near-real-time sync**: a change syncs a few seconds after you stop editing, opening the app syncs at once, and an open app checks the cloud every 2 minutes (Android background: about every 15 minutes). Windows turns automatic sync on when you connect.
 - **GitHub sync** as an alternative to Google Drive. See [GitHub sync setup](GITHUB_SYNC_SETUP.md).
 
 ## Fixed

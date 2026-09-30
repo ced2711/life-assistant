@@ -514,7 +514,7 @@ private fun CloudSyncCard(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(localizedText("Automatic sync"), style = MaterialTheme.typography.titleSmall)
                         Text(
-                            localizedText("Runs periodically when a network is available"),
+                            localizedText("Syncs a few seconds after each change, when you open the app, and about every 15 minutes in the background."),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

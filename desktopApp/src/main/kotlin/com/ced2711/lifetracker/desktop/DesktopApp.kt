@@ -217,6 +217,7 @@ fun LifeTrackerDesktopApp() {
         } else {
             if (appLockEnabled && appLockExpired(unfocusedAt, now, appLockTimeout)) appLocked = true
             unfocusedAt = null
+            cloud.onWindowFocused()
         }
     }
 
@@ -1335,7 +1336,7 @@ private fun SettingsPage(
             Text(desktopText("Encrypted snapshots are stored in Life Assistant's private Google Drive app folder or a private GitHub repository. Nothing else in those accounts is read."))
             Text(desktopText("Each upload creates a new encrypted version. The 10 most recent versions are kept; conflicts pause sync until you resolve them."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (cloudState.connected) {
-                Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(desktopText("Automatic sync")); Text(desktopText("Off by default. When enabled, checks every 15 minutes while Life Assistant is running"), style = MaterialTheme.typography.bodySmall) }; Switch(cloudState.automaticSync, cloud::setAutomaticSync) }
+                Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(desktopText("Automatic sync")); Text(desktopText("Syncs a few seconds after each change, when the window is focused, and every 2 minutes while Life Assistant is open."), style = MaterialTheme.typography.bodySmall) }; Switch(cloudState.automaticSync, cloud::setAutomaticSync) }
                 cloudState.lastSyncAt?.let { Text(desktopLastSync(formatTimestamp(it), LocalUiLanguage.current), color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Button(enabled = !cloudState.syncing, onClick = { cloud.launch { synchronize() } }) { Icon(Icons.Default.Refresh, null); Spacer(Modifier.width(8.dp)); Text(desktopText(if (cloudState.syncing) "Syncing…" else "Sync now")) }; TextButton(enabled = !cloudState.syncing, onClick = { if (cloudState.provider == DesktopCloudProvider.GITHUB) gitHubDialog = true else connectDialog = true }) { Text(desktopText("Reconnect")) }; TextButton(enabled = !cloudState.syncing, onClick = { cloud.launch { disconnect() } }) { Text(desktopText("Disconnect / switch account")) } }
             } else Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Button(enabled = !cloudState.syncing, onClick = { connectDialog = true }) { Text(desktopText("Connect Google Drive")) }; OutlinedButton(enabled = !cloudState.syncing, onClick = { gitHubDialog = true }) { Text(desktopText("Connect GitHub")) } }
