@@ -374,6 +374,16 @@ interface TaskLedgerDao {
     @Query("SELECT * FROM ledger_series ORDER BY createdAt DESC")
     fun observeLedgerSeries(): Flow<List<LedgerSeriesEntity>>
 
+    /** Turns a schedule's generated entries into ordinary entries so they outlive the schedule. */
+    @Query(
+        "UPDATE ledger_entries SET seriesId = NULL, occurrenceEpochDay = NULL, " +
+            "updatedAt = MAX(updatedAt, :updatedAt) WHERE seriesId = :seriesId",
+    )
+    suspend fun detachLedgerSeriesEntries(seriesId: Long, updatedAt: Long)
+
+    @Query("DELETE FROM ledger_series WHERE id = :seriesId AND active = 0")
+    suspend fun deleteStoppedLedgerSeries(seriesId: Long): Int
+
     @Query("UPDATE ledger_series SET active = 0, updatedAt = :updatedAt WHERE id = :seriesId")
     suspend fun deactivateLedgerSeries(seriesId: Long, updatedAt: Long)
 

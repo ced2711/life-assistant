@@ -103,6 +103,8 @@ internal fun LedgerEntriesPage(
     uiOperations: LedgerUiOperationsViewModel,
     quickAddRequestToken: String? = null,
     onQuickAddRequestHandled: (String) -> Unit = {},
+    requestedEditId: Long? = null,
+    onRequestedEditHandled: (Long) -> Unit = {},
 ) {
     var editorState by rememberSaveable { mutableStateOf<Bundle?>(null) }
     var pendingEditId by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -128,6 +130,12 @@ internal fun LedgerEntriesPage(
         editorState = null
         editorSessionKey = UUID.randomUUID().toString()
         pendingEditId = id
+    }
+
+    LaunchedEffect(requestedEditId) {
+        val id = requestedEditId ?: return@LaunchedEffect
+        requestEdit(id)
+        onRequestedEditHandled(id)
     }
 
     fun closeEditor() {

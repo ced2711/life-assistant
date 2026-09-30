@@ -1023,6 +1023,17 @@ class TaskLedgerRepository(
         )
     }
 
+    /**
+     * Removes a stopped schedule from the Recurring list. The entries it already created stay,
+     * detached into ordinary entries; its skip markers go with it.
+     */
+    suspend fun deleteStoppedLedgerSeries(seriesId: Long) = database.withTransaction {
+        val series = requireNotNull(dao.getLedgerSeries(seriesId)) { "Ledger series does not exist" }
+        require(!series.active) { "Stop the schedule before deleting it" }
+        dao.detachLedgerSeriesEntries(seriesId, monotonicMutationTimestamp(wallClockMillis()))
+        check(dao.deleteStoppedLedgerSeries(seriesId) == 1) { "Ledger series could not be deleted" }
+    }
+
     suspend fun deactivateTodoSeries(seriesId: Long) = database.withTransaction {
         val series = requireNotNull(dao.getTodoSeries(seriesId)) { "Task series does not exist" }
         dao.deactivateTodoSeries(

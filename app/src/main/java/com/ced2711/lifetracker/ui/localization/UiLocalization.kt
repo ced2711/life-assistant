@@ -18,6 +18,9 @@ fun uiLocale(language: UiLanguage): Locale = when (language) {
 fun translateUiText(text: String, language: UiLanguage): String {
     if (language == UiLanguage.ENGLISH || text.isEmpty()) return text
     zhHans[text]?.let { return it }
+    // Button labels such as " Stop" carry spacing next to an icon; keep it around the translation.
+    val trimmed = text.trim()
+    if (trimmed.isNotEmpty() && trimmed != text) zhHans[trimmed]?.let { return text.replace(trimmed, it) }
     return translateDynamicChinese(text)
 }
 
@@ -765,6 +768,10 @@ private val zhHans = mapOf(
     "They will be permanently deleted from this PC." to "它们将从这台电脑上永久删除。",
     // Cloud sync providers
     "GitHub sync" to "GitHub 同步",
+    "Delete this stopped schedule?" to "删除这个已停止的定期流水？",
+    "It disappears from Recurring. Entries it already created stay in your ledger." to
+        "它会从“定期流水”中移除，已经生成的流水记录会保留。",
+    "View or edit ledger entry" to "查看或编辑流水",
     "Local .tlb, Google Drive or GitHub" to "本地 .tlb、Google Drive 或 GitHub",
     "Connect GitHub" to "连接 GitHub",
     "Sync password-encrypted snapshots between Android and Windows through Google Drive's " +

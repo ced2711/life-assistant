@@ -12,6 +12,8 @@
 - **Modules in menu**: choose which modules appear in navigation. Diary and Confessional start
   hidden.
 - **Delete from the todo editor**, with Undo on Android.
+- **Edit ledger entries from the Calendar**: tap a ledger row in any calendar view to open it in the Ledger editor.
+- **Delete stopped recurring entries**: a stopped schedule can be removed from Recurring; the entries it already created stay.
 - **GitHub sync** as an alternative to Google Drive. See [GitHub sync setup](GITHUB_SYNC_SETUP.md).
 
 ## Fixed

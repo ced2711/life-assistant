@@ -13,13 +13,17 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.StopCircle
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
+import com.ced2711.lifetracker.ui.adaptive.HingeSafeAlertDialog
 import androidx.compose.material3.Text
 import com.ced2711.lifetracker.ui.localization.localizedText
 import androidx.compose.runtime.Composable
@@ -42,6 +46,7 @@ internal fun LedgerRecurringPage(
     series: List<LedgerSeriesEntity>,
     contentPadding: PaddingValues,
     onStop: (Long) -> Unit,
+    onDelete: (Long) -> Unit,
     onEditRule: (
         seriesId: Long,
         effectiveEpochDay: Long,
@@ -54,6 +59,7 @@ internal fun LedgerRecurringPage(
 ) {
     var editingSeriesId by rememberSaveable { mutableStateOf<Long?>(null) }
     var editingSessionKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var deletingSeriesId by rememberSaveable { mutableStateOf<Long?>(null) }
 
     fun closeEditor() {
         val closingSession = editingSessionKey
@@ -89,6 +95,21 @@ internal fun LedgerRecurringPage(
                     { message -> uiOperations.markSaveFailed(sessionKey, attempt, message) },
                 )
             },
+        )
+    }
+
+    series.firstOrNull { it.id == deletingSeriesId && !it.active }?.let { stopped ->
+        HingeSafeAlertDialog(
+            onDismissRequest = { deletingSeriesId = null },
+            title = { Text(localizedText("Delete this stopped schedule?")) },
+            text = { Text(localizedText("It disappears from Recurring. Entries it already created stay in your ledger.")) },
+            confirmButton = {
+                TextButton(onClick = {
+                    deletingSeriesId = null
+                    onDelete(stopped.id)
+                }) { Text(localizedText("Delete"), color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { deletingSeriesId = null }) { Text(localizedText("Cancel")) } },
         )
     }
 
@@ -143,6 +164,7 @@ internal fun LedgerRecurringPage(
                         }
                     },
                     onStop = { onStop(item.id) },
+                    onDelete = { deletingSeriesId = item.id },
                     modifier = Modifier.widthIn(max = 820.dp),
                 )
             }
@@ -156,6 +178,7 @@ private fun RecurringCard(
     formatting: LedgerDisplayFormatting,
     onEdit: () -> Unit,
     onStop: () -> Unit,
+    onDelete: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val amountColor = if (item.type == LedgerType.INCOME) incomeColor() else expenseColor()
@@ -235,6 +258,15 @@ private fun RecurringCard(
                         Icon(Icons.Outlined.StopCircle, contentDescription = null)
                         Text(localizedText(" Stop"))
                     }
+                }
+            } else {
+                OutlinedButton(
+                    onClick = onDelete,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                ) {
+                    Icon(Icons.Outlined.Delete, contentDescription = null)
+                    Text(localizedText(" Delete"))
                 }
             }
         }

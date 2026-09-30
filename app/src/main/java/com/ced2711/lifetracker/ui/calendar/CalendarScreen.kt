@@ -123,6 +123,7 @@ fun CalendarScreen(
     isWide: Boolean = false,
     onOpenDiary: (Long) -> Unit = {},
     showDiary: Boolean = true,
+    onOpenLedgerEntry: (Long) -> Unit = {},
 ) {
     val activeTodos by viewModel.activeTodos.collectAsStateWithLifecycle()
     val diaryEntries by viewModel.diaryEntries.collectAsStateWithLifecycle()
@@ -133,7 +134,10 @@ fun CalendarScreen(
     val entries by viewModel.ledgerEntries.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
 
-    CompositionLocalProvider(LocalCalendarDiary provides diary) {
+    CompositionLocalProvider(
+        LocalCalendarDiary provides diary,
+        LocalOpenLedgerEntry provides onOpenLedgerEntry,
+    ) {
     CalendarContent(
         todos = (activeTodos + completedTodos).filter { it.deadlineEpochDay != null },
         entries = entries,
@@ -1001,8 +1005,17 @@ private fun TodoRow(
 @Composable
 private fun LedgerRow(entry: LedgerEntryEntity, use24HourTime: Boolean) {
     val signedCents = if (entry.type == LedgerType.EXPENSE) -entry.amountCents else entry.amountCents
+    val openEntry = LocalOpenLedgerEntry.current
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(
+                onClickLabel = "View or edit ledger entry",
+                role = Role.Button,
+                onClick = { openEntry(entry.id) },
+            )
+            .padding(horizontal = 8.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -1189,3 +1202,6 @@ private fun DiaryDetail(entry: DiaryEntryEntity?, onOpen: () -> Unit) {
         }
     }
 }
+
+/** Opens a ledger entry in the Ledger editor; tapping a ledger row in any calendar view uses it. */
+private val LocalOpenLedgerEntry = staticCompositionLocalOf<(Long) -> Unit> { {} }

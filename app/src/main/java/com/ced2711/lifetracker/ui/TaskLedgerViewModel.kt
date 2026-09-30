@@ -301,6 +301,7 @@ class TaskLedgerViewModel(private val container: AppContainer) : ViewModel() {
     }
     fun stopTodoSeries(id: Long) = launchAction { repository.deactivateTodoSeries(id) }
     fun stopLedgerSeries(id: Long) = launchAction { repository.deactivateLedgerSeries(id) }
+    fun deleteStoppedLedgerSeries(id: Long) = launchAction { repository.deleteStoppedLedgerSeries(id) }
 
     fun addNoteFolder(
         name: String,

@@ -17,6 +17,13 @@ class NewFeatureLocalizationTest {
     }
 
     @Test
+    fun `icon button labels with spacing are translated and keep their spacing`() {
+        assertEquals(" 停止", translateUiText(" Stop", chinese))
+        assertEquals(" 删除", translateUiText(" Delete", chinese))
+        assertEquals("   ", translateUiText("   ", chinese))
+    }
+
+    @Test
     fun `module count summary keeps its numbers`() {
         assertEquals("显示 4/6 个功能", translateUiText("4 of 6 modules shown", chinese))
         assertEquals("4 of 6 modules shown", translateUiText("4 of 6 modules shown", UiLanguage.ENGLISH))

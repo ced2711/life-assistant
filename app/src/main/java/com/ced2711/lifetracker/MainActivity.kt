@@ -208,6 +208,7 @@ class MainActivity : FragmentActivity() {
                 )
             }
             var requestedDiaryDay by rememberSaveable { mutableStateOf<Long?>(null) }
+            var requestedLedgerEntryId by rememberSaveable { mutableStateOf<Long?>(null) }
             val foldingFeature by collectFoldingFeature(this)
 
             LaunchedEffect(pendingCloudSyncOpen) {
@@ -488,6 +489,10 @@ class MainActivity : FragmentActivity() {
                                             selectedOverride = TopLevelDestination.LEDGER.name
                                             auxiliaryName = null
                                         },
+                                        requestedEntryId = requestedLedgerEntryId,
+                                        onRequestedEntryHandled = { handledId ->
+                                            if (requestedLedgerEntryId == handledId) requestedLedgerEntryId = null
+                                        },
                                     )
                                     TopLevelDestination.CALENDAR -> CalendarScreen(
                                         viewModel = viewModel,
@@ -504,6 +509,12 @@ class MainActivity : FragmentActivity() {
                                             viewModel.setLastDestination(TopLevelDestination.DIARY)
                                         },
                                         showDiary = TopLevelDestination.DIARY in visibleDestinations,
+                                        onOpenLedgerEntry = { entryId ->
+                                            requestedLedgerEntryId = entryId
+                                            selectedOverride = TopLevelDestination.LEDGER.name
+                                            auxiliaryName = null
+                                            viewModel.setLastDestination(TopLevelDestination.LEDGER)
+                                        },
                                         modifier = Modifier.fillMaxSize(),
                                         isWide = isWide,
                                     )
