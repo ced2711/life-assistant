@@ -11,6 +11,16 @@ import com.ced2711.lifetracker.ui.localization.translateUiText
  * Shared Android translations win whenever a label is already known there.
  */
 private val desktopSimplifiedChinese = mapOf(
+    "Checking…" to "正在检查…",
+    "Review backup" to "查看备份内容",
+    "Replace this PC's data with the backup?" to "用备份替换这台电脑的数据？",
+    "Backup" to "备份",
+    "This PC" to "这台电脑",
+    "Ledger entries" to "流水",
+    "Diary" to "日记",
+    "Attachments" to "附件",
+    "Everything on this PC is replaced by the backup. Export the current data first if you may need it later." to "这台电脑上的所有数据都会被备份替换。如果以后可能还需要，请先导出当前数据。",
+    "Replace" to "替换",
     "Quit" to "退出",
     "Show reminders on this PC" to "在这台电脑上显示提醒",
     "As system notifications while Life Assistant is open." to "生活助手打开时以系统通知显示。",
@@ -358,6 +368,11 @@ fun desktopReminderBody(dueAtMillis: Long, snapshot: com.ced2711.lifetracker.dat
         UiLanguage.ENGLISH -> "Due $text"
         UiLanguage.SIMPLIFIED_CHINESE -> "截止 $text"
     }
+}
+
+fun desktopBackupCreated(time: String, language: UiLanguage): String = when (language) {
+    UiLanguage.ENGLISH -> "Backup created $time"
+    UiLanguage.SIMPLIFIED_CHINESE -> "备份创建于 $time"
 }
 
 fun desktopCompletedCount(count: Int, language: UiLanguage): String = when (language) {

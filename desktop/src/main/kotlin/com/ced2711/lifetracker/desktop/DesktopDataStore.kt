@@ -195,6 +195,21 @@ class DesktopDataStore(
         }
     }
 
+    /** Opens a backup only to show what it contains; null when the password is wrong or it is damaged. */
+    suspend fun previewEncrypted(source: File, sourcePassword: CharArray): BackupSnapshot? = mutex.withLock {
+        withContext(ioDispatcher) {
+            var loaded: LoadedSnapshot? = null
+            try {
+                loaded = loadSnapshot(source, sourcePassword)
+                loaded.snapshot
+            } catch (_: Throwable) {
+                null
+            } finally {
+                loaded?.directory?.deleteRecursively()
+            }
+        }
+    }
+
     fun currentSnapshot(): BackupSnapshot? = (_state.value as? DesktopStoreState.Open)?.snapshot
 
     fun isUserDataEmpty(): Boolean = currentSnapshot()?.let { snapshot ->

@@ -598,6 +598,10 @@ private fun SettingsPage(
         else gitHubDialog = true
     }
     var importCandidate by remember { mutableStateOf<File?>(null) }
+    // Second step of an import: what the backup holds, shown before anything is replaced.
+    var importPreview by remember { mutableStateOf<Pair<File, BackupSnapshot>?>(null) }
+    var importPreviewPassword by remember { mutableStateOf<CharArray?>(null) }
+    var importChecking by remember { mutableStateOf(false) }
     var importPassword by remember { mutableStateOf("") }
     var importPasswordVisible by remember { mutableStateOf(false) }
     var backupMessage by remember { mutableStateOf<String?>(null) }
@@ -848,10 +852,59 @@ private fun SettingsPage(
             },
             dismissButton = { TextButton(onClick = { importCandidate = null; importPassword = "" }) { Text(desktopText("Cancel")) } },
             confirmButton = {
-                Button(enabled = importPassword.length >= 8, onClick = {
+                Button(enabled = importPassword.length >= 8 && !importChecking, onClick = {
                     val sourcePassword = importPassword.toCharArray()
-                    importPassword = ""
-                    importCandidate = null
+                    importChecking = true
+                    scope.launch {
+                        val preview = dataStore.previewEncrypted(candidate, sourcePassword.copyOf())
+                        importChecking = false
+                        if (preview == null) {
+                            sourcePassword.fill('\u0000')
+                            backupMessage = desktopText("The source password is incorrect or the backup is damaged.", language)
+                        } else {
+                            importPassword = ""
+                            importCandidate = null
+                            importPreviewPassword = sourcePassword
+                            importPreview = candidate to preview
+                        }
+                    }
+                }) { Text(desktopText(if (importChecking) "Checking…" else "Review backup")) }
+            },
+        )
+    }
+    importPreview?.let { (candidate, preview) ->
+        val current = dataStore.currentSnapshot()
+        fun dismissPreview() {
+            importPreviewPassword?.fill('\u0000')
+            importPreviewPassword = null
+            importPreview = null
+        }
+        AlertDialog(
+            onDismissRequest = ::dismissPreview,
+            title = { Text(desktopText("Replace this PC's data with the backup?")) },
+            text = {
+                Column(Modifier.widthIn(max = 560.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(desktopBackupCreated(formatTimestamp(preview.createdAt), language), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row { Text("", Modifier.weight(1f)); Text(desktopText("Backup"), Modifier.width(90.dp), fontWeight = FontWeight.SemiBold); Text(desktopText("This PC"), Modifier.width(90.dp), fontWeight = FontWeight.SemiBold) }
+                    listOf<Triple<String, Int, Int?>>(
+                        Triple("Todos", preview.todos.count { it.deletedAt == null }, current?.todos?.count { it.deletedAt == null }),
+                        Triple("Ledger entries", preview.ledgerEntries.count { it.deletedAt == null }, current?.ledgerEntries?.count { it.deletedAt == null }),
+                        Triple("Notes", preview.notes.size, current?.notes?.size),
+                        Triple("Diary", preview.diaryEntries.size, current?.diaryEntries?.size),
+                        Triple("Vault", preview.vaultEntries.size, current?.vaultEntries?.size),
+                        Triple("Attachments", preview.attachments.size, current?.attachments?.size),
+                    ).forEach { (label, backup, local) ->
+                        Row { Text(desktopText(label), Modifier.weight(1f)); Text(backup.toString(), Modifier.width(90.dp)); Text(local?.toString() ?: "-", Modifier.width(90.dp)) }
+                    }
+                    Text(desktopText("Everything on this PC is replaced by the backup. Export the current data first if you may need it later."), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
+            },
+            dismissButton = { TextButton(onClick = ::dismissPreview) { Text(desktopText("Cancel")) } },
+            confirmButton = {
+                Button(onClick = {
+                    val sourcePassword = importPreviewPassword ?: return@Button
+                    importPreviewPassword = null
+                    importPreview = null
                     scope.launch {
                         try {
                             val expected = dataStore.localFingerprint()
@@ -864,7 +917,7 @@ private fun SettingsPage(
                             sourcePassword.fill('\u0000')
                         }
                     }
-                }) { Text(desktopText("Restore")) }
+                }) { Text(desktopText("Replace")) }
             },
         )
     }
