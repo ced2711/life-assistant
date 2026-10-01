@@ -15,6 +15,10 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "LifeAssistant"
-include(":app")
+// android/          Android app
+// desktop/          Windows and Linux app (shared code; platform parts in desktop/windows and desktop/linux)
+// shared/cloudsync  Cloud sync used by every app
+include(":android")
+include(":desktop")
 include(":cloudsync")
-include(":desktopApp")
+project(":cloudsync").projectDir = file("shared/cloudsync")

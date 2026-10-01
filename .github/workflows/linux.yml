@@ -1,0 +1,40 @@
+# Builds the Linux version (a .deb package and a portable archive) on Ubuntu, because Linux
+# packages can only be made on Linux. Run it by hand from the Actions tab, or let it attach the
+# files to a release when one is published.
+name: Linux build
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Test and package
+        run: ./gradlew :cloudsync:test :desktop:test :desktop:packageReleaseDeb :desktop:createReleaseDistributable --no-configuration-cache
+      - name: Collect files
+        run: |
+          mkdir -p dist
+          cp desktop/build/compose/binaries/main-release/deb/*.deb dist/LifeAssistant-linux-amd64.deb
+          tar -C desktop/build/compose/binaries/main-release/app -czf dist/LifeAssistant-linux-x64.tar.gz .
+          ls -l dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: life-assistant-linux
+          path: dist/*
+      - name: Attach to the release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" dist/* --clobber
