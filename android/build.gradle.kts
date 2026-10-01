@@ -31,8 +31,8 @@ android {
         applicationId = "com.ced2711.lifetracker"
         minSdk = 26
         targetSdk = 36
-        versionCode = 16
-        versionName = "1.8.0"
+        versionCode = 17
+        versionName = "1.9.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Public GitHub App client ID used to prefill GitHub sync; not a secret.
