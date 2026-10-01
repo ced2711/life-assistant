@@ -24,3 +24,10 @@
 -dontwarn okhttp3.internal.graal.**
 -dontwarn org.graalvm.**
 -dontwarn com.oracle.svm.**
+
+# ProGuard's return-type specialization broke Okio (VerifyError in Okio.buffer), which made every
+# cloud request fail with "Could not reach GitHub". Keep the network libraries as they are, and
+# keep that optimization off everywhere.
+-keep class okio.** { *; }
+-keep class okhttp3.** { *; }
+-optimizations !method/specialization/returntype,!method/specialization/parametertype
