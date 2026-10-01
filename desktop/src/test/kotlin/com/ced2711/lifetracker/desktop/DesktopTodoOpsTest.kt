@@ -104,6 +104,29 @@ class DesktopTodoOpsTest {
     }
 
     @Test
+    fun deletingACategoryUncategorizesTodosAndPromotesChildren() {
+        val parent = com.ced2711.lifetracker.data.local.CategoryEntity(1, "Work", null, 0, 500)
+        val child = com.ced2711.lifetracker.data.local.CategoryEntity(2, "Meetings", 1, 0, 500)
+        val sibling = com.ced2711.lifetracker.data.local.CategoryEntity(3, "Meetings", null, 0, 500)
+        val (saved, id) = save(TodoDraft(description = "Prepare slides", categoryId = 1), empty.copy(categories = listOf(parent, child, sibling)))
+        val result = DesktopTodoOps.deleteCategory(saved, 1, 3_000).validate()
+        assertNull(result.todos.single { it.id == id }.categoryId)
+        assertEquals(setOf("Meetings", "Meetings (2)"), result.categories.map { it.name }.toSet())
+        assertTrue(result.categories.all { it.parentId == null })
+    }
+
+    @Test
+    fun renamingATagChangesItEverywhere() {
+        val (first, _) = save(TodoDraft(description = "Gym", tags = listOf("Health", "daily")))
+        val (both, _) = save(TodoDraft(description = "Run", deadlineEpochDay = day, tags = listOf("health"), recurrence = RecurrenceRule(RecurrenceUnit.WEEK)), first)
+        val renamed = DesktopTodoOps.changeTag(both, "health", "fitness", 3_000)
+        assertTrue(renamed.todos.all { "fitness" in it.tagsCsv.split(',') })
+        assertEquals("fitness", renamed.todoSeries.single().tagsCsv)
+        val removed = DesktopTodoOps.changeTag(renamed, "fitness", null, 4_000)
+        assertTrue(removed.todos.none { "fitness" in it.tagsCsv })
+    }
+
+    @Test
     fun undoOfASingleDeleteRestoresTheTodo() {
         val (saved, id) = save(TodoDraft(description = "Pay rent"))
         val (deleted, deletion) = DesktopTodoOps.delete(saved, id, SeriesEditScope.ONLY_THIS_OCCURRENCE, 4_000)

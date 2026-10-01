@@ -11,6 +11,12 @@ import com.ced2711.lifetracker.ui.localization.translateUiText
  * Shared Android translations win whenever a label is already known there.
  */
 private val desktopSimplifiedChinese = mapOf(
+    "Rename" to "重命名",
+    "Rename category" to "重命名分类",
+    "Delete category" to "删除分类",
+    "Its todos become uncategorized and its subcategories move up one level." to "其中的待办会变成未分类，子分类会上移一级。",
+    "Rename tag" to "重命名标签",
+    "Delete tag" to "删除标签",
     "Daily net" to "每日净额",
     "Monthly net" to "每月净额",
     "Delete repeating entry" to "删除重复流水",

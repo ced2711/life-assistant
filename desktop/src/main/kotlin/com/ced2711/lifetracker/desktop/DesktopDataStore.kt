@@ -307,6 +307,14 @@ class DesktopDataStore(
         DesktopTodoOps.undoDelete(snapshot, deletion, System.currentTimeMillis())
     }
 
+    suspend fun renameCategory(id: Long, name: String) = mutate { snapshot -> DesktopTodoOps.renameCategory(snapshot, id, name) }
+
+    suspend fun deleteCategory(id: Long) = mutate { snapshot -> DesktopTodoOps.deleteCategory(snapshot, id, System.currentTimeMillis()) }
+
+    suspend fun renameTodoTag(tag: String, replacement: String) = mutate { snapshot -> DesktopTodoOps.changeTag(snapshot, tag, replacement, System.currentTimeMillis()) }
+
+    suspend fun deleteTodoTag(tag: String) = mutate { snapshot -> DesktopTodoOps.changeTag(snapshot, tag, null, System.currentTimeMillis()) }
+
     suspend fun stopTodoSeries(seriesId: Long) = mutate { snapshot ->
         DesktopTodoOps.stopTodoSeries(snapshot, seriesId, System.currentTimeMillis())
     }

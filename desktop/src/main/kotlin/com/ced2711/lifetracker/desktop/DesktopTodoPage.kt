@@ -1,6 +1,10 @@
 package com.ced2711.lifetracker.desktop
 
 import androidx.compose.foundation.background
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
@@ -171,6 +175,10 @@ internal fun TodoPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
     var selectedId by remember { mutableStateOf<Long?>(null) }
     var editor by remember { mutableStateOf<TodoEditorTarget?>(null) }
     var newCategory by remember { mutableStateOf(false) }
+    var renamingCategory by remember { mutableStateOf<com.ced2711.lifetracker.data.local.CategoryEntity?>(null) }
+    var deletingCategory by remember { mutableStateOf<com.ced2711.lifetracker.data.local.CategoryEntity?>(null) }
+    var renamingTag by remember { mutableStateOf<String?>(null) }
+    var deletingTag by remember { mutableStateOf<String?>(null) }
     var completeWithSubtasks by remember { mutableStateOf<TodoEntity?>(null) }
     var deleteScopeFor by remember { mutableStateOf<TodoEntity?>(null) }
     val searchFocus = remember { FocusRequester() }
@@ -280,6 +288,10 @@ internal fun TodoPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
                         filters = filters,
                         today = today,
                         onNewCategory = { newCategory = true },
+                        onRenameCategory = { renamingCategory = it },
+                        onDeleteCategory = { deletingCategory = it },
+                        onRenameTag = { renamingTag = it },
+                        onDeleteTag = { deletingTag = it },
                         modifier = Modifier.width(240.dp).fillMaxHeight(),
                     )
                     VerticalDivider()
@@ -423,6 +435,49 @@ internal fun TodoPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
             },
         )
     }
+    renamingCategory?.let { category ->
+        SimpleNameDialog(desktopText("Rename category"), { renamingCategory = null }, initial = category.name) { name ->
+            scope.launch { store.renameCategory(category.id, name) }
+            renamingCategory = null
+        }
+    }
+    deletingCategory?.let { category ->
+        AlertDialog(
+            onDismissRequest = { deletingCategory = null },
+            title = { Text(desktopText("Delete category")) },
+            text = { Text(desktopText("Its todos become uncategorized and its subcategories move up one level.")) },
+            dismissButton = { TextButton(onClick = { deletingCategory = null }) { Text(desktopText("Cancel")) } },
+            confirmButton = {
+                Button(onClick = {
+                    scope.launch { store.deleteCategory(category.id) }
+                    filters.selectAllCategories()
+                    deletingCategory = null
+                }) { Text(desktopText("Delete")) }
+            },
+        )
+    }
+    renamingTag?.let { tag ->
+        SimpleNameDialog(desktopText("Rename tag"), { renamingTag = null }, initial = tag) { name ->
+            scope.launch { store.renameTodoTag(tag, name) }
+            if (filters.tag == tag) filters.tag = null
+            renamingTag = null
+        }
+    }
+    deletingTag?.let { tag ->
+        AlertDialog(
+            onDismissRequest = { deletingTag = null },
+            title = { Text(desktopText("Delete tag")) },
+            text = { Text("#$tag") },
+            dismissButton = { TextButton(onClick = { deletingTag = null }) { Text(desktopText("Cancel")) } },
+            confirmButton = {
+                Button(onClick = {
+                    scope.launch { store.deleteTodoTag(tag) }
+                    if (filters.tag == tag) filters.tag = null
+                    deletingTag = null
+                }) { Text(desktopText("Delete")) }
+            },
+        )
+    }
     if (newCategory) {
         SimpleNameDialog(desktopText("New category"), { newCategory = false }) { name ->
             scope.launch { store.addCategory(name, filters.singleCategory) }
@@ -439,6 +494,10 @@ private fun TodoFilterColumn(
     filters: TodoFilters,
     today: Long,
     onNewCategory: () -> Unit,
+    onRenameCategory: (com.ced2711.lifetracker.data.local.CategoryEntity) -> Unit,
+    onDeleteCategory: (com.ced2711.lifetracker.data.local.CategoryEntity) -> Unit,
+    onRenameTag: (String) -> Unit,
+    onDeleteTag: (String) -> Unit,
     modifier: Modifier,
 ) {
     val open = live.filter { it.completedAt == null }
@@ -473,6 +532,8 @@ private fun TodoFilterColumn(
                 count = open.count { it.categoryId in ids },
                 selected = !filters.allCategories && category.id in filters.selectedCategories,
                 indent = depth,
+                onRename = { onRenameCategory(category) },
+                onDelete = { onDeleteCategory(category) },
             ) { filters.toggleCategory(category.id) }
         }
         FilterListEntry(desktopText("Uncategorized"), open.count { it.categoryId == null }, !filters.allCategories && filters.includeUncategorized) { filters.toggleUncategorized() }
@@ -489,7 +550,7 @@ private fun TodoFilterColumn(
         if (tags.isNotEmpty()) {
             FilterSectionTitle("Tags")
             tags.forEach { tag ->
-                FilterListEntry("#$tag", open.count { todo -> parseTags(todo.tagsCsv).any { it.equals(tag, true) } }, filters.tag == tag) {
+                FilterListEntry("#$tag", open.count { todo -> parseTags(todo.tagsCsv).any { it.equals(tag, true) } }, filters.tag == tag, onRename = { onRenameTag(tag) }, onDelete = { onDeleteTag(tag) }) {
                     filters.tag = if (filters.tag == tag) null else tag
                 }
             }
@@ -518,12 +579,16 @@ private fun FilterListEntry(
     indent: Int = 0,
     emphasize: Boolean = false,
     dot: Color? = null,
+    onRename: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
     Surface(
         shape = RoundedCornerShape(10.dp),
         color = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        modifier = Modifier.fillMaxWidth().hoverable(interaction).clickable(onClick = onClick),
     ) {
         Row(Modifier.padding(start = 10.dp + (indent * 14).dp, end = 10.dp, top = 7.dp, bottom = 7.dp), verticalAlignment = Alignment.CenterVertically) {
             if (dot != null) {
@@ -538,7 +603,10 @@ private fun FilterListEntry(
                 color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
             )
-            if (count != null && count > 0) {
+            if (hovered && onRename != null) {
+                IconButton(onClick = onRename, modifier = Modifier.size(24.dp)) { Icon(Icons.Default.Edit, desktopText("Rename"), Modifier.size(15.dp)) }
+                IconButton(onClick = { onDelete?.invoke() }, modifier = Modifier.size(24.dp)) { Icon(Icons.Default.Delete, desktopText("Delete"), Modifier.size(15.dp)) }
+            } else if (count != null && count > 0) {
                 Text(count.toString(), style = MaterialTheme.typography.labelMedium, color = if (emphasize) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }

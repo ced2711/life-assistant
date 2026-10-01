@@ -395,6 +395,49 @@ internal object DesktopTodoOps {
         else -> null
     }
 
+    fun renameCategory(snapshot: BackupSnapshot, categoryId: Long, name: String): BackupSnapshot {
+        val clean = name.trim()
+        require(clean.isNotEmpty()) { "Category name is required" }
+        val category = requireNotNull(snapshot.categories.firstOrNull { it.id == categoryId }) { "Category no longer exists" }
+        require(snapshot.categories.none { it.id != categoryId && it.parentId == category.parentId && it.name.equals(clean, ignoreCase = true) }) {
+            "A category with this name already exists here"
+        }
+        return snapshot.copy(categories = snapshot.categories.map { if (it.id == categoryId) it.copy(name = clean) else it })
+    }
+
+    /** As on the phone: its todos become uncategorized and its subcategories move up one level. */
+    fun deleteCategory(snapshot: BackupSnapshot, categoryId: Long, now: Long): BackupSnapshot {
+        val category = snapshot.categories.firstOrNull { it.id == categoryId } ?: return snapshot
+        val occupied = snapshot.categories.filter { it.parentId == category.parentId && it.id != categoryId }.mapTo(HashSet()) { it.name }
+        val promoted = snapshot.categories.filter { it.parentId == categoryId }
+            .sortedWith(compareBy<com.ced2711.lifetracker.data.local.CategoryEntity> { it.sortOrder }.thenBy { it.name.lowercase() }.thenBy { it.name }.thenBy { it.id })
+            .associate { child ->
+                var name = child.name
+                var suffix = 2
+                while (name in occupied) name = "${child.name} (${suffix++})"
+                occupied += name
+                child.id to child.copy(name = name, parentId = category.parentId)
+            }
+        return snapshot.copy(
+            categories = snapshot.categories.filterNot { it.id == categoryId }.map { promoted[it.id] ?: it },
+            todos = snapshot.todos.map { if (it.categoryId == categoryId) it.copy(categoryId = null, updatedAt = maxOf(now, it.updatedAt)) else it },
+            todoSeries = snapshot.todoSeries.map { if (it.categoryId == categoryId) it.copy(categoryId = null, updatedAt = maxOf(now, it.updatedAt)) else it },
+        )
+    }
+
+    /** Renames or removes a tag on every todo and repeating todo; [replacement] null removes it. */
+    fun changeTag(snapshot: BackupSnapshot, tag: String, replacement: String?, now: Long): BackupSnapshot {
+        val transform: (String) -> String = { csv ->
+            if (replacement == null) com.ced2711.lifetracker.domain.model.deleteTodoTagCsv(csv, tag)
+            else com.ced2711.lifetracker.domain.model.renameTodoTagCsv(csv, tag, replacement)
+        }
+        transform("") // Validates the names before anything changes.
+        return snapshot.copy(
+            todos = snapshot.todos.map { todo -> transform(todo.tagsCsv).let { if (it == todo.tagsCsv) todo else todo.copy(tagsCsv = it, updatedAt = maxOf(now, todo.updatedAt)) } },
+            todoSeries = snapshot.todoSeries.map { series -> transform(series.tagsCsv).let { if (it == series.tagsCsv) series else series.copy(tagsCsv = it, updatedAt = maxOf(now, series.updatedAt)) } },
+        )
+    }
+
     fun addLedgerException(snapshot: BackupSnapshot, seriesId: Long, day: Long, now: Long): BackupSnapshot =
         if (snapshot.ledgerOccurrenceExceptions.any { it.seriesId == seriesId && it.occurrenceEpochDay == day }) snapshot
         else snapshot.copy(ledgerOccurrenceExceptions = snapshot.ledgerOccurrenceExceptions + LedgerOccurrenceExceptionEntity(seriesId, day, now))
