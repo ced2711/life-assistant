@@ -25,7 +25,8 @@ import org.junit.Test
 class DesktopParityStoreTest {
     @Test
     fun rebrandKeepsLegacyStorageDirectoryAndReadsExistingDataAndConfig() = runBlocking {
-        assertEquals("Life Tracker", DesktopDataStore.defaultAppDirectory().name)
+        // Windows keeps the folder of earlier versions; Linux has its own XDG folder.
+        assertEquals(DesktopPlatform.text("Life Tracker", "life-assistant"), DesktopDataStore.defaultAppDirectory().name)
         val root = Files.createTempDirectory("life-assistant-rebrand-compatibility").toFile()
         val legacyDirectory = root.resolve("Life Tracker")
         try {
