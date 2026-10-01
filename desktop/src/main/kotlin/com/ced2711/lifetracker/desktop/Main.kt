@@ -24,7 +24,15 @@ import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.application
 import com.ced2711.lifetracker.domain.model.AppIdentity
 
-fun main() = application {
+fun main(args: Array<String>) {
+    // Packaged-build check without a window; see DesktopSelfTest.
+    if (args.firstOrNull() == "--self-test") {
+        kotlin.system.exitProcess(if (DesktopSelfTest.run(java.io.File(args.getOrElse(1) { "self-test.txt" }))) 0 else 1)
+    }
+    runApp()
+}
+
+private fun runApp() = application {
     val windowIcon = remember { LifeTrackerWindowIcon() }
     val configStore = remember { DesktopConfigStore() }
     val shortcuts = remember { DesktopShortcuts() }

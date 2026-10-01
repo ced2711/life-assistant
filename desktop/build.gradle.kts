@@ -153,7 +153,11 @@ compose.desktop {
         buildTypes.release.proguard {
             // Drops unused Compose code, notably most of the extended icon set.
             isEnabled.set(true)
-            obfuscate.set(false)
+            // One obfuscated output jar packs smaller. proguard-rules.pro keeps the names that
+            // libraries look up (JNA, Okio, serializers) and the app's own class names, and prints
+            // the mapping so library frames in stack traces can still be decoded.
+            obfuscate.set(true)
+            joinOutputJars.set(true)
             configurationFiles.from(project.file("proguard-rules.pro"))
         }
         nativeDistributions {
@@ -165,7 +169,8 @@ compose.desktop {
             vendor = "ced2711"
             copyright = "Copyright 2026 ced2711"
             licenseFile.set(rootProject.file("LICENSE"))
-            modules("java.net.http", "jdk.httpserver")
+            // jdk.httpserver receives the Google sign-in redirect; networking itself uses OkHttp.
+            modules("jdk.httpserver")
             windows {
                 iconFile.set(windowsIconFile)
                 menu = true
@@ -186,6 +191,14 @@ compose.desktop {
             }
         }
     }
+}
+
+// Compress the bundled Java runtime (the plugin keeps this option internal, so set it by name).
+tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJLinkTask>().configureEach {
+    val level = Class.forName("org.jetbrains.compose.desktop.application.internal.RuntimeCompressionLevel")
+        .getMethod("valueOf", String::class.java).invoke(null, "CONSTANT_STRING_SHARING")
+    @Suppress("UNCHECKED_CAST")
+    (javaClass.getMethod("getCompressionLevel\$compose").invoke(this) as Property<Any>).set(level)
 }
 
 tasks.matching {

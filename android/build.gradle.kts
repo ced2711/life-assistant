@@ -35,11 +35,16 @@ android {
         versionName = "1.9.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        // Public GitHub App client ID used to prefill GitHub sync; not a secret.
+        // Public GitHub OAuth App client ID for the built-in GitHub sign-in; not a secret.
         val gitHubClientId = providers.gradleProperty("lifeassistant.github.clientId").orNull.orEmpty()
         require(gitHubClientId.matches(Regex("[A-Za-z0-9._-]*"))) { "Invalid lifeassistant.github.clientId" }
         buildConfigField("String", "GITHUB_CLIENT_ID", "\"$gitHubClientId\"")
         vectorDrawables.useSupportLibrary = true
+    }
+
+    // The app speaks English and Simplified Chinese; drop library translations for other languages.
+    androidResources {
+        localeFilters += listOf("en", "zh-rCN")
     }
 
     flavorDimensions += "distribution"
