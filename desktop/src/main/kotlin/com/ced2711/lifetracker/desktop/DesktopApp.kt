@@ -546,50 +546,6 @@ internal fun SimpleNameDialog(title: String, onDismiss: () -> Unit, initial: Str
 }
 
 @Composable
-private fun VaultPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
-    val scope = rememberSafeCoroutineScope()
-    var adding by remember { mutableStateOf(false) }
-    var editing by remember { mutableStateOf<VaultEntry?>(null) }
-    var query by remember { mutableStateOf("") }
-    var visibleIds by remember { mutableStateOf(emptySet<String>()) }
-    val entries = snapshot.vaultEntries.filter { query.isBlank() || it.label.contains(query, true) || it.account.contains(query, true) }
-    Scaffold(floatingActionButton = { FloatingActionButton({ adding = true }) { Icon(Icons.Default.Add, null) } }) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
-            PageHeader("Vault", "Encrypted inside the local .tlb file")
-            OutlinedTextField(query, { query = it }, label = { Text(desktopText("Search")) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp))
-            LazyColumn(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(entries, key = { it.id }) { entry ->
-                    Card(Modifier.fillMaxWidth()) {
-                        Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text(entry.label.ifBlank { desktopText("Untitled") }, fontWeight = FontWeight.Bold)
-                                Text(entry.account, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(if (entry.id in visibleIds) entry.password else "••••••••")
-                            }
-                            IconButton({ visibleIds = if (entry.id in visibleIds) visibleIds - entry.id else visibleIds + entry.id }) { Icon(if (entry.id in visibleIds) Icons.Default.VisibilityOff else Icons.Default.Visibility, desktopText("Show password")) }
-                            IconButton({ editing = entry }) { Icon(Icons.Default.Edit, desktopText("Edit")) }
-                            IconButton({ scope.launch { store.deleteVault(entry.id) } }) { Icon(Icons.Default.Delete, desktopText("Delete")) }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    if (adding || editing != null) VaultEditorDialog(editing, { adding = false; editing = null }) { label, account, password, website, notes ->
-        scope.launch { store.upsertVault(editing?.id, label, account, password, website, notes) }
-        adding = false; editing = null
-    }
-}
-
-@Composable
-private fun VaultEditorDialog(entry: VaultEntry?, onDismiss: () -> Unit, onSave: (String, String, String, String, String) -> Unit) {
-    var label by remember { mutableStateOf(entry?.label.orEmpty()) }; var account by remember { mutableStateOf(entry?.account.orEmpty()) }; var password by remember { mutableStateOf(entry?.password.orEmpty()) }; var website by remember { mutableStateOf(entry?.website.orEmpty()) }; var notes by remember { mutableStateOf(entry?.notes.orEmpty()) }; var visible by remember { mutableStateOf(false) }
-    AlertDialog(onDismissRequest = onDismiss, title = { Text(desktopText(if (entry == null) "New Vault entry" else "Edit Vault entry")) }, text = { Column(Modifier.widthIn(max = 520.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedTextField(label, { label = it }, label = { Text(desktopText("Label")) }, modifier = Modifier.fillMaxWidth()); OutlinedTextField(account, { account = it }, label = { Text(desktopText("Account")) }, modifier = Modifier.fillMaxWidth()); OutlinedTextField(password, { password = it }, label = { Text(desktopText("Password")) }, modifier = Modifier.fillMaxWidth(), visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(), trailingIcon = { IconButton({ visible = !visible }) { Icon(if (visible) Icons.Default.VisibilityOff else Icons.Default.Visibility, null) } }); OutlinedTextField(website, { website = it }, label = { Text(desktopText("Website")) }, modifier = Modifier.fillMaxWidth()); OutlinedTextField(notes, { notes = it }, label = { Text(desktopText("Notes")) }, modifier = Modifier.fillMaxWidth(), minLines = 3)
-    } }, dismissButton = { TextButton(onClick = onDismiss) { Text(desktopText("Cancel")) } }, confirmButton = { Button(enabled = listOf(label, account, password, website, notes).any(String::isNotBlank), onClick = { onSave(label, account, password, website, notes) }) { Text(desktopText("Save")) } })
-}
-
-@Composable
 private fun SettingsPage(
     cloudState: DesktopCloudUiState,
     cloud: DesktopCloudSyncController,

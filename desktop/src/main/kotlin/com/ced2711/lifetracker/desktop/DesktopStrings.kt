@@ -296,3 +296,8 @@ fun desktopRepeatSummary(
         UiLanguage.SIMPLIFIED_CHINESE -> "从 $start 起每${if (interval == 1) "" else " $interval "}$zh" + (end?.let { "，到 $it 为止" } ?: "")
     }
 }
+
+fun desktopCopiedMessage(what: String, language: UiLanguage): String = when (language) {
+    UiLanguage.ENGLISH -> "$what copied. The clipboard is cleared in 30 seconds."
+    UiLanguage.SIMPLIFIED_CHINESE -> "已复制$what，30 秒后自动清除剪贴板。"
+}
