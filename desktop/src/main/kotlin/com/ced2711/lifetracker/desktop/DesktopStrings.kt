@@ -250,6 +250,11 @@ fun desktopText(text: String): String = desktopText(text, LocalUiLanguage.curren
 /** User-authored values must bypass the UI label dictionary, even if they match a built-in label. */
 fun desktopUserText(text: String): String = text
 
+fun desktopMoreCount(count: Int, language: UiLanguage): String = when (language) {
+    UiLanguage.ENGLISH -> "+$count more"
+    UiLanguage.SIMPLIFIED_CHINESE -> "还有 $count 项"
+}
+
 fun desktopCompletedCount(count: Int, language: UiLanguage): String = when (language) {
     UiLanguage.ENGLISH -> "Completed ($count)"
     UiLanguage.SIMPLIFIED_CHINESE -> "已完成（$count）"

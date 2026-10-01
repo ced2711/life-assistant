@@ -92,7 +92,7 @@ import kotlinx.coroutines.launch
 
 /** What the editor pane is showing. */
 private sealed interface TodoEditorTarget {
-    data object New : TodoEditorTarget
+    data class New(val epochDay: Long? = null) : TodoEditorTarget
     data class Existing(val id: Long) : TodoEditorTarget
 }
 
@@ -180,7 +180,7 @@ internal fun TodoPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
     val today = LocalDate.now().toEpochDay()
 
     RegisterPageShortcuts(
-        onNew = { editor = TodoEditorTarget.New },
+        onNew = { editor = TodoEditorTarget.New() },
         onFind = { runCatching { searchFocus.requestFocus() } },
     )
 
@@ -750,7 +750,9 @@ private fun TodoEditor(
     val key = (todo?.id ?: -1L)
     var description by remember(key) { mutableStateOf(todo?.description.orEmpty()) }
     var title by remember(key) { mutableStateOf(todo?.title?.takeIf { todo.description.isNotBlank() && it != com.ced2711.lifetracker.domain.model.deriveTodoTitle(todo.description) }.orEmpty()) }
-    var dateText by remember(key) { mutableStateOf(todo?.deadlineEpochDay?.let { UserFormatting.formatDate(LocalDate.ofEpochDay(it), snapshot.settings.dateFormat, locale) }.orEmpty()) }
+    var dateText by remember(key) {
+        mutableStateOf((todo?.deadlineEpochDay ?: (target as? TodoEditorTarget.New)?.epochDay)?.let { UserFormatting.formatDate(LocalDate.ofEpochDay(it), snapshot.settings.dateFormat, locale) }.orEmpty())
+    }
     var timeText by remember(key) {
         mutableStateOf(todo?.deadlineMinute?.let { "%d:%02d".format(it / 60, it % 60) }.orEmpty())
     }
@@ -945,7 +947,7 @@ private fun TodoEditor(
 
 /** The todo editor in its own dialog, for opening a todo from another page such as the calendar. */
 @Composable
-internal fun TodoEditorWindow(snapshot: BackupSnapshot, store: DesktopDataStore, todoId: Long?, onClose: () -> Unit) {
+internal fun TodoEditorWindow(snapshot: BackupSnapshot, store: DesktopDataStore, todoId: Long?, initialDay: Long? = null, onClose: () -> Unit) {
     val scope = rememberSafeCoroutineScope()
     var deleteScopeFor by remember { mutableStateOf<TodoEntity?>(null) }
     androidx.compose.ui.window.DialogWindow(
@@ -957,7 +959,7 @@ internal fun TodoEditorWindow(snapshot: BackupSnapshot, store: DesktopDataStore,
             TodoEditor(
                 snapshot = snapshot,
                 store = store,
-                target = todoId?.let { TodoEditorTarget.Existing(it) } ?: TodoEditorTarget.New,
+                target = todoId?.let { TodoEditorTarget.Existing(it) } ?: TodoEditorTarget.New(initialDay),
                 onClose = onClose,
                 onDelete = { todo ->
                     if (todo.seriesId != null) deleteScopeFor = todo else {
