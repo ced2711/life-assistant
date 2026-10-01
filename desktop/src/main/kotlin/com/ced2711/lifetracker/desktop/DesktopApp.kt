@@ -866,134 +866,6 @@ private fun CalendarPage(
 }
 
 @Composable
-private fun NotesPage(snapshot: BackupSnapshot, store: DesktopDataStore, openVault: () -> Unit) {
-    val scope = rememberSafeCoroutineScope()
-    var query by remember { mutableStateOf("") }
-    var showSearch by remember { mutableStateOf(false) }
-    var showFolders by remember { mutableStateOf(false) }
-    var editing by remember { mutableStateOf<NoteEntity?>(null) }
-    var adding by remember { mutableStateOf(false) }
-    var selectedFolder by remember { mutableStateOf<Long?>(null) }
-    var unfiledOnly by remember { mutableStateOf(false) }
-    var newFolder by remember { mutableStateOf(false) }
-    var renamingFolder by remember { mutableStateOf<Long?>(null) }
-    var deletingFolder by remember { mutableStateOf<Long?>(null) }
-    val folderParents = snapshot.noteFolders.associate { it.id to it.parentId }
-    val includedFolderIds = selectedFolder?.let { selected ->
-        snapshot.noteFolders.mapNotNull { candidate ->
-            var cursor: Long? = candidate.id
-            val visited = mutableSetOf<Long>()
-            while (cursor != null && visited.add(cursor)) {
-                if (cursor == selected) return@mapNotNull candidate.id
-                cursor = folderParents[cursor]
-            }
-            null
-        }.toSet()
-    }
-    val notes = snapshot.notes.filter {
-        ((unfiledOnly && it.folderId == null) || (!unfiledOnly && (includedFolderIds == null || it.folderId in includedFolderIds))) &&
-            (query.isBlank() || it.title.contains(query, true) || it.body.contains(query, true))
-    }
-        .sortedWith(compareByDescending<NoteEntity> { it.pinned }.thenByDescending { it.updatedAt })
-    Row(Modifier.fillMaxSize()) {
-        if (showFolders) Column(Modifier.width(250.dp).fillMaxHeight().background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .25f)).padding(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(desktopText("Folders"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                IconButton(onClick = { showFolders = false }) { Icon(Icons.Default.ChevronLeft, desktopText("Hide folders")) }
-            }
-            TextButton({ selectedFolder = null; unfiledOnly = false }) { Text(desktopText("All notes")) }
-            TextButton({ selectedFolder = null; unfiledOnly = true }) { Text(desktopText("Unfiled")) }
-            snapshot.noteFolders.forEach { folder ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    TextButton({ selectedFolder = folder.id; unfiledOnly = false }, modifier = Modifier.weight(1f)) { Text(noteFolderPath(folder.id, snapshot)) }
-                    IconButton(onClick = { renamingFolder = folder.id }) { Icon(Icons.Default.Edit, desktopText("Rename folder")) }
-                    IconButton(onClick = { deletingFolder = folder.id }) { Icon(Icons.Default.Delete, desktopText("Delete folder")) }
-                }
-            }
-            TextButton({ newFolder = true }) { Icon(Icons.Default.Add, null); Text(desktopText("Folder")) }
-        }
-        Scaffold(floatingActionButton = { FloatingActionButton({ adding = true }) { Icon(Icons.Default.Add, null) } }, modifier = Modifier.weight(1f)) { padding ->
-            Column(Modifier.fillMaxSize().padding(padding)) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(desktopText("Notes"), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                        Text(desktopNotesCount(notes.size, LocalUiLanguage.current), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    IconButton(onClick = { showFolders = !showFolders }) { Icon(Icons.Default.Folder, desktopText("Folders")) }
-                    IconButton(onClick = { showSearch = !showSearch }) { Icon(Icons.Default.Search, desktopText("Search")) }
-                    IconButton(onClick = openVault) { Icon(Icons.Default.Lock, desktopText("Vault")) }
-                }
-                if (showSearch) OutlinedTextField(query, { query = it }, label = { Text(desktopText("Search")) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp))
-                LazyColumn(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(notes, key = { it.id }) { note ->
-                        Card(Modifier.fillMaxWidth().clickable { editing = note }) {
-                            Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(if (note.pinned) "★ ${note.title}" else note.title, fontWeight = FontWeight.SemiBold)
-                                    Text(note.body, maxLines = 3, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    AttachmentList(snapshot, AttachmentOwnerType.NOTE, note.id, store)
-                                }
-                                IconButton({ chooseAndAttach(scope, store, AttachmentOwnerType.NOTE, note.id) }) { Icon(Icons.Default.AttachFile, desktopText("Attach")) }
-                                IconButton({ scope.launch { store.deleteNote(note.id) } }) { Icon(Icons.Default.Delete, desktopText("Delete")) }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    if (adding || editing != null) NoteEditorDialog(
-        editing,
-        snapshot.noteFolders.map { it.id to noteFolderPath(it.id, snapshot) },
-        selectedFolder,
-        { adding = false; editing = null },
-    ) { folder, title, body, pinned ->
-        scope.launch { store.upsertNote(editing?.id, folder, title, body, pinned) }
-        adding = false; editing = null
-    }
-    if (newFolder) SimpleNameDialog(desktopText("New folder"), { newFolder = false }) { scope.launch { store.addNoteFolder(it, selectedFolder) }; newFolder = false }
-    renamingFolder?.let { folderId ->
-        SimpleNameDialog(desktopText("Rename folder"), { renamingFolder = null }, initial = snapshot.noteFolders.firstOrNull { it.id == folderId }?.name.orEmpty()) { name ->
-            scope.launch { store.renameNoteFolder(folderId, name) }
-            renamingFolder = null
-        }
-    }
-    deletingFolder?.let { folderId ->
-        AlertDialog(
-            onDismissRequest = { deletingFolder = null },
-            title = { Text(desktopText("Delete folder")) },
-            text = { Text(desktopText("Notes stay safe; the folder is removed and child folders move up one level.")) },
-            dismissButton = { TextButton(onClick = { deletingFolder = null }) { Text(desktopText("Cancel")) } },
-            confirmButton = { Button(onClick = { scope.launch { store.deleteNoteFolder(folderId) }; deletingFolder = null }) { Text(desktopText("Delete")) } },
-        )
-    }
-}
-
-@Composable
-private fun NoteEditorDialog(note: NoteEntity?, folders: List<Pair<Long, String>>, defaultFolder: Long?, onDismiss: () -> Unit, onSave: (Long?, String, String, Boolean) -> Unit) {
-    var title by remember { mutableStateOf(note?.title.orEmpty()) }
-    var body by remember { mutableStateOf(note?.body.orEmpty()) }
-    var pinned by remember { mutableStateOf(note?.pinned ?: false) }
-    var folder by remember { mutableStateOf(note?.folderId ?: defaultFolder) }
-    AlertDialog(onDismissRequest = onDismiss, title = { Text(desktopText(if (note == null) "New note" else "Edit note")) }, text = {
-        Column(Modifier.widthIn(max = 620.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedTextField(title, { title = it }, label = { Text(desktopText("Title")) }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(body, { body = it }, label = { Text(desktopText("Note")) }, modifier = Modifier.fillMaxWidth(), minLines = 12)
-            Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(pinned, { pinned = it }); Text(desktopText("Pinned")) }
-            if (folders.isNotEmpty()) {
-                Text(desktopText("Folder"))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    item { FilterChipSimple(desktopText("None"), folder == null) { folder = null } }
-                    items(folders, key = { it.first }) { (id, name) ->
-                        FilterChipSimple(name, folder == id) { folder = id }
-                    }
-                }
-            }
-        }
-    }, dismissButton = { TextButton(onClick = onDismiss) { Text(desktopText("Cancel")) } }, confirmButton = { Button(enabled = title.isNotBlank() || body.isNotBlank(), onClick = { onSave(folder, title, body, pinned) }) { Text(desktopText("Save")) } })
-}
-
-@Composable
 internal fun SimpleNameDialog(title: String, onDismiss: () -> Unit, initial: String = "", onSave: (String) -> Unit) {
     var value by remember { mutableStateOf(initial) }
     AlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = { OutlinedTextField(value, { value = it }, label = { Text(desktopText("Name")) }) }, dismissButton = { TextButton(onClick = onDismiss) { Text(desktopText("Cancel")) } }, confirmButton = { Button(enabled = value.isNotBlank(), onClick = { onSave(value.trim()) }) { Text(desktopText("Save")) } })
@@ -1444,7 +1316,7 @@ internal fun categoryPath(categoryId: Long, snapshot: BackupSnapshot): String {
     return path.asReversed().joinToString(" / ")
 }
 
-private fun noteFolderPath(folderId: Long, snapshot: BackupSnapshot): String {
+internal fun noteFolderPath(folderId: Long, snapshot: BackupSnapshot): String {
     val byId = snapshot.noteFolders.associateBy { it.id }
     val path = mutableListOf<String>()
     val visited = mutableSetOf<Long>()

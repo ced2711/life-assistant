@@ -215,7 +215,7 @@ fun desktopActiveTasks(count: Int, language: UiLanguage): String = when (languag
 }
 
 fun desktopNotesCount(count: Int, language: UiLanguage): String = when (language) {
-    UiLanguage.ENGLISH -> "$count notes"
+    UiLanguage.ENGLISH -> if (count == 1) "1 note" else "$count notes"
     UiLanguage.SIMPLIFIED_CHINESE -> "$count 条笔记"
 }
 

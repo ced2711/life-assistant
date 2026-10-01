@@ -428,6 +428,29 @@ class DesktopDataStore(
         snapshot.copy(notes = snapshot.notes.filterNot { it.id == effectiveId } + note)
     }
 
+    /** Saves a note and returns its id, so autosave can keep writing to a note it just created. */
+    suspend fun saveNote(id: Long?, folderId: Long?, title: String, body: String, pinned: Boolean): Long? {
+        var savedId: Long? = null
+        val saved = mutate { snapshot ->
+            val now = System.currentTimeMillis()
+            val effectiveId = id?.takeIf { existing -> snapshot.notes.any { it.id == existing } }
+                ?: (snapshot.notes.maxOfOrNull(NoteEntity::id) ?: 0L) + 1
+            savedId = effectiveId
+            val existing = snapshot.notes.firstOrNull { it.id == effectiveId }
+            val note = NoteEntity(
+                id = effectiveId,
+                folderId = folderId?.takeIf { folder -> snapshot.noteFolders.any { it.id == folder } },
+                title = title.trim().ifBlank { body.lineSequence().map(String::trim).firstOrNull(String::isNotEmpty).orEmpty().take(60).ifBlank { "Untitled" } },
+                body = body,
+                pinned = pinned,
+                createdAt = existing?.createdAt ?: now,
+                updatedAt = maxOf(now, existing?.updatedAt ?: 0L),
+            )
+            snapshot.copy(notes = snapshot.notes.filterNot { it.id == effectiveId } + note)
+        }
+        return savedId.takeIf { saved }
+    }
+
     suspend fun addNoteFolder(name: String, parentId: Long? = null) = mutate { snapshot ->
         val normalizedName = normalizeNoteFolderName(name)
         require(parentId == null || snapshot.noteFolders.any { it.id == parentId }) {
