@@ -271,3 +271,23 @@ fun desktopReminderMinutes(minutes: Long, language: UiLanguage): String {
         UiLanguage.SIMPLIFIED_CHINESE -> "提前 $amount $unitZh"
     }
 }
+
+/** "Every 2 weeks from 09/01/2026 until 12/31/2026" and its Chinese form. */
+fun desktopRepeatSummary(
+    unit: com.ced2711.lifetracker.domain.model.RecurrenceUnit,
+    interval: Int,
+    start: String,
+    end: String?,
+    language: UiLanguage,
+): String {
+    val (en, zh) = when (unit) {
+        com.ced2711.lifetracker.domain.model.RecurrenceUnit.DAY -> "day" to "天"
+        com.ced2711.lifetracker.domain.model.RecurrenceUnit.WEEK -> "week" to "周"
+        com.ced2711.lifetracker.domain.model.RecurrenceUnit.MONTH -> "month" to "个月"
+        com.ced2711.lifetracker.domain.model.RecurrenceUnit.YEAR -> "year" to "年"
+    }
+    return when (language) {
+        UiLanguage.ENGLISH -> (if (interval == 1) "Every $en" else "Every $interval ${en}s") + " from $start" + (end?.let { " until $it" } ?: "")
+        UiLanguage.SIMPLIFIED_CHINESE -> "从 $start 起每${if (interval == 1) "" else " $interval "}$zh" + (end?.let { "，到 $it 为止" } ?: "")
+    }
+}

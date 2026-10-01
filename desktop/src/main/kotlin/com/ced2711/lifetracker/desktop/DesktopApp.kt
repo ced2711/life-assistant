@@ -540,160 +540,6 @@ label: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun LedgerPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
-    val scope = rememberSafeCoroutineScope()
-    var adding by remember { mutableStateOf(false) }
-    var editing by remember { mutableStateOf<LedgerEntryEntity?>(null) }
-    val entries = snapshot.ledgerEntries.filter { it.deletedAt == null }.sortedByDescending { it.epochDay }
-    val income = entries.filter { it.type == LedgerType.INCOME }.sumOf { it.amountCents }
-    val expense = entries.filter { it.type == LedgerType.EXPENSE }.sumOf { it.amountCents }
-    Scaffold(floatingActionButton = { FloatingActionButton({ adding = true }) { Icon(Icons.Default.Add, null) } }) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
-            PageHeader("Ledger", desktopNet(formatMoney(income - expense), LocalUiLanguage.current))
-            Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                SummaryCard(desktopText("Income"), formatMoney(income), Color(0xFF65D28A), Modifier.weight(1f))
-                SummaryCard(desktopText("Expense"), formatMoney(expense), Color(0xFFFF756B), Modifier.weight(1f))
-            }
-            LedgerTrend(entries, snapshot.settings.dateFormat, Modifier.fillMaxWidth().height(200.dp).padding(horizontal = 24.dp, vertical = 12.dp))
-            LazyColumn(Modifier.fillMaxSize().padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(entries, key = { it.id }) { entry ->
-                    Card(Modifier.fillMaxWidth()) {
-                        Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text(entry.merchant.ifBlank { entry.note.ifBlank { entry.type.name.lowercase().replaceFirstChar(Char::uppercase) } }, fontWeight = FontWeight.SemiBold)
-                                Text(UserFormatting.formatDate(LocalDate.ofEpochDay(entry.epochDay), snapshot.settings.dateFormat, uiLocale(LocalUiLanguage.current)), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                AttachmentList(snapshot, AttachmentOwnerType.LEDGER, entry.id, store)
-                            }
-                            Text(
-                                (if (entry.type == LedgerType.INCOME) "+" else "−") + formatMoney(entry.amountCents),
-                                color = if (entry.type == LedgerType.INCOME) Color(0xFF65D28A) else Color(0xFFFF756B),
-                                fontWeight = FontWeight.Bold,
-                            )
-                            IconButton({ chooseAndAttach(scope, store, AttachmentOwnerType.LEDGER, entry.id) }) { Icon(Icons.Default.AttachFile, desktopText("Attach")) }
-                            IconButton({ editing = entry }) { Icon(Icons.Default.Edit, desktopText("Edit")) }
-                            IconButton({ scope.launch { store.deleteLedger(entry.id) } }) { Icon(Icons.Default.Delete, desktopText("Delete")) }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    if (adding || editing != null) {
-        LedgerEditorDialog(
-            entry = editing,
-            onDismiss = { adding = false; editing = null },
-            onSave = { type, cents, day, note, merchant, tags ->
-                scope.launch { store.upsertLedger(editing?.id, type, cents, day, note, merchant, tags) }
-                adding = false; editing = null
-            },
-        )
-    }
-}
-
-@Composable
-private fun SummaryCard(title: String, value: String, color: Color, modifier: Modifier) {
-    Card(modifier) { Column(Modifier.padding(16.dp)) { Text(title); Text(value, color = color, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) } }
-}
-
-@Composable
-private fun LedgerTrend(entries: List<LedgerEntryEntity>, dateFormat: DateFormatOption, modifier: Modifier) {
-    val values = entries.groupBy { it.epochDay }.toSortedMap().entries.toList().takeLast(7).map { (day, rows) ->
-        day to rows.sumOf { if (it.type == LedgerType.INCOME) it.amountCents else -it.amountCents }
-    }
-    val maximum = values.maxOfOrNull { kotlin.math.abs(it.second) }?.coerceAtLeast(1L) ?: 1L
-    val scaleMaximum = ((maximum * 11L) + 9L) / 10L
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(desktopText("Daily net  •  green = net income  •  red = net expense"), style = MaterialTheme.typography.bodySmall)
-            Text(desktopRange(formatMoney(scaleMaximum), LocalUiLanguage.current), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        if (values.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(desktopText("No ledger data yet"), color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            return@Column
-        }
-        Canvas(Modifier.fillMaxWidth().weight(1f)) {
-            val slot = size.width / values.size
-            val center = size.height / 2f
-            drawLine(Color(0xFF52605D), start = androidx.compose.ui.geometry.Offset(0f, center), end = androidx.compose.ui.geometry.Offset(size.width, center))
-            values.forEachIndexed { index, (_, value) ->
-                val height = (kotlin.math.abs(value).toFloat() / scaleMaximum) * (center - 5f)
-                val left = index * slot + slot * .22f
-                val top = if (value >= 0) center - height else center
-                drawRect(
-                    if (value >= 0) Color(0xFF65D28A) else Color(0xFFFF756B),
-                    topLeft = androidx.compose.ui.geometry.Offset(left, top),
-                    size = androidx.compose.ui.geometry.Size(slot * .56f, height.coerceAtLeast(2f)),
-                )
-            }
-        }
-        Row(Modifier.fillMaxWidth()) {
-            values.forEach { (day, value) ->
-                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        (if (value >= 0) "+" else "−") + compactMoney(kotlin.math.abs(value)),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (value >= 0) Color(0xFF65D28A) else Color(0xFFFF756B),
-                        maxLines = 1,
-                    )
-                    Text(
-                        UserFormatting.formatDate(LocalDate.ofEpochDay(day), dateFormat, uiLocale(LocalUiLanguage.current)),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun LedgerEditorDialog(
-    entry: LedgerEntryEntity?,
-    onDismiss: () -> Unit,
-    onSave: (LedgerType, Long, Long, String, String, String) -> Unit,
-) {
-    var type by remember { mutableStateOf(entry?.type ?: LedgerType.EXPENSE) }
-    var amount by remember { mutableStateOf(entry?.amountCents?.let { "%.2f".format(Locale.US, it / 100.0) }.orEmpty()) }
-    var date by remember {
-        mutableStateOf(
-            (entry?.epochDay?.let(LocalDate::ofEpochDay) ?: LocalDate.now())
-                .format(DateTimeFormatter.ofPattern("M/d/yyyy", Locale.US)),
-        )
-    }
-    var merchant by remember { mutableStateOf(entry?.merchant.orEmpty()) }
-    var note by remember { mutableStateOf(entry?.note.orEmpty()) }
-    var tags by remember { mutableStateOf(entry?.tagsCsv.orEmpty()) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(desktopText(if (entry == null) "New ledger entry" else "Edit ledger entry")) },
-        text = {
-            Column(Modifier.widthIn(max = 480.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row { LedgerType.entries.forEach { item -> Row(verticalAlignment = Alignment.CenterVertically) { RadioButton(type == item, { type = item }); Text(desktopText(item.name.lowercase().replaceFirstChar(Char::uppercase))) } } }
-                OutlinedTextField(
-                    amount,
-                    { next -> if (isValidDesktopAmountInput(next)) amount = next },
-                    label = { Text(desktopText("Amount")) },
-                    supportingText = { Text(desktopText("Positive amount, up to 2 decimal places")) },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(date, { date = it }, label = { Text(desktopText("Date M/D/YYYY, M/D, or day")) }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(merchant, { merchant = it }, label = { Text(desktopText("Merchant / payer")) }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(note, { note = it }, label = { Text(desktopText("Note")) }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(tags, { tags = it }, label = { Text(desktopText("Tags, comma separated (optional)")) }, modifier = Modifier.fillMaxWidth())
-            }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(desktopText("Cancel")) } },
-        confirmButton = {
-            val cents = parseAmountCents(amount)
-            val day = SmartDateParser.parse(date, LocalDate.now())?.toEpochDay()
-            Button(enabled = cents != null && day != null, onClick = { onSave(type, requireNotNull(cents), requireNotNull(day), note, merchant, tags) }) { Text(desktopText("Save")) }
-        },
-    )
-}
-
-@Composable
 private fun CalendarPage(
     snapshot: BackupSnapshot,
     store: DesktopDataStore,
@@ -858,10 +704,7 @@ private fun CalendarPage(
         TodoEditorWindow(snapshot, store, todo.id) { editingTodo = null }
     }
     editingLedger?.let { entry ->
-        LedgerEditorDialog(entry, { editingLedger = null }) { type, cents, day, note, merchant, tags ->
-            scope.launch { store.upsertLedger(entry.id, type, cents, day, note, merchant, tags) }
-            editingLedger = null
-        }
+        LedgerEditorWindow(snapshot, store, entry.id, entry.epochDay) { editingLedger = null }
     }
 }
 
@@ -1364,7 +1207,7 @@ private fun desktopErrorMessage(error: Throwable, language: UiLanguage = UiLangu
     else -> desktopText("The operation could not be completed. Your last saved data was kept.", language)
 }
 
-private fun formatMoney(cents: Long): String = NumberFormat.getCurrencyInstance(Locale.US).apply { currency = Currency.getInstance("USD") }.format(cents / 100.0)
+internal fun formatMoney(cents: Long): String = NumberFormat.getCurrencyInstance(Locale.US).apply { currency = Currency.getInstance("USD") }.format(cents / 100.0)
 private fun compactMoney(cents: Long): String = when {
     cents >= 100_000_000L -> "$" + "%.1fM".format(Locale.US, cents / 100_000_000.0)
     cents >= 100_000L -> "$" + "%.1fk".format(Locale.US, cents / 100_000.0)
@@ -1375,7 +1218,7 @@ private fun formatCalendarNet(cents: Long): String = BigDecimal.valueOf(cents, 2
     .toPlainString()
 private fun formatTimestamp(timestamp: Long): String = DateTimeFormatter.ofPattern("MMM d, yyyy, h:mm a", Locale.US).format(Instant.ofEpochMilli(timestamp).atZone(ZoneId.systemDefault()))
 
-private fun parseAmountCents(value: String): Long? {
+internal fun parseAmountCents(value: String): Long? {
     val decimal = value.toBigDecimalOrNull() ?: return null
     if (decimal.signum() <= 0 || decimal.scale() !in 0..2) return null
     return runCatching { decimal.movePointRight(2).longValueExact() }
