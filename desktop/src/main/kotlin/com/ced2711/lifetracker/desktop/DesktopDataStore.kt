@@ -345,6 +345,11 @@ class DesktopDataStore(
         snapshot.copy(categories = snapshot.categories + CategoryEntity(id = id, name = name.trim(), parentId = parentId))
     }
 
+    /** Changes synced settings such as reminder defaults. */
+    suspend fun updateSettings(transform: (BackupSettings) -> BackupSettings) = mutate { snapshot ->
+        snapshot.copy(settings = transform(snapshot.settings))
+    }
+
     suspend fun setAccentColor(accentColor: AccentColor) = mutate { snapshot ->
         snapshot.copy(settings = snapshot.settings.copy(accentColor = accentColor))
     }

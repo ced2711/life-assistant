@@ -640,12 +640,14 @@ private fun SettingsPage(
         )
     }
     val language = LocalUiLanguage.current
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    // Settings read best as one comfortable column, not stretched across a wide window.
+    Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), contentAlignment = Alignment.TopCenter) {
+    Column(Modifier.widthIn(max = 920.dp).fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         PageHeader("Settings")
         Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.Cloud, null); Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { Text(desktopText(when { !cloudState.connected -> "Cloud sync"; cloudState.provider == DesktopCloudProvider.GITHUB -> "GitHub sync"; else -> "Google Drive sync" }), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold); Text(if (cloudState.connected && cloudState.provider == DesktopCloudProvider.GITHUB) desktopText("Connected") + " · " + cloudState.gitHubRepository else desktopText(if (cloudState.connected) "Connected" else "Not connected"), color = MaterialTheme.colorScheme.onSurfaceVariant) } }
             Text(desktopText("Encrypted snapshots are stored in Life Assistant's private Google Drive app folder or a private GitHub repository. Nothing else in those accounts is read."))
-            Text(desktopText("Each upload creates a new encrypted version. The 10 most recent versions are kept; conflicts pause sync until you resolve them."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(desktopText("Changes made on this PC and your other devices are merged automatically. The 10 most recent encrypted versions are kept."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (cloudState.connected) {
                 Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(desktopText("Automatic sync")); Text(desktopText("Syncs a few seconds after each change, when the window is focused, and every 2 minutes while Life Assistant is open."), style = MaterialTheme.typography.bodySmall) }; Switch(cloudState.automaticSync, cloud::setAutomaticSync) }
                 cloudState.lastSyncAt?.let { Text(desktopLastSync(formatTimestamp(it), LocalUiLanguage.current), color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -710,7 +712,7 @@ private fun SettingsPage(
                 Text(desktopText("Theme"))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(ThemeMode.entries, key = { it.name }) { mode ->
-                        FilterChipSimple(mode.name.lowercase().replaceFirstChar(Char::uppercase), dataStore.currentSnapshot()?.settings?.themeMode == mode) {
+                        FilterChipSimple(desktopText(themeLabel(mode)), dataStore.currentSnapshot()?.settings?.themeMode == mode) {
                             scope.launch { dataStore.setThemeMode(mode) }
                         }
                     }
@@ -736,23 +738,24 @@ private fun SettingsPage(
                 Text(desktopText("Week starts on"))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(WeekStart.entries, key = { it.name }) { value ->
-                        FilterChipSimple(value.name.lowercase().replaceFirstChar(Char::uppercase), dataStore.currentSnapshot()?.settings?.weekStart == value) { scope.launch { dataStore.setWeekStart(value) } }
+                        FilterChipSimple(desktopText(weekStartLabel(value)), dataStore.currentSnapshot()?.settings?.weekStart == value) { scope.launch { dataStore.setWeekStart(value) } }
                     }
                 }
                 Text(desktopText("Time format"))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(TimeFormatOption.entries, key = { it.name }) { value ->
-                        FilterChipSimple(value.name.lowercase().replace('_', ' ').replaceFirstChar(Char::uppercase), dataStore.currentSnapshot()?.settings?.timeFormat == value) { scope.launch { dataStore.setTimeFormat(value) } }
+                        FilterChipSimple(desktopText(timeFormatLabel(value)), dataStore.currentSnapshot()?.settings?.timeFormat == value) { scope.launch { dataStore.setTimeFormat(value) } }
                     }
                 }
                 Text(desktopText("Date format"))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(DateFormatOption.entries, key = { it.name }) { value ->
-                        FilterChipSimple(value.name.lowercase().replace('_', ' ').replaceFirstChar(Char::uppercase), dataStore.currentSnapshot()?.settings?.dateFormat == value) { scope.launch { dataStore.setDateFormat(value) } }
+                        FilterChipSimple(dateFormatLabel(value, language), dataStore.currentSnapshot()?.settings?.dateFormat == value) { scope.launch { dataStore.setDateFormat(value) } }
                     }
                 }
             }
         }
+        dataStore.currentSnapshot()?.settings?.let { settings -> ReminderSettingsCard(settings) { change -> scope.launch { dataStore.updateSettings(change) } } }
         Card(Modifier.fillMaxWidth()) {
             Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Lock, null)
@@ -842,6 +845,7 @@ private fun SettingsPage(
             }
         }
         Text(desktopAppVersion(language), color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
     }
     if (connectDialog) GoogleConnectDialog(config.clientId, { connectDialog = false }) { clientId, clientSecret -> connectDialog = false; cloud.launch { connect(clientId, clientSecret) } }
     if (gitHubDialog) GitHubConnectDialog(config.gitHubClientId, config.gitHubRepository, { gitHubDialog = false }) { clientId, repository -> gitHubDialog = false; cloud.startGitHubConnect(clientId, repository) }

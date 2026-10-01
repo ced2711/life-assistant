@@ -165,7 +165,8 @@ internal fun DiaryPage(
                     }
                 }
             }
-            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // A page about as wide as a book reads better than one stretched across the screen.
+            Column(Modifier.weight(1f).widthIn(max = 860.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton({ select(selectedDay - 1) }) { Icon(Icons.Default.ChevronLeft, desktopText("Previous day")) }
                     Text(
@@ -185,6 +186,7 @@ internal fun DiaryPage(
                     value = text,
                     onValueChange = { draft = it },
                     modifier = Modifier.fillMaxWidth().weight(1f),
+                    textStyle = MaterialTheme.typography.bodyLarge,
                     placeholder = { Text(desktopText("How was your day?")) },
                 )
             }
