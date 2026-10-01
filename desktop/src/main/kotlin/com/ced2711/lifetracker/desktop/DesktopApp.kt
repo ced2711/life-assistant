@@ -417,13 +417,20 @@ private fun DesktopHome(
         destination = to
         if (to in mainDestinations) configStore.setLastDestination(to.toTopLevelDestination())
     }
-    // Ctrl+1…9 opens the modules in menu order, Ctrl+R syncs, Ctrl+, opens Settings.
+    var sidebarCollapsed by remember { mutableStateOf(configStore.sidebarCollapsed()) }
+    val toggleSidebar: () -> Unit = {
+        sidebarCollapsed = !sidebarCollapsed
+        configStore.setSidebarCollapsed(sidebarCollapsed)
+    }
+    // Ctrl+1…9 opens the modules in menu order, Ctrl+R syncs, Ctrl+, opens Settings, Ctrl+B folds the menu.
     val shortcuts = LocalDesktopShortcuts.current
     DisposableEffect(shortcuts, mainDestinations) {
         shortcuts.onNavigate = { index -> mainDestinations.getOrNull(index)?.let(::navigate) }
         shortcuts.onSync = { cloud.launch { synchronize() } }
         shortcuts.onSettings = { destination = DesktopDestination.SETTINGS }
+        shortcuts.onToggleSidebar = toggleSidebar
         onDispose {
+            shortcuts.onToggleSidebar = null
             shortcuts.onNavigate = null
             shortcuts.onSync = null
             shortcuts.onSettings = null
@@ -454,8 +461,9 @@ private fun DesktopHome(
         }
     }
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        // Wide windows get a labelled sidebar; narrow ones a compact icon rail.
-        val expanded = maxWidth >= 1_100.dp
+        // Wide windows get a labelled sidebar unless it was folded; narrow ones a compact icon rail.
+        val roomy = maxWidth >= 1_100.dp
+        val expanded = roomy && !sidebarCollapsed
         Scaffold(snackbarHost = { SnackbarHost(snackbar) }) { padding ->
             Row(Modifier.fillMaxSize().padding(padding)) {
                 DesktopSidebar(
@@ -467,6 +475,7 @@ private fun DesktopHome(
                     settingsSelected = destination == DesktopDestination.SETTINGS,
                     onVault = { destination = DesktopDestination.VAULT },
                     onSettings = { destination = DesktopDestination.SETTINGS },
+                    onToggle = toggleSidebar.takeIf { roomy },
                     syncStatus = {
                         DesktopSyncStatusButton(
                             state = cloudState,

@@ -59,6 +59,12 @@ fun main(args: Array<String>) {
             shortcuts.onNew?.invoke()
             save("${index + 1}b-${destination.name.lowercase()}-new")
         }
+        if (destination == TopLevelDestination.CALENDAR) {
+            // The folded sidebar, as with Ctrl+B; unfolded again afterwards.
+            shortcuts.onToggleSidebar?.invoke()
+            save("${index + 1}c-${destination.name.lowercase()}-folded-menu")
+            shortcuts.onToggleSidebar?.invoke()
+        }
     }
     shortcuts.onSettings?.invoke()
     save("9-settings")

@@ -13,7 +13,8 @@
   Simultaneous uploads are merged too. Only a cloud version with a different password still asks.
 - **Linux version** (`.deb` and a portable `.tar.gz`), built automatically on GitHub.
 - **Redesigned desktop app for large screens**:
-  - A labelled sidebar with counts, sync status, Vault and Settings.
+  - A labelled sidebar with counts, sync status, Vault and Settings. Fold it to icons with the
+    menu button or Ctrl+B; the choice is remembered.
   - **Todo**: filter column (Today, Next 7 days, Overdue, No date, category tree, priority, tags,
     sort), list grouped by date, and an editor beside it with subtasks, due time, reminders,
     repeat, Urgent priority, attachments and Undo for deletes. Rename or delete categories and tags.
@@ -30,8 +31,12 @@
   - Reminder settings (also used by the phone), readable option names, a centered Settings page,
     reviewing a backup before it replaces local data, and exporting with a separate password.
 - **Keyboard** on the desktop: Ctrl+N new item, Ctrl+F search, Ctrl+1–9 modules, Ctrl+R sync,
-  Ctrl+, settings, Ctrl+S save, Esc close, arrow keys in lists and the calendar, Enter to add.
+  Ctrl+, settings, Ctrl+B fold the menu, Ctrl+S save, Esc close, arrow keys in lists and the
+  calendar, Enter to add.
 - The desktop window remembers its size and position.
+- **Smaller downloads**, same features: the Windows installer is about 46 MB (was 50 MB) and
+  takes 89 MB installed (was 108 MB); the Android APK is 3.5 MB (was 3.9 MB) because it only
+  carries the English and Chinese system texts the app uses.
 
 ## Fixed
 

@@ -11,6 +11,8 @@ import com.ced2711.lifetracker.ui.localization.translateUiText
  * Shared Android translations win whenever a label is already known there.
  */
 private val desktopSimplifiedChinese = mapOf(
+    "Fold menu (Ctrl+B)" to "收起菜单（Ctrl+B）",
+    "Unfold menu (Ctrl+B)" to "展开菜单（Ctrl+B）",
     "Export failed." to "导出失败。",
     "Lock with my data password" to "用我的数据密码加密",
     "Lock with a separate backup password" to "用单独的备份密码加密",

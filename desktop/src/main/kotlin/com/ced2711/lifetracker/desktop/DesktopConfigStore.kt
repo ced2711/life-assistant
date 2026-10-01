@@ -153,6 +153,13 @@ class DesktopConfigStore(
         save(properties)
     }
 
+    /** Whether the sidebar is folded to icons (off by default). */
+    @Synchronized
+    fun sidebarCollapsed(): Boolean = load().getProperty(KEY_SIDEBAR_COLLAPSED)?.toBooleanStrictOrNull() ?: false
+
+    @Synchronized
+    fun setSidebarCollapsed(collapsed: Boolean) = load().let { it.setProperty(KEY_SIDEBAR_COLLAPSED, collapsed.toString()); save(it) }
+
     /** Whether this PC shows todo reminders as system notifications (on by default). */
     @Synchronized
     fun desktopReminders(): Boolean = load().getProperty(KEY_DESKTOP_REMINDERS)?.toBooleanStrictOrNull() ?: true
@@ -245,6 +252,7 @@ class DesktopConfigStore(
         const val KEY_WINDOW_Y = "window.y"
         const val KEY_WINDOW_MAXIMIZED = "window.maximized"
         const val KEY_DESKTOP_REMINDERS = "reminders.desktop"
+        const val KEY_SIDEBAR_COLLAPSED = "ui.sidebarCollapsed"
         const val KEY_KEEP_IN_TRAY = "window.keepInTray"
         const val KEY_REMINDERS_CHECKED_AT = "reminders.checkedAt"
     }

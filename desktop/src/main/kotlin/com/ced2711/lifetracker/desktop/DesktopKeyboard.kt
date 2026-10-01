@@ -20,7 +20,8 @@ import androidx.compose.ui.input.key.type
  * Window-wide keyboard shortcuts. The window forwards every key press to [handle]; the current
  * page registers what "new" and "find" mean for it with [RegisterPageShortcuts].
  *
- * - Ctrl+N new item, Ctrl+F search, Ctrl+1…9 switch module, Ctrl+R sync, Ctrl+, settings.
+ * - Ctrl+N new item, Ctrl+F search, Ctrl+1…9 switch module, Ctrl+R sync, Ctrl+, settings,
+ *   Ctrl+B fold or unfold the sidebar.
  */
 class DesktopShortcuts {
     var onNew: (() -> Unit)? = null
@@ -28,6 +29,7 @@ class DesktopShortcuts {
     var onNavigate: ((Int) -> Unit)? = null
     var onSync: (() -> Unit)? = null
     var onSettings: (() -> Unit)? = null
+    var onToggleSidebar: (() -> Unit)? = null
 
     fun handle(event: KeyEvent): Boolean {
         if (event.type != KeyEventType.KeyDown) return false
@@ -38,6 +40,7 @@ class DesktopShortcuts {
             Key.F -> onFind?.invoke() != null
             Key.R -> onSync?.invoke() != null
             Key.Comma -> onSettings?.invoke() != null
+            Key.B -> onToggleSidebar?.invoke() != null
             Key.One, Key.NumPad1 -> navigate(0)
             Key.Two, Key.NumPad2 -> navigate(1)
             Key.Three, Key.NumPad3 -> navigate(2)

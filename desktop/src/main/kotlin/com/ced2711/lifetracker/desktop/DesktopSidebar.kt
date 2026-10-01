@@ -17,6 +17,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuOpen
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.TaskAlt
@@ -52,6 +55,7 @@ fun DesktopSidebar(
     onVault: () -> Unit,
     onSettings: () -> Unit,
     syncStatus: @Composable () -> Unit,
+    onToggle: (() -> Unit)? = null,
 ) {
     Surface(color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxHeight().width(if (expanded) 236.dp else 76.dp)) {
         Column(Modifier.fillMaxHeight().padding(horizontal = 10.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -70,6 +74,14 @@ fun DesktopSidebar(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
+                    if (onToggle != null) IconButton(onClick = onToggle, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.AutoMirrored.Filled.MenuOpen, desktopText("Fold menu (Ctrl+B)"), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+            if (!expanded && onToggle != null) {
+                Box(Modifier.fillMaxWidth().padding(bottom = 6.dp), contentAlignment = Alignment.Center) {
+                    IconButton(onClick = onToggle) { Icon(Icons.Default.Menu, desktopText("Unfold menu (Ctrl+B)"), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
                 }
             }
             destinations.forEachIndexed { index, item ->
