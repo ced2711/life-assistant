@@ -89,7 +89,13 @@ class GitHubDeviceAuthorization(
                 .add("device_code", code.deviceCode)
                 .add("grant_type", "urn:ietf:params:oauth:grant-type:device_code")
                 .build()
-            val result = withContext(ioDispatcher) { postForm(webBaseUrl.resolve("login/oauth/access_token")!!, body) }
+            // While the user approves in the browser this app is in the background, and phones
+            // often cut its connections then. A failed check is not an answer: keep waiting.
+            val result = try {
+                withContext(ioDispatcher) { postForm(webBaseUrl.resolve("login/oauth/access_token")!!, body) }
+            } catch (error: CloudTransportException) {
+                if (error.cause is IOException) continue else throw error
+            }
             when (val error = result.error()) {
                 null -> return GitHubToken(
                     accessToken = result.text("access_token"),
@@ -121,7 +127,11 @@ class GitHubDeviceAuthorization(
      * access, or for an OAuth App the user's own [DEFAULT_REPOSITORY], created on first use. The
      * repository must be private, even though every backup is encrypted.
      */
-    suspend fun resolveRepository(token: String, requested: String): GitHubRepository {
+    suspend fun resolveRepository(token: String, requested: String): GitHubRepository = retryTransient {
+        resolveRepositoryOnce(token, requested)
+    }
+
+    private suspend fun resolveRepositoryOnce(token: String, requested: String): GitHubRepository {
         val repository = when {
             requested.isNotBlank() -> GitHubRepository.parse(requested)
             isGitHubApp -> {
@@ -178,7 +188,7 @@ class GitHubDeviceAuthorization(
                 }
             }
         } catch (error: IOException) {
-            throw CloudTransportException("Could not reach GitHub.", error)
+            throw unreachable(error)
         }
         if (!created) {
             (repositoryDetails(token, repository) ?: throw CloudTransportException("GitHub request failed (422)."))
@@ -202,7 +212,7 @@ class GitHubDeviceAuthorization(
                 }
             }
         } catch (error: IOException) {
-            throw CloudTransportException("Could not reach GitHub.", error)
+            throw unreachable(error)
         } catch (error: IllegalArgumentException) {
             throw CloudTransportException("GitHub returned malformed data.", error)
         }
@@ -231,11 +241,13 @@ class GitHubDeviceAuthorization(
             if (response.code == 401) throw CloudAuthorizationException("GitHub sign-in expired or was revoked. Reconnect GitHub.")
             if (response.code == 404) throw CloudAuthorizationException("GitHub did not recognize this Client ID.")
             if (response.code !in 200..299) throw CloudTransportException("GitHub request failed (${response.code}).")
-            val text = response.body?.string() ?: throw CloudTransportException("GitHub returned an empty response.")
+            val text = response.body?.string().orEmpty()
+            // A connection cut before the body arrived looks like an empty answer; retry it like one.
+            if (text.isBlank()) throw IOException("empty response")
             json.parseToJsonElement(text).jsonObject
         }
     } catch (error: IOException) {
-        throw CloudTransportException("Could not reach GitHub.", error)
+        throw unreachable(error)
     } catch (error: IllegalArgumentException) {
         throw CloudTransportException("GitHub returned malformed data.", error)
     }

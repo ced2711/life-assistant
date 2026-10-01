@@ -91,7 +91,9 @@ class GitHubBackupStore(
         block()
     }
 
-    override suspend fun listRevisions(limit: Int): List<CloudRevision> = withToken {
+    override suspend fun listRevisions(limit: Int): List<CloudRevision> = retryTransient { listRevisionsOnce(limit) }
+
+    private suspend fun listRevisionsOnce(limit: Int): List<CloudRevision> = withToken {
         require(limit in 1..100)
         val head = readHead() ?: return@withToken emptyList()
         readIndex(head.commitSha).also(::remember).revisions.map(GitHubIndexEntry::revision)
@@ -367,7 +369,7 @@ class GitHubBackupStore(
     private fun okhttp3.Call.executeSafely(): Response = try {
         execute()
     } catch (error: IOException) {
-        throw CloudTransportException("Could not reach GitHub.", error)
+        throw unreachable(error)
     }
 
     private fun ensureSuccess(response: Response) {

@@ -46,6 +46,14 @@ private fun translateDynamicChinese(text: String): String {
     match("Active \\((\\d+)\\)")?.let { return "待完成（${it.groupValues[1]}）" }
     match("Completed \\((\\d+)\\)")?.let { return "已完成（${it.groupValues[1]}）" }
     match("(\\d+) notes")?.let { return "${it.groupValues[1]} 条笔记" }
+    match("Could not reach GitHub \\((.+)\\)\\.")?.let {
+        val reason = when (val raw = it.groupValues[1]) {
+            "no connection or name lookup failed" -> "没有网络或无法解析地址"
+            "timed out" -> "超时"
+            else -> raw
+        }
+        return "无法连接 GitHub（$reason）。"
+    }
     match("The GitHub app cannot write to (.+)\\. Install it on that repository with Contents read and write permission\\.")?.let {
         return "GitHub App 无法写入 ${it.groupValues[1]}。请把它安装到这个仓库，并授予 Contents 读写权限。"
     }
