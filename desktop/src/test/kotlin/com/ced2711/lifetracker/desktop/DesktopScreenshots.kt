@@ -12,11 +12,14 @@ import org.jetbrains.skia.EncodedImageFormat
  * window. Run through the `renderScreens` task, which points APPDATA at prepared sample data.
  */
 fun main(args: Array<String>) {
-    require(args.size == 3) { "Pass the output directory, width and height." }
+    require(args.size >= 3) { "Pass the output directory, width, height and optionally zh for Chinese." }
     val output = File(args[0]).apply { mkdirs() }
     val width = args[1].toInt()
     val height = args[2].toInt()
     DesktopConfigStore().setVisibleDestinations(TopLevelDestination.entries.toSet())
+    DesktopConfigStore().setUiLanguage(
+        if (args.getOrNull(3) == "zh") com.ced2711.lifetracker.domain.model.UiLanguage.SIMPLIFIED_CHINESE else com.ced2711.lifetracker.domain.model.UiLanguage.ENGLISH,
+    )
     val shortcuts = DesktopShortcuts()
     val scene = ImageComposeScene(width, height, Density(1f)) {
         CompositionLocalProvider(LocalDesktopShortcuts provides shortcuts) {
