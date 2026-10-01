@@ -21,6 +21,7 @@ import com.ced2711.lifetracker.domain.model.AccentColor
 import com.ced2711.lifetracker.domain.model.AppIdentity
 import com.ced2711.lifetracker.domain.model.AttachmentOwnerType
 import com.ced2711.lifetracker.domain.model.DateFormatOption
+import com.ced2711.lifetracker.domain.model.LedgerDraft
 import com.ced2711.lifetracker.domain.model.LedgerType
 import com.ced2711.lifetracker.domain.model.MAX_DIARY_LENGTH
 import com.ced2711.lifetracker.domain.model.ThemeMode
@@ -364,6 +365,7 @@ class DesktopDataStore(
         snapshot.copy(settings = snapshot.settings.copy(dateFormat = dateFormat))
     }
 
+    /** Quick edit that keeps the entry's time and its slot in a schedule. */
     suspend fun upsertLedger(
         id: Long?,
         type: LedgerType,
@@ -372,38 +374,62 @@ class DesktopDataStore(
         note: String,
         merchant: String,
         tagsCsv: String,
-    ) = mutate { snapshot ->
-        val now = System.currentTimeMillis()
-        val effectiveId = id ?: snapshot.ledgerEntries.maxOfOrNull(LedgerEntryEntity::id)?.plus(1) ?: 1L
-        val existing = snapshot.ledgerEntries.firstOrNull { it.id == effectiveId }
-        val entry = existing?.copy(
+    ): Boolean {
+        val snapshot = currentSnapshot() ?: return false
+        val existing = id?.let { entryId -> snapshot.ledgerEntries.firstOrNull { it.id == entryId } }
+        val draft = LedgerDraft(
+            id = existing?.id,
             type = type,
             amountCents = amountCents.coerceIn(1, 99_999_999_999L),
             epochDay = epochDay,
+            minuteOfDay = existing?.minuteOfDay ?: LocalTime.now().let { it.hour * 60 + it.minute },
             note = note,
             merchant = merchant,
-            tagsCsv = normalizeTags(tagsCsv),
-            updatedAt = now,
-        ) ?: LedgerEntryEntity(
-            id = effectiveId,
-            type = type,
-            amountCents = amountCents.coerceIn(1, 99_999_999_999L),
-            epochDay = epochDay,
-            minuteOfDay = LocalTime.now().let { it.hour * 60 + it.minute },
-            note = note,
-            merchant = merchant,
-            tagsCsv = normalizeTags(tagsCsv),
-            createdAt = now,
-            updatedAt = now,
+            tags = tagsCsv.split(','),
+            recurrence = existing?.seriesId?.let { seriesId ->
+                snapshot.ledgerSeries.firstOrNull { it.id == seriesId }?.let { RecurrenceRule(it.recurrenceUnit, it.intervalCount, it.endEpochDay) }
+            },
         )
-        snapshot.copy(ledgerEntries = snapshot.ledgerEntries.filterNot { it.id == effectiveId } + entry)
+        return saveLedger(draft, SeriesEditScope.ONLY_THIS_OCCURRENCE) != null || existing == null
     }
 
-    suspend fun deleteLedger(id: Long) = mutate { snapshot ->
-        val now = System.currentTimeMillis()
-        snapshot.copy(ledgerEntries = snapshot.ledgerEntries.map { entry ->
-            if (entry.id == id) entry.copy(deletedAt = now, updatedAt = now) else entry
-        })
+    /** Saves a ledger entry with Android's rules; returns its id (null when it became a future schedule). */
+    suspend fun saveLedger(draft: LedgerDraft, scope: SeriesEditScope): Long? {
+        var savedId: Long? = null
+        mutate { snapshot ->
+            val (updated, id) = DesktopLedgerOps.save(snapshot, draft, scope, LocalDate.now().toEpochDay(), System.currentTimeMillis())
+            savedId = id
+            updated
+        }
+        return savedId
+    }
+
+    suspend fun deleteLedgerWithUndo(id: Long, scope: SeriesEditScope = SeriesEditScope.ONLY_THIS_OCCURRENCE): LedgerDeletion? {
+        var deletion: LedgerDeletion? = null
+        val done = mutate { snapshot ->
+            val (updated, result) = DesktopLedgerOps.delete(snapshot, id, scope, System.currentTimeMillis())
+            deletion = result
+            updated
+        }
+        return deletion.takeIf { done }
+    }
+
+    suspend fun undoDeleteLedger(deletion: LedgerDeletion) = mutate { snapshot ->
+        DesktopLedgerOps.undoDelete(snapshot, deletion, System.currentTimeMillis())
+    }
+
+    suspend fun deleteLedger(id: Long) = deleteLedgerWithUndo(id) != null
+
+    suspend fun stopLedgerSeries(seriesId: Long) = mutate { snapshot ->
+        DesktopLedgerOps.stopSeries(snapshot, seriesId, System.currentTimeMillis())
+    }
+
+    suspend fun deleteStoppedLedgerSeries(seriesId: Long) = mutate { snapshot ->
+        DesktopLedgerOps.deleteStoppedSeries(snapshot, seriesId, System.currentTimeMillis())
+    }
+
+    suspend fun editLedgerSeriesForFuture(seriesId: Long, draft: LedgerDraft) = mutate { snapshot ->
+        DesktopLedgerOps.editSeriesForFuture(snapshot, seriesId, draft, LocalDate.now().toEpochDay(), System.currentTimeMillis())
     }
 
     suspend fun upsertNote(
