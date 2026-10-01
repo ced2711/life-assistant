@@ -40,7 +40,13 @@ import java.time.LocalDate
 /** Reminder defaults; they are part of the synced data, so the phone uses them too. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun ReminderSettingsCard(settings: BackupSettings, onChange: ((BackupSettings) -> BackupSettings) -> Unit) {
+internal fun ReminderSettingsCard(
+    settings: BackupSettings,
+    configStore: DesktopConfigStore,
+    onChange: ((BackupSettings) -> BackupSettings) -> Unit,
+) {
+    var onThisPc by remember { mutableStateOf(configStore.desktopReminders()) }
+    var keepInTray by remember { mutableStateOf(configStore.keepInTray()) }
     var allDayText by remember(settings.defaultAllDayReminderMinute) {
         mutableStateOf("%d:%02d".format(settings.defaultAllDayReminderMinute / 60, settings.defaultAllDayReminderMinute % 60))
     }
@@ -57,6 +63,20 @@ internal fun ReminderSettingsCard(settings: BackupSettings, onChange: ((BackupSe
                     Text(desktopText("Shown by the phone app. Shared with your other devices through sync."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Switch(settings.notificationsEnabled, { enabled -> onChange { it.copy(notificationsEnabled = enabled) } })
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(desktopText("Show reminders on this PC"))
+                    Text(desktopText("As system notifications while Life Assistant is open."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(onThisPc, { enabled -> onThisPc = enabled; configStore.setDesktopReminders(enabled) }, enabled = settings.notificationsEnabled)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(desktopText("Keep running in the tray when closed"))
+                    Text(desktopText("Reminders keep arriving after the window is closed. Quit from the tray icon."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(keepInTray, { enabled -> keepInTray = enabled; configStore.setKeepInTray(enabled) })
             }
             Text(desktopText("Default reminders for new todos with a date"))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {

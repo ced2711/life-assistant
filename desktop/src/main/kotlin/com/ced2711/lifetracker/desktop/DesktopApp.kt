@@ -429,6 +429,23 @@ private fun DesktopHome(
             shortcuts.onSettings = null
         }
     }
+    // Todo reminders become system notifications while the app runs (missed ones up to an hour late).
+    val notifier = LocalDesktopNotifier.current
+    LaunchedEffect(dataStore, notifier) {
+        if (notifier == null) return@LaunchedEffect
+        while (true) {
+            val now = System.currentTimeMillis()
+            val from = maxOf(configStore.remindersCheckedAt() ?: now, now - MISSED_REMINDER_GRACE_MILLIS)
+            val current = dataStore.currentSnapshot()
+            if (current != null && current.settings.notificationsEnabled && configStore.desktopReminders()) {
+                dueReminders(current, from, now).forEach { reminder ->
+                    notifier.notify(reminder.title, desktopReminderBody(reminder.dueAtMillis, current, language))
+                }
+            }
+            configStore.setRemindersCheckedAt(now)
+            kotlinx.coroutines.delay(30_000)
+        }
+    }
     // Due recurring items appear and expired deletions are cleared, also across midnight.
     LaunchedEffect(dataStore) {
         while (true) {
@@ -711,7 +728,7 @@ private fun SettingsPage(
                 }
             }
         }
-        dataStore.currentSnapshot()?.settings?.let { settings -> ReminderSettingsCard(settings) { change -> scope.launch { dataStore.updateSettings(change) } } }
+        dataStore.currentSnapshot()?.settings?.let { settings -> ReminderSettingsCard(settings, configStore) { change -> scope.launch { dataStore.updateSettings(change) } } }
         Card(Modifier.fillMaxWidth()) {
             Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Lock, null)

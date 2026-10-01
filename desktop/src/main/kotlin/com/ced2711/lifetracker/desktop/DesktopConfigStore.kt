@@ -153,6 +153,27 @@ class DesktopConfigStore(
         save(properties)
     }
 
+    /** Whether this PC shows todo reminders as system notifications (on by default). */
+    @Synchronized
+    fun desktopReminders(): Boolean = load().getProperty(KEY_DESKTOP_REMINDERS)?.toBooleanStrictOrNull() ?: true
+
+    @Synchronized
+    fun setDesktopReminders(enabled: Boolean) = load().let { it.setProperty(KEY_DESKTOP_REMINDERS, enabled.toString()); save(it) }
+
+    /** Whether closing the window keeps the app running in the tray (off by default). */
+    @Synchronized
+    fun keepInTray(): Boolean = load().getProperty(KEY_KEEP_IN_TRAY)?.toBooleanStrictOrNull() ?: false
+
+    @Synchronized
+    fun setKeepInTray(enabled: Boolean) = load().let { it.setProperty(KEY_KEEP_IN_TRAY, enabled.toString()); save(it) }
+
+    /** Until when reminders were already checked, so none is shown twice. */
+    @Synchronized
+    fun remindersCheckedAt(): Long? = load().getProperty(KEY_REMINDERS_CHECKED_AT)?.toLongOrNull()
+
+    @Synchronized
+    fun setRemindersCheckedAt(millis: Long) = load().let { it.setProperty(KEY_REMINDERS_CHECKED_AT, millis.toString()); save(it) }
+
     /** The window's last size and position, or null the first time. */
     @Synchronized
     fun windowBounds(): DesktopWindowBounds? {
@@ -223,5 +244,8 @@ class DesktopConfigStore(
         const val KEY_WINDOW_X = "window.x"
         const val KEY_WINDOW_Y = "window.y"
         const val KEY_WINDOW_MAXIMIZED = "window.maximized"
+        const val KEY_DESKTOP_REMINDERS = "reminders.desktop"
+        const val KEY_KEEP_IN_TRAY = "window.keepInTray"
+        const val KEY_REMINDERS_CHECKED_AT = "reminders.checkedAt"
     }
 }

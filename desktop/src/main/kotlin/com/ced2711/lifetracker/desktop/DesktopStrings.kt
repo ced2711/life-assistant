@@ -11,6 +11,11 @@ import com.ced2711.lifetracker.ui.localization.translateUiText
  * Shared Android translations win whenever a label is already known there.
  */
 private val desktopSimplifiedChinese = mapOf(
+    "Quit" to "退出",
+    "Show reminders on this PC" to "在这台电脑上显示提醒",
+    "As system notifications while Life Assistant is open." to "生活助手打开时以系统通知显示。",
+    "Keep running in the tray when closed" to "关闭窗口后在托盘中继续运行",
+    "Reminders keep arriving after the window is closed. Quit from the tray icon." to "关闭窗口后仍会收到提醒。可从托盘图标退出。",
     "Rename" to "重命名",
     "Rename category" to "重命名分类",
     "Delete category" to "删除分类",
@@ -344,6 +349,15 @@ fun desktopUserText(text: String): String = text
 fun desktopMoreCount(count: Int, language: UiLanguage): String = when (language) {
     UiLanguage.ENGLISH -> "+$count more"
     UiLanguage.SIMPLIFIED_CHINESE -> "还有 $count 项"
+}
+
+fun desktopReminderBody(dueAtMillis: Long, snapshot: com.ced2711.lifetracker.data.backup.BackupSnapshot, language: UiLanguage): String {
+    val due = java.time.Instant.ofEpochMilli(dueAtMillis).atZone(java.time.ZoneId.systemDefault())
+    val text = formatDeadline(due.toLocalDate().toEpochDay(), due.hour * 60 + due.minute, snapshot, language)
+    return when (language) {
+        UiLanguage.ENGLISH -> "Due $text"
+        UiLanguage.SIMPLIFIED_CHINESE -> "截止 $text"
+    }
 }
 
 fun desktopCompletedCount(count: Int, language: UiLanguage): String = when (language) {

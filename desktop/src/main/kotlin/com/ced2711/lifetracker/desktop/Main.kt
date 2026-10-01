@@ -1,7 +1,13 @@
 package com.ced2711.lifetracker.desktop
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.window.Notification
+import androidx.compose.ui.window.Tray
+import androidx.compose.ui.window.rememberTrayState
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -22,6 +28,24 @@ fun main() = application {
     val windowIcon = remember { LifeTrackerWindowIcon() }
     val configStore = remember { DesktopConfigStore() }
     val shortcuts = remember { DesktopShortcuts() }
+    var windowVisible by remember { mutableStateOf(true) }
+    // The tray icon shows reminder notifications and, when chosen, keeps the app running.
+    val trayState = rememberTrayState()
+    val traySupported = remember { runCatching { java.awt.SystemTray.isSupported() }.getOrDefault(false) }
+    val notifier = remember { DesktopNotifier { title, message -> trayState.sendNotification(Notification(title, message, Notification.Type.Info)) } }
+    val language = remember { configStore.read().uiLanguage }
+    if (traySupported) {
+        Tray(
+            icon = windowIcon,
+            state = trayState,
+            tooltip = desktopText(AppIdentity.NAME, language),
+            onAction = { windowVisible = true },
+            menu = {
+                Item(desktopText("Open", language), onClick = { windowVisible = true })
+                Item(desktopText("Quit", language), onClick = ::exitApplication)
+            },
+        )
+    }
     // Reopen where the window was left, at the size it had.
     val windowState = remember {
         val saved = runCatching { configStore.windowBounds() }.getOrNull()
@@ -45,15 +69,16 @@ fun main() = application {
                     ),
                 )
             }
-            exitApplication()
+            if (traySupported && configStore.keepInTray()) windowVisible = false else exitApplication()
         },
+        visible = windowVisible,
         title = AppIdentity.NAME,
         icon = windowIcon,
         state = windowState,
         onPreviewKeyEvent = shortcuts::handle,
     ) {
         window.minimumSize = java.awt.Dimension(640, 480)
-        CompositionLocalProvider(LocalDesktopShortcuts provides shortcuts) {
+        CompositionLocalProvider(LocalDesktopShortcuts provides shortcuts, LocalDesktopNotifier provides notifier.takeIf { traySupported }) {
             LifeTrackerDesktopApp()
         }
     }
