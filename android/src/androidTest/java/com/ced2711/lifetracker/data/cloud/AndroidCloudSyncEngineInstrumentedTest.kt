@@ -43,6 +43,7 @@ class AndroidCloudSyncEngineInstrumentedTest {
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
         recoveryDirectory = File(context.filesDir, "cloud-recovery").apply { deleteRecursively() }
+        File(context.filesDir, "cloud-sync-base").deleteRecursively()
         context.getSharedPreferences("life_tracker_cloud_sync", Context.MODE_PRIVATE)
             .edit().clear().commit()
         context.getSharedPreferences("life_tracker_cloud_sync_secret", Context.MODE_PRIVATE)
@@ -92,6 +93,42 @@ class AndroidCloudSyncEngineInstrumentedTest {
         assertEquals(listOf(42L), database.backupDao().backupCategories().map { it.id })
         assertEquals(0, store.uploadCount)
         assertEquals(0, store.downloadCount)
+    }
+
+    @Test
+    fun firstConnectionWithDataOnBothSidesMergesBothWithoutAsking() = runBlocking {
+        val remoteBytes = otherDeviceBackup(CategoryEntity(7, "From PC", createdAt = 7_000))
+        database.backupDao().insertCategories(listOf(CategoryEntity(7, "From phone", createdAt = 8_000)))
+        val store = FakeCloudStore(mutableListOf(remoteRevision("a".repeat(64))), downloadBytes = remoteBytes)
+
+        val result = engine(store, automaticMerge = true).synchronize()
+
+        assertTrue(result.toString(), result is AndroidCloudSyncResult.Downloaded && result.merged)
+        assertEquals(setOf("From PC", "From phone"), database.backupDao().backupCategories().map { it.name }.toSet())
+        assertEquals(1, store.uploadCount)
+        assertEquals(listOf("remote-revision"), store.uploadedRevision?.mergedRevisionIds)
+        assertEquals("uploaded-1", preferences.read().state.lastRevisionId)
+        assertEquals(backupRepository.syncFingerprint(), preferences.read().state.lastContentFingerprint)
+    }
+
+    @Test
+    fun anUploadRacingAnotherDeviceIsMergedInsteadOfAsking() = runBlocking {
+        val remoteBytes = otherDeviceBackup(CategoryEntity(3, "Other device", createdAt = 3_000))
+        database.backupDao().insertCategories(listOf(CategoryEntity(42, "This phone", createdAt = 4_000)))
+        val store = FakeCloudStore(
+            revisions = mutableListOf(),
+            downloadBytes = remoteBytes,
+            onList = { call, revisions ->
+                if (call == 3) revisions.add(0, remoteRevision("c".repeat(64)).copy(fileId = "simultaneous-device"))
+            },
+        )
+
+        val result = engine(store, automaticMerge = true).synchronize()
+
+        assertTrue(result.toString(), result is AndroidCloudSyncResult.Downloaded && result.merged)
+        assertEquals(setOf("Other device", "This phone"), database.backupDao().backupCategories().map { it.name }.toSet())
+        assertEquals(2, store.uploadCount)
+        assertEquals("uploaded-2", preferences.read().state.lastRevisionId)
     }
 
     @Test
@@ -372,7 +409,8 @@ class AndroidCloudSyncEngineInstrumentedTest {
         assertEquals(null, reset.attention)
     }
 
-    private fun engine(store: CloudBackupStore) = AndroidCloudSyncEngine(
+    // Most tests here cover the manual keep-local / use-cloud choice, so merging is opt-in.
+    private fun engine(store: CloudBackupStore, automaticMerge: Boolean = false) = AndroidCloudSyncEngine(
         context = context,
         backupRepository = backupRepository,
         preferences = preferences,
@@ -380,7 +418,22 @@ class AndroidCloudSyncEngineInstrumentedTest {
         authorization = GoogleDriveAuthorization(context),
         afterRestore = {},
         cloudStore = store,
+        automaticMerge = automaticMerge,
     )
+
+    /** Encrypted data of "another device" that holds only [categories]. */
+    private suspend fun otherDeviceBackup(vararg categories: CategoryEntity): ByteArray {
+        val saved = database.backupDao().backupCategories()
+        database.clearAllTables()
+        database.backupDao().insertCategories(categories.toList())
+        val bytes = ByteArrayOutputStream().use { output ->
+            backupRepository.export(output, TEST_PASSWORD.toCharArray())
+            output.toByteArray()
+        }
+        database.clearAllTables()
+        database.backupDao().insertCategories(saved)
+        return bytes
+    }
 
     private fun remoteRevision(contentFingerprint: String) = CloudRevision(
         fileId = "remote-revision",

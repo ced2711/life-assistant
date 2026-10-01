@@ -336,6 +336,11 @@ private val zhHans = mapOf(
     "Already up to date." to "已经是最新状态。",
     "Encrypted backup uploaded." to "加密备份已上传。",
     "Cloud changes restored." to "已恢复云端更改。",
+    "Merged changes from your other devices." to "已合并你其他设备上的更改。",
+    "Merged changes from your other devices. Some texts were edited on both; both versions were kept." to
+        "已合并你其他设备上的更改。有些文字两边都改过，两个版本都保留了。",
+    "Other devices kept changing the cloud backup. Sync again in a moment." to "其他设备一直在修改云端备份，请稍后再同步。",
+    "The cloud backup uses a different data password. Choose which version to keep." to "云端备份使用了不同的数据密码，请选择保留哪个版本。",
     "Both this device and Google Drive changed." to "本机和 Google Drive 都发生了更改。",
     "Reconnect Google Drive to continue." to "请重新连接 Google Drive 后继续。",
     "The saved sync password is unavailable." to "已保存的同步密码不可用。",

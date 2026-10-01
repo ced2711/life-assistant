@@ -18,6 +18,7 @@ import com.ced2711.lifetracker.cloudsync.prunableCloudRevisions
 import com.ced2711.lifetracker.data.backup.BackupRepository
 import com.ced2711.lifetracker.data.backup.BackupDataChangedException
 import com.ced2711.lifetracker.data.backup.BackupRestoreResult
+import com.ced2711.lifetracker.data.backup.mergeEncryptedBackups
 import com.ced2711.lifetracker.data.vault.VaultSession
 import com.ced2711.lifetracker.data.vault.VaultAuthenticationRequiredException
 import java.io.File
@@ -43,6 +44,10 @@ sealed interface AndroidCloudSyncResult {
     data class Downloaded(
         val revision: CloudRevision,
         val restoreResult: BackupRestoreResult,
+        /** Changes from this device and the cloud were merged, not just downloaded. */
+        val merged: Boolean = false,
+        /** Texts edited on both sides; both versions were kept. */
+        val textConflicts: Int = 0,
     ) : AndroidCloudSyncResult
     data class Conflict(val remote: CloudRevision) : AndroidCloudSyncResult
     data class NeedsVaultUnlock(val remote: CloudRevision? = null) : AndroidCloudSyncResult
@@ -61,9 +66,12 @@ class AndroidCloudSyncEngine(
     private val now: () -> Long = System::currentTimeMillis,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     cloudStore: CloudBackupStore? = null,
+    // Off only in tests of the manual keep-local / use-cloud choice.
+    private val automaticMerge: Boolean = true,
 ) {
     private val cacheDirectory = File(context.cacheDir, "cloud-sync")
     private val recoveryDirectory = File(context.filesDir, CLOUD_RECOVERY_DIRECTORY)
+    private val syncBaseDirectory = File(context.filesDir, "cloud-sync-base")
     private val injectedStore = cloudStore
     private val driveStore by lazy { GoogleDriveBackupStore(authorization) }
     // Chosen at the start of each sync from the configured provider; guarded by [syncMutex].
@@ -122,7 +130,8 @@ class AndroidCloudSyncEngine(
             }
             when {
                 decision == SyncDecision.Conflict && conflictResolution == null ->
-                    AndroidCloudSyncResult.Conflict(requireNotNull(remote))
+                    mergeAutomatically(password, vaultSession, localFingerprint, settings.state.lastRevisionId)
+                        ?: AndroidCloudSyncResult.Conflict(requireNotNull(remote))
                 decision == SyncDecision.Conflict && conflictResolution == ConflictResolution.KEEP_LOCAL ->
                     upload(
                         password,
@@ -152,7 +161,14 @@ class AndroidCloudSyncEngine(
                     remote,
                     vaultSession,
                     expectedHeadIds = observedHeadIds,
-                )
+                ).let { result ->
+                    // Another device uploaded at the same moment: merge both instead of asking.
+                    if (result is AndroidCloudSyncResult.Conflict) {
+                        mergeAutomatically(password, vaultSession, backupRepository.syncFingerprint(), settings.state.lastRevisionId) ?: result
+                    } else {
+                        result
+                    }
+                }
                 decision == SyncDecision.Download ->
                     download(password, requireNotNull(remote), localFingerprint, vaultSession)
                 else -> AndroidCloudSyncResult.UpToDate
@@ -263,6 +279,7 @@ class AndroidCloudSyncEngine(
                 )
             }
             preferences.recordSuccessfulSync(revision.fileId, fingerprint, now())
+            saveSyncBase(encrypted, revision.fileId)
             pruneOldRevisions(postflightRevisions)
             return AndroidCloudSyncResult.Uploaded(revision)
         } finally {
@@ -302,6 +319,7 @@ class AndroidCloudSyncEngine(
             val fingerprint = result.appliedSyncFingerprint
                 ?: throw IllegalStateException("Cloud restore did not report its applied fingerprint.")
             preferences.recordSuccessfulSync(remote.fileId, fingerprint, now())
+            saveSyncBase(encrypted, remote.fileId)
             runCatching { afterRestore() }
             return AndroidCloudSyncResult.Downloaded(remote, result)
         } finally {
@@ -397,12 +415,146 @@ class AndroidCloudSyncEngine(
             // Android sync baseline.
             pruneOldRevisions(postflightRevisions)
             preferences.recordSuccessfulSync(revision.fileId, fingerprint, now())
+            saveSyncBase(encrypted, revision.fileId)
             runCatching { afterRestore() }
             return AndroidCloudSyncResult.Downloaded(revision, result)
         } finally {
             prepared?.close()
             if (encrypted.exists()) encrypted.delete()
         }
+    }
+
+    /**
+     * Merges this device's data with every cloud head record by record (see mergeSnapshots),
+     * uploads the result as the single new head, then restores it here. Returns null when the
+     * user has to choose instead: a head uses another password, or no valid merge exists.
+     * Another device racing the upload just means merging again.
+     */
+    private suspend fun mergeAutomatically(
+        password: CharArray,
+        vaultSession: VaultSession?,
+        expectedLocalFingerprint: String,
+        lastRevisionId: String?,
+    ): AndroidCloudSyncResult? {
+        if (!automaticMerge) return null
+        var localFingerprint = expectedLocalFingerprint
+        repeat(MERGE_ATTEMPTS) {
+            val revisions = store.listRevisions(limit = 100)
+            val heads = cloudRevisionHeads(revisions)
+            val primary = latestCloudRevision(revisions) ?: return null
+            cacheDirectory.mkdirs()
+            val local = File.createTempFile("life-tracker-merge-local-", ".tlb", cacheDirectory)
+            val headFiles = ArrayList<File>()
+            val work = File(cacheDirectory, "merge-${UUID.randomUUID()}")
+            val merged = File.createTempFile("life-tracker-merged-", ".tlb", cacheDirectory)
+            var downloadedBase: File? = null
+            var prepared: com.ced2711.lifetracker.data.backup.PreparedBackupRestore? = null
+            try {
+                local.outputStream().buffered().use { output ->
+                    try {
+                        backupRepository.export(output, password.copyOf(), vaultSession)
+                    } catch (_: VaultAuthenticationRequiredException) {
+                        return AndroidCloudSyncResult.NeedsVaultUnlock(primary)
+                    }
+                }
+                val exportedFingerprint = backupRepository.syncFingerprint()
+                if (exportedFingerprint != localFingerprint) {
+                    localFingerprint = exportedFingerprint // Edited while exporting: merge again.
+                    return@repeat
+                }
+                heads.forEach { head ->
+                    val file = File.createTempFile("life-tracker-merge-head-", ".tlb", cacheDirectory)
+                    headFiles += file
+                    store.downloadRevision(head, file)
+                }
+                val base = syncBase(lastRevisionId, revisions)
+                if (base != null && base != syncBaseFile) downloadedBase = base
+                val textConflicts = try {
+                    mergeEncryptedBackups(local, base, headFiles, password, work, merged, now())
+                } catch (_: com.ced2711.lifetracker.data.backup.BackupException) {
+                    return null // Another password, or nothing valid to merge: let the user choose.
+                }
+
+                val preflight = store.listRevisions(limit = 100)
+                if (cloudRevisionHeadIds(preflight) != heads.mapTo(HashSet(), CloudRevision::fileId)) return@repeat
+                val revision = store.uploadRevision(
+                    merged,
+                    NewCloudRevision(
+                        createdAt = now(),
+                        deviceId = preferences.read().state.deviceId,
+                        baseRevisionId = primary.fileId,
+                        contentFingerprint = sha256Hex(merged),
+                        mergedRevisionIds = heads.map(CloudRevision::fileId),
+                    ),
+                )
+                val postflight = store.listRevisions(limit = 100)
+                if (cloudRevisionHeadIds(postflight) != setOf(revision.fileId)) return@repeat
+
+                prepared = merged.inputStream().buffered().use { backupRepository.prepareRestore(it, password.copyOf()) }
+                if (prepared.requiresVaultAuthentication && vaultSession == null) {
+                    return AndroidCloudSyncResult.NeedsVaultUnlock(revision)
+                }
+                val result = try {
+                    backupRepository.restore(prepared, vaultSession, expectedLocalSyncFingerprint = localFingerprint)
+                } catch (_: VaultAuthenticationRequiredException) {
+                    return AndroidCloudSyncResult.NeedsVaultUnlock(revision)
+                } catch (_: BackupDataChangedException) {
+                    // A local edit arrived after the upload; the next sync merges it on top.
+                    return AndroidCloudSyncResult.Uploaded(revision)
+                }
+                prepared = null
+                val fingerprint = result.appliedSyncFingerprint
+                    ?: throw IllegalStateException("Cloud restore did not report its applied fingerprint.")
+                preferences.recordSuccessfulSync(revision.fileId, fingerprint, now())
+                saveSyncBase(merged, revision.fileId)
+                pruneOldRevisions(postflight)
+                runCatching { afterRestore() }
+                return AndroidCloudSyncResult.Downloaded(revision, result, merged = true, textConflicts = textConflicts)
+            } finally {
+                prepared?.close()
+                local.delete()
+                headFiles.forEach(File::delete)
+                downloadedBase?.delete()
+                merged.delete()
+                work.deleteRecursively()
+            }
+        }
+        return AndroidCloudSyncResult.Failed("Other devices kept changing the cloud backup. Sync again in a moment.")
+    }
+
+    private val syncBaseFile: File get() = File(syncBaseDirectory, "sync-base.tlb")
+    private val syncBaseRevisionFile: File get() = File(syncBaseDirectory, "sync-base.revision")
+
+    /** Keeps the version just agreed with the cloud, so the next merge can tell edits from deletions. */
+    private fun saveSyncBase(source: File, revisionId: String) {
+        runCatching {
+            syncBaseDirectory.mkdirs()
+            val temporary = File(syncBaseDirectory, "sync-base.tlb.part")
+            source.copyTo(temporary, overwrite = true)
+            syncBaseRevisionFile.delete()
+            Files.move(temporary.toPath(), syncBaseFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            syncBaseRevisionFile.writeText(revisionId)
+        }
+    }
+
+    /** The last agreed version: the local copy, else the cloud revision if it was not pruned. */
+    private suspend fun syncBase(revisionId: String?, revisions: List<CloudRevision>): File? {
+        if (revisionId == null) return null
+        if (syncBaseFile.isFile && runCatching { syncBaseRevisionFile.readText() }.getOrNull() == revisionId) return syncBaseFile
+        val revision = revisions.firstOrNull { it.fileId == revisionId } ?: return null
+        val file = File.createTempFile("life-tracker-merge-base-", ".tlb", cacheDirectory)
+        return runCatching { store.downloadRevision(revision, file); file }.getOrElse { file.delete(); null }
+    }
+
+    private fun sha256Hex(file: File): String = file.inputStream().use { input ->
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        while (true) {
+            val read = input.read(buffer)
+            if (read < 0) break
+            digest.update(buffer, 0, read)
+        }
+        digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     private suspend fun persistLocalRecoverySnapshot(
@@ -483,6 +635,7 @@ class AndroidCloudSyncEngine(
         const val CLOUD_RECOVERY_DIRECTORY = "cloud-recovery"
         const val KEPT_CLOUD_REVISIONS = 10
         const val KEPT_RECOVERY_COPIES = 5
+        const val MERGE_ATTEMPTS = 3
         const val CLOUD_RECOVERY_FILE_PREFIX = "life-tracker-cloud-recovery-"
     }
 }

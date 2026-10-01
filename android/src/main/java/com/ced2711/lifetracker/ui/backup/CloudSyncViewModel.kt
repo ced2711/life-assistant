@@ -477,7 +477,14 @@ class CloudSyncViewModel internal constructor(
             is AndroidCloudSyncResult.Uploaded ->
                 _uiState.value = readState().copy(message = "Encrypted backup uploaded.")
             is AndroidCloudSyncResult.Downloaded ->
-                _uiState.value = readState().copy(message = "Cloud changes restored.")
+                _uiState.value = readState().copy(
+                    message = when {
+                        !result.merged -> "Cloud changes restored."
+                        result.textConflicts > 0 ->
+                            "Merged changes from your other devices. Some texts were edited on both; both versions were kept."
+                        else -> "Merged changes from your other devices."
+                    },
+                )
             is AndroidCloudSyncResult.Conflict ->
                 _uiState.value = readState().copy(
                     task = CloudSyncTask.NONE,
