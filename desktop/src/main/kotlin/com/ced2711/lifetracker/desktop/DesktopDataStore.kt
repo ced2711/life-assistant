@@ -6,7 +6,9 @@ import com.ced2711.lifetracker.data.backup.BackupCrypto
 import com.ced2711.lifetracker.data.backup.BackupLimits
 import com.ced2711.lifetracker.data.backup.BackupSettings
 import com.ced2711.lifetracker.data.backup.BackupSnapshot
+import com.ced2711.lifetracker.data.backup.MergeSide
 import com.ced2711.lifetracker.data.backup.attachmentArchivePath
+import com.ced2711.lifetracker.data.backup.mergeSnapshots
 import com.ced2711.lifetracker.data.backup.validate
 import com.ced2711.lifetracker.data.local.AttachmentEntity
 import com.ced2711.lifetracker.data.local.CategoryEntity
@@ -56,6 +58,9 @@ data class DesktopUploadSnapshot(
     val file: File,
     val fingerprint: String,
 )
+
+/** Local data merged with cloud versions, encrypted with the data password, not applied yet. */
+data class DesktopMergedFile(val file: File, val fingerprint: String, val textConflicts: Int)
 
 sealed interface DesktopReplaceResult {
     data class Applied(val fingerprint: String) : DesktopReplaceResult
@@ -602,6 +607,66 @@ class DesktopDataStore(
                 recovery
             } finally {
                 if (temporary.exists()) temporary.delete()
+            }
+        }
+    }
+
+    /**
+     * Merges each of [remotes] into the current local data, using [base] (the last version both
+     * sides agreed on, or null when unknown) to tell edits from deletions. The result goes to a new
+     * encrypted file that [replaceFromEncrypted] applies once it is safely in the cloud. Returns
+     * null when local data no longer matches [expectedLocalFingerprint].
+     */
+    suspend fun createMergedFile(
+        base: File?,
+        remotes: List<File>,
+        expectedLocalFingerprint: String,
+        now: Long = System.currentTimeMillis(),
+    ): DesktopMergedFile? = mutex.withLock {
+        withContext(ioDispatcher) {
+            val secret = password?.copyOf() ?: error("Desktop data is locked")
+            val loaded = ArrayList<LoadedSnapshot>()
+            try {
+                if (fingerprintLocked() != expectedLocalFingerprint) return@withContext null
+                val baseLoaded = base?.let { file -> runCatching { loadSnapshot(file, secret) }.getOrNull() }?.also(loaded::add)
+                var merged = requireNotNull(currentSnapshot()) { "Desktop data is locked" }
+                var files: Map<Long, File> = attachmentFiles
+                var textConflicts = 0
+                remotes.forEach { file ->
+                    val remote = loadSnapshot(file, secret).also(loaded::add)
+                    val result = mergeSnapshots(baseLoaded?.snapshot, merged, remote.snapshot, now)
+                    val previousFiles = files
+                    files = result.attachmentSources.mapValues { (id, source) ->
+                        when (source.side) {
+                            MergeSide.LOCAL -> previousFiles[source.originalId]
+                            MergeSide.REMOTE -> remote.files[source.originalId]
+                            MergeSide.BASE -> baseLoaded?.files?.get(source.originalId)
+                        } ?: error("Attachment $id is missing")
+                    }
+                    merged = result.snapshot
+                    textConflicts += result.textConflicts
+                }
+                workDirectory.mkdirs()
+                val target = File(workDirectory, "merged-${UUID.randomUUID()}.tlb")
+                try {
+                    target.outputStream().buffered().use { output ->
+                        BackupCrypto.encrypt(
+                            merged,
+                            secret.copyOf(),
+                            output,
+                            BackupAttachmentSource { attachment ->
+                                files[attachment.id]?.inputStream() ?: error("Attachment ${attachment.id} is missing")
+                            },
+                        )
+                    }
+                } catch (error: Throwable) {
+                    target.delete()
+                    throw error
+                }
+                DesktopMergedFile(target, fingerprint(target), textConflicts)
+            } finally {
+                secret.fill('\u0000')
+                loaded.forEach { it.directory.deleteRecursively() }
             }
         }
     }

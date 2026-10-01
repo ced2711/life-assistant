@@ -40,6 +40,7 @@ sourceSets {
             include("com/ced2711/lifetracker/data/backup/BackupModels.kt")
             include("com/ced2711/lifetracker/data/backup/BackupCodec.kt")
             include("com/ced2711/lifetracker/data/backup/BackupCrypto.kt")
+            include("com/ced2711/lifetracker/data/backup/BackupMerge.kt")
             include("com/ced2711/lifetracker/data/backup/AttachmentStager.kt")
         }
         resources.srcDir(layout.buildDirectory.dir("generated/legal-resources"))

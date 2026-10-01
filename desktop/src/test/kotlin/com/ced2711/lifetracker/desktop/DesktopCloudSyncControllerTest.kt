@@ -73,7 +73,7 @@ class DesktopCloudSyncControllerTest {
 
     @Test
     fun firstUploadStopsWhenCloudBecomesNonEmptyDuringSnapshotCreation() = runBlocking {
-        withController { controller, dataStore, configStore, cloud ->
+        withController(automaticMerge = false) { controller, dataStore, configStore, cloud ->
             assertTrue(dataStore.addCategory("Local"))
             cloud.onList = { call, revisions ->
                 if (call == 2) revisions.add(0, revision("raced-remote", "b".repeat(64)))
@@ -90,7 +90,7 @@ class DesktopCloudSyncControllerTest {
 
     @Test
     fun simultaneousUploadKeepsBothBranchesAndDoesNotRecordFalseBaseline() = runBlocking {
-        withController { controller, dataStore, configStore, cloud ->
+        withController(automaticMerge = false) { controller, dataStore, configStore, cloud ->
             assertTrue(dataStore.addCategory("Local"))
             cloud.onList = { call, revisions ->
                 if (call == 3) revisions.add(0, revision("simultaneous-device", "c".repeat(64)))
@@ -107,7 +107,7 @@ class DesktopCloudSyncControllerTest {
 
     @Test
     fun conflictResolutionStopsWhenHeadsChangeBeforeUpload() = runBlocking {
-        withController { controller, dataStore, configStore, cloud ->
+        withController(automaticMerge = false) { controller, dataStore, configStore, cloud ->
             assertTrue(dataStore.addCategory("Local"))
             val validEncrypted = dataStore.createUploadSnapshot()
             cloud.downloadBytes = validEncrypted.file.readBytes()
@@ -150,7 +150,7 @@ class DesktopCloudSyncControllerTest {
 
     @Test
     fun useCloudStopsBeforeUploadWhenCloudChangesDuringDownload() = runBlocking {
-        withController { controller, dataStore, configStore, cloud ->
+        withController(automaticMerge = false) { controller, dataStore, configStore, cloud ->
             val originalLocalFingerprint = prepareUseCloudConflict(dataStore, cloud)
             cloud.onDownload = {
                 cloud.revisions.add(revision("download-race", "c".repeat(64)))
@@ -169,7 +169,7 @@ class DesktopCloudSyncControllerTest {
 
     @Test
     fun useCloudKeepsLocalAndBaselineWhenCloudChangesDuringUpload() = runBlocking {
-        withController { controller, dataStore, configStore, cloud ->
+        withController(automaticMerge = false) { controller, dataStore, configStore, cloud ->
             val originalLocalFingerprint = prepareUseCloudConflict(dataStore, cloud)
             cloud.onUpload = {
                 cloud.revisions.add(revision("upload-race", "d".repeat(64)))
@@ -188,7 +188,7 @@ class DesktopCloudSyncControllerTest {
 
     @Test
     fun useCloudReplacesLocalOnlyAfterPostflightAndRecordsNewBaseline() = runBlocking {
-        withController { controller, dataStore, configStore, cloud ->
+        withController(automaticMerge = false) { controller, dataStore, configStore, cloud ->
             prepareUseCloudConflict(dataStore, cloud)
             val originalLocalBytes = dataStore.encryptedFile.readBytes()
 
@@ -214,7 +214,7 @@ class DesktopCloudSyncControllerTest {
 
     @Test
     fun useCloudDoesNotReplaceLocalWhenItChangesBeforeConditionalApply() = runBlocking {
-        withController { controller, dataStore, configStore, cloud ->
+        withController(automaticMerge = false) { controller, dataStore, configStore, cloud ->
             val originalLocalFingerprint = prepareUseCloudConflict(dataStore, cloud)
             cloud.onUpload = {
                 assertTrue(dataStore.addCategory("Changed during sync"))
@@ -228,6 +228,77 @@ class DesktopCloudSyncControllerTest {
             assertTrue(!dataStore.isUserDataEmpty())
             assertNull(configStore.read().syncState.lastRevisionId)
             assertNotNull(controller.state.value.conflict)
+        }
+    }
+
+    @Test
+    fun changesOnThisPcAndAnotherDeviceAreMergedWithoutAsking() = runBlocking {
+        withController { controller, dataStore, configStore, cloud ->
+            // Both devices start from the same synced data.
+            assertTrue(dataStore.addCategory("Shared"))
+            controller.synchronize()
+            assertEquals("uploaded-1", configStore.read().syncState.lastRevisionId)
+
+            // The other device adds "Phone" (simulated by building its snapshot here, then undoing it).
+            assertTrue(dataStore.addCategory("Phone"))
+            val phone = dataStore.createUploadSnapshot()
+            cloud.downloadBytes = phone.file.readBytes()
+            phone.file.delete()
+            cloud.revisions.add(0, revision("phone-upload", "p".repeat(64)).copy(baseRevisionId = "uploaded-1"))
+            assertTrue(dataStore.mutate { it.copy(categories = it.categories.filterNot { c -> c.name == "Phone" }) })
+            // Meanwhile this PC adds "PC".
+            assertTrue(dataStore.addCategory("PC"))
+
+            controller.synchronize()
+
+            assertNull(controller.state.value.conflict)
+            val names = dataStore.currentSnapshot()!!.categories.map { it.name }.toSet()
+            assertEquals(setOf("Shared", "Phone", "PC"), names)
+            assertEquals(2, cloud.uploadCount)
+            assertEquals(listOf("phone-upload"), cloud.revisions.first().mergedRevisionIds)
+            assertEquals("uploaded-2", configStore.read().syncState.lastRevisionId)
+            assertEquals(dataStore.localFingerprint(), configStore.read().syncState.lastContentFingerprint)
+
+            // Nothing left to do afterwards.
+            controller.synchronize()
+            assertEquals(2, cloud.uploadCount)
+        }
+    }
+
+    @Test
+    fun anUploadRacingAnotherDeviceIsMergedInsteadOfAsking() = runBlocking {
+        withController { controller, dataStore, configStore, cloud ->
+            assertTrue(dataStore.addCategory("Other device"))
+            val other = dataStore.createUploadSnapshot()
+            cloud.downloadBytes = other.file.readBytes()
+            other.file.delete()
+            assertTrue(dataStore.mutate { it.copy(categories = emptyList()) })
+            assertTrue(dataStore.addCategory("This PC"))
+            cloud.onList = { call, revisions ->
+                if (call == 3) revisions.add(0, revision("simultaneous-device", "c".repeat(64)))
+            }
+
+            controller.synchronize()
+
+            assertNull(controller.state.value.conflict)
+            assertEquals(setOf("Other device", "This PC"), dataStore.currentSnapshot()!!.categories.map { it.name }.toSet())
+            assertEquals(2, cloud.uploadCount)
+            assertEquals("uploaded-2", configStore.read().syncState.lastRevisionId)
+        }
+    }
+
+    @Test
+    fun aCloudVersionWithAnotherPasswordStillAsks() = runBlocking {
+        withController { controller, dataStore, configStore, cloud ->
+            assertTrue(dataStore.addCategory("Local"))
+            cloud.downloadBytes = ByteArray(64) { 7 }
+            cloud.revisions.add(revision("foreign", "f".repeat(64)))
+
+            controller.synchronize()
+
+            assertNotNull(controller.state.value.conflict)
+            assertEquals(0, cloud.uploadCount)
+            assertNull(configStore.read().syncState.lastRevisionId)
         }
     }
 
@@ -248,6 +319,7 @@ class DesktopCloudSyncControllerTest {
 
     private suspend fun withController(
         editDebounceMillis: Long = DesktopCloudSyncController.EDIT_DEBOUNCE_MILLIS,
+        automaticMerge: Boolean = true,
         block: suspend (
             DesktopCloudSyncController,
             DesktopDataStore,
@@ -272,6 +344,7 @@ class DesktopCloudSyncControllerTest {
                 connectionStatus = { true },
                 editDebounceMillis = editDebounceMillis,
                 pollIntervalMillis = 60 * 60_000L,
+                automaticMerge = automaticMerge,
             )
             block(controller, dataStore, configStore, cloud)
         } finally {

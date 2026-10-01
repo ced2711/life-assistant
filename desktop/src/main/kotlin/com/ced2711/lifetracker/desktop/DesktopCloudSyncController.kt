@@ -59,6 +59,8 @@ class DesktopCloudSyncController(
     private val connectionStatus: (() -> Boolean)? = null,
     private val editDebounceMillis: Long = EDIT_DEBOUNCE_MILLIS,
     private val pollIntervalMillis: Long = AUTOMATIC_INTERVAL_MILLIS,
+    // Off only in tests of the manual keep-local / use-cloud choice.
+    private val automaticMerge: Boolean = true,
 ) {
     private val injectedStore = cloudStore
     private val googleDrive by lazy { GoogleDriveBackupStore(oauth) }
@@ -270,11 +272,13 @@ class DesktopCloudSyncController(
             }
             when {
                 decision == SyncDecision.Conflict && resolution == null -> {
-                    _state.value = readState().copy(
-                        syncing = false,
-                        conflict = requireNotNull(remote),
-                        message = "This PC and the cloud backup both changed.",
-                    )
+                    if (!mergeAutomatically(localFingerprint)) {
+                        _state.value = readState().copy(
+                            syncing = false,
+                            conflict = requireNotNull(remote),
+                            message = _state.value.message ?: "This PC and the cloud backup both changed.",
+                        )
+                    }
                 }
                 decision == SyncDecision.Conflict && resolution == ConflictResolution.KEEP_LOCAL ->
                     upload(remote, heads.map(CloudRevision::fileId), observedHeadIds)
@@ -282,7 +286,13 @@ class DesktopCloudSyncController(
                     val chosen = requireNotNull(remote)
                     useCloud(chosen, observedHeadIds, localFingerprint)
                 }
-                decision == SyncDecision.Upload -> upload(remote, emptyList(), observedHeadIds)
+                decision == SyncDecision.Upload -> {
+                    upload(remote, emptyList(), observedHeadIds)
+                    // The other device uploaded at the same moment: merge both instead of asking.
+                    if (_state.value.conflict != null && mergeAutomatically(dataStore.localFingerprint())) {
+                        _state.update { it.copy(conflict = null) }
+                    }
+                }
                 decision == SyncDecision.Download -> download(requireNotNull(remote), localFingerprint)
                 else -> _state.value = readState().copy(message = "Already up to date.")
             }
@@ -293,6 +303,100 @@ class DesktopCloudSyncController(
             _state.value = readState().copy(message = error.safeMessage(), lastSyncFailed = true)
         }
         refreshPendingChanges()
+    }
+
+    /**
+     * Merges this PC's changes with every cloud head record by record (see mergeSnapshots), uploads
+     * the result as the one new head, then applies it here. Returns false when the user has to
+     * choose instead: a head uses another password, or the merge itself was impossible. Another
+     * device racing this upload just means merging again.
+     */
+    private suspend fun mergeAutomatically(expectedLocalFingerprint: String): Boolean {
+        if (!automaticMerge) return false
+        var localFingerprint = expectedLocalFingerprint
+        repeat(MERGE_ATTEMPTS) {
+            val revisions = drive.listRevisions(100)
+            val heads = cloudRevisionHeads(revisions)
+            val primary = latestCloudRevision(revisions) ?: return false
+            val headFiles = heads.map { head ->
+                File(dataStore.appDirectory, "cloud-merge-${UUID.randomUUID()}.tlb.part").also { drive.downloadRevision(head, it) }
+            }
+            var baseFile: File? = null
+            var merged: DesktopMergedFile? = null
+            try {
+                if (!headFiles.all { dataStore.verifyEncrypted(it) }) {
+                    _state.update { it.copy(message = "The cloud backup uses a different data password. Choose which version to keep.") }
+                    return false
+                }
+                baseFile = syncBase(configStore.read().syncState.lastRevisionId, revisions)
+                merged = try {
+                    dataStore.createMergedFile(baseFile, headFiles, localFingerprint, now())
+                } catch (_: Exception) {
+                    return false // Nothing could be merged safely; let the user choose.
+                } ?: run {
+                    localFingerprint = dataStore.localFingerprint() // Edited meanwhile: merge again.
+                    return@repeat
+                }
+                val uploaded = uploadFile(
+                    source = merged.file,
+                    fingerprint = merged.fingerprint,
+                    remote = primary,
+                    mergedRevisionIds = heads.map(CloudRevision::fileId),
+                    expectedHeadIds = heads.mapTo(HashSet(), CloudRevision::fileId),
+                    successMessage = null,
+                    recordBaseline = false,
+                ) ?: return@repeat // Another device uploaded meanwhile.
+                when (val result = dataStore.replaceFromEncrypted(merged.file, localFingerprint)) {
+                    is DesktopReplaceResult.Applied -> {
+                        configStore.recordSync(uploaded.fileId, result.fingerprint, now())
+                        saveSyncBase(merged.file, uploaded.fileId)
+                        _state.value = readState().copy(
+                            message = if (merged.textConflicts > 0) {
+                                "Merged changes from your other devices. Some texts were edited on both; both versions were kept."
+                            } else {
+                                "Merged changes from your other devices."
+                            },
+                        )
+                        return true
+                    }
+                    // A local edit arrived after the upload; the next sync merges it on top.
+                    DesktopReplaceResult.LocalChanged -> {
+                        _state.value = readState().copy(message = "Merged changes from your other devices.")
+                        return true
+                    }
+                    DesktopReplaceResult.Invalid -> return false
+                }
+            } finally {
+                headFiles.forEach(File::delete)
+                if (baseFile != null && baseFile != syncBaseFile) baseFile.delete()
+                merged?.file?.delete()
+            }
+        }
+        _state.update { it.copy(message = "Other devices kept changing the cloud backup. Sync again in a moment.") }
+        return false
+    }
+
+    private val syncBaseFile: File get() = File(dataStore.appDirectory, "sync-base.tlb")
+    private val syncBaseRevisionFile: File get() = File(dataStore.appDirectory, "sync-base.revision")
+
+    /** Keeps the version just agreed with the cloud, so the next merge can tell edits from deletions. */
+    private fun saveSyncBase(source: File, revisionId: String) {
+        runCatching {
+            val temporary = File(dataStore.appDirectory, "sync-base.tlb.part")
+            source.copyTo(temporary, overwrite = true)
+            syncBaseRevisionFile.delete()
+            java.nio.file.Files.move(temporary.toPath(), syncBaseFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+            syncBaseRevisionFile.writeText(revisionId)
+        }
+    }
+
+    /** The last agreed version: the local copy, else the cloud revision if it was not pruned. */
+    private suspend fun syncBase(revisionId: String?, revisions: List<CloudRevision>): File? {
+        if (revisionId == null) return null
+        if (syncBaseFile.isFile && runCatching { syncBaseRevisionFile.readText() }.getOrNull() == revisionId) return syncBaseFile
+        val revision = revisions.firstOrNull { it.fileId == revisionId } ?: return null
+        val file = File(dataStore.appDirectory, "cloud-base-${UUID.randomUUID()}.tlb.part")
+        return runCatching { drive.downloadRevision(revision, file); file }.getOrElse { file.delete(); null }
     }
 
     /** Compares the local data file with the one recorded at the last sync. */
@@ -369,6 +473,7 @@ class DesktopCloudSyncController(
             when (val result = dataStore.replaceFromEncrypted(temporary, expectedLocalFingerprint)) {
                 is DesktopReplaceResult.Applied -> {
                     configStore.recordSync(uploaded.fileId, result.fingerprint, now())
+                    saveSyncBase(temporary, uploaded.fileId)
                     _state.value = readState().copy(message = "Cloud changes restored.")
                 }
                 DesktopReplaceResult.LocalChanged -> {
@@ -423,7 +528,10 @@ class DesktopCloudSyncController(
             )
             return null
         }
-        if (recordBaseline) configStore.recordSync(revision.fileId, fingerprint, now())
+        if (recordBaseline) {
+            configStore.recordSync(revision.fileId, fingerprint, now())
+            saveSyncBase(source, revision.fileId)
+        }
         runCatching { prunableCloudRevisions(refreshed, keepCount = KEPT_CLOUD_REVISIONS).forEach { drive.deleteRevision(it.fileId) } }
         if (successMessage != null) {
             _state.value = readState().copy(message = successMessage)
@@ -438,6 +546,7 @@ class DesktopCloudSyncController(
             when (val result = dataStore.replaceFromEncrypted(temporary, expectedLocalFingerprint)) {
                 is DesktopReplaceResult.Applied -> {
                     configStore.recordSync(remote.fileId, result.fingerprint, now())
+                    saveSyncBase(temporary, remote.fileId)
                     _state.value = readState().copy(message = "Cloud changes restored.")
                     return true
                 }
@@ -493,5 +602,6 @@ class DesktopCloudSyncController(
         const val EDIT_DEBOUNCE_MILLIS = 8_000L
         const val FOCUS_SYNC_MIN_INTERVAL_MILLIS = 30_000L
         const val KEPT_CLOUD_REVISIONS = 10
+        const val MERGE_ATTEMPTS = 3
     }
 }
