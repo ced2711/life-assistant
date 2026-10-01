@@ -32,6 +32,7 @@ sourceSets {
             include("com/ced2711/lifetracker/domain/model/VaultModels.kt")
             include("com/ced2711/lifetracker/domain/model/ConfessionModels.kt")
             include("com/ced2711/lifetracker/domain/date/SmartDateParser.kt")
+            include("com/ced2711/lifetracker/domain/recurrence/RecurrenceEngine.kt")
             include("com/ced2711/lifetracker/domain/format/UserFormatting.kt")
             include("com/ced2711/lifetracker/ui/theme/TaskLedgerTheme.kt")
             include("com/ced2711/lifetracker/ui/localization/UiLocalization.kt")

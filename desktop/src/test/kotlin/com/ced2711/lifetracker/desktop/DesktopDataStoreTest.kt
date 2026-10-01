@@ -142,7 +142,7 @@ class DesktopDataStoreTest {
                 )
             }
 
-            store.upsertTodo(id, "Edited", "Details", null, TodoPriority.HIGH, null, "two", true)
+            store.upsertTodo(id, "Edited", "Details", 21_010L, TodoPriority.HIGH, null, "two", true)
             val edited = store.currentSnapshot()!!.todos.single()
             assertEquals("desktop-test-token", edited.clientOperationToken)
             assertEquals(7L, edited.seriesId)

@@ -25,6 +25,9 @@ import com.ced2711.lifetracker.domain.model.LedgerType
 import com.ced2711.lifetracker.domain.model.MAX_DIARY_LENGTH
 import com.ced2711.lifetracker.domain.model.ThemeMode
 import com.ced2711.lifetracker.domain.model.TimeFormatOption
+import com.ced2711.lifetracker.domain.model.RecurrenceRule
+import com.ced2711.lifetracker.domain.model.SeriesEditScope
+import com.ced2711.lifetracker.domain.model.TodoDraft
 import com.ced2711.lifetracker.domain.model.TodoPriority
 import com.ced2711.lifetracker.domain.model.TopLevelDestination
 import com.ced2711.lifetracker.domain.model.VaultEntry
@@ -219,6 +222,7 @@ class DesktopDataStore(
         }
     }
 
+    /** Quick edit that keeps the todo's subtasks, reminders, time and series slot. */
     suspend fun upsertTodo(
         id: Long?,
         title: String,
@@ -228,57 +232,96 @@ class DesktopDataStore(
         categoryId: Long?,
         tagsCsv: String,
         completed: Boolean,
-    ) = mutate { snapshot ->
-        val now = System.currentTimeMillis()
-        val effectiveId = id ?: snapshot.todos.maxOfOrNull(TodoEntity::id)?.plus(1) ?: 1L
-        val existing = snapshot.todos.firstOrNull { it.id == effectiveId }
-        val effectiveTitle = title.ifBlank { description.lineSequence().firstOrNull().orEmpty().take(40) }
-        val item = existing?.copy(
-            title = effectiveTitle,
+    ): Boolean {
+        val snapshot = currentSnapshot() ?: return false
+        val existing = id?.let { todoId -> snapshot.todos.firstOrNull { it.id == todoId } }
+        val draft = TodoDraft(
+            id = existing?.id,
+            title = title,
             description = description,
             categoryId = categoryId,
             deadlineEpochDay = deadlineEpochDay,
-            deadlineMinute = existing.deadlineMinute.takeIf { deadlineEpochDay != null },
+            deadlineMinute = existing?.deadlineMinute.takeIf { deadlineEpochDay != null },
             priority = priority,
-            tagsCsv = normalizeTags(tagsCsv),
-            completedAt = when {
-                completed && existing.completedAt == null -> now
-                completed -> existing.completedAt
-                else -> null
+            tags = tagsCsv.split(','),
+            reminderOffsetsMinutes = existing?.let { todo -> snapshot.todoReminders.filter { it.todoId == todo.id }.map { it.offsetMinutes } }
+                ?: snapshot.settings.defaultReminderOffsetsMinutes.toList().takeIf { deadlineEpochDay != null }.orEmpty(),
+            subtasks = existing?.let { todo -> snapshot.subtasks.filter { it.todoId == todo.id }.sortedBy { it.sortOrder }.map { it.description } }.orEmpty(),
+            // A quick edit of one occurrence keeps it in its series.
+            recurrence = existing?.seriesId?.takeIf { deadlineEpochDay != null }?.let { seriesId ->
+                snapshot.todoSeries.firstOrNull { it.id == seriesId }?.let { RecurrenceRule(it.recurrenceUnit, it.intervalCount, it.endEpochDay) }
             },
-            updatedAt = now,
-        ) ?: TodoEntity(
-            id = effectiveId,
-            title = effectiveTitle,
-            description = description,
-            categoryId = categoryId,
-            deadlineEpochDay = deadlineEpochDay,
-            priority = priority,
-            tagsCsv = normalizeTags(tagsCsv),
-            completedAt = now.takeIf { completed },
-            createdAt = now,
-            updatedAt = now,
-            customOrder = now,
         )
-        snapshot.copy(todos = snapshot.todos.filterNot { it.id == effectiveId } + item)
+        return saveTodo(draft, SeriesEditScope.ONLY_THIS_OCCURRENCE, completed) != null
+    }
+
+    /** Saves a todo with Android's rules (subtasks, reminders, recurrence); returns its id. */
+    suspend fun saveTodo(draft: TodoDraft, scope: SeriesEditScope, completed: Boolean? = null): Long? {
+        var savedId: Long? = null
+        val saved = mutate { snapshot ->
+            val now = System.currentTimeMillis()
+            val (updated, id) = DesktopTodoOps.save(snapshot, draft, scope, completed, now)
+            savedId = id
+            DesktopTodoOps.materialize(updated, LocalDate.now().toEpochDay(), now)
+        }
+        return savedId.takeIf { saved }
+    }
+
+    suspend fun setTodoCompleted(id: Long, completed: Boolean, completeSubtasks: Boolean = false) = mutate { snapshot ->
+        DesktopTodoOps.setCompleted(snapshot, id, completed, completeSubtasks, System.currentTimeMillis())
+    }
+
+    suspend fun setSubtaskCompleted(subtaskId: Long, completed: Boolean) = mutate { snapshot ->
+        DesktopTodoOps.setSubtaskCompleted(snapshot, subtaskId, completed, System.currentTimeMillis())
+    }
+
+    /** Deletes a todo (or this and future occurrences); keep the result to offer Undo. */
+    suspend fun deleteTodoWithUndo(id: Long, scope: SeriesEditScope = SeriesEditScope.ONLY_THIS_OCCURRENCE): TodoDeletion? {
+        var deletion: TodoDeletion? = null
+        val done = mutate { snapshot ->
+            val (updated, result) = DesktopTodoOps.delete(snapshot, id, scope, System.currentTimeMillis())
+            deletion = result
+            updated
+        }
+        return deletion.takeIf { done }
+    }
+
+    suspend fun undoDeleteTodo(deletion: TodoDeletion) = mutate { snapshot ->
+        DesktopTodoOps.undoDelete(snapshot, deletion, System.currentTimeMillis())
+    }
+
+    suspend fun stopTodoSeries(seriesId: Long) = mutate { snapshot ->
+        DesktopTodoOps.stopTodoSeries(snapshot, seriesId, System.currentTimeMillis())
+    }
+
+    /**
+     * Creates due recurring todos and ledger entries and clears deletions whose undo window has
+     * passed. Runs when the data opens and from time to time while the app is open. Optional
+     * [planningThroughEpochDay] also creates future todos for a calendar view, like the phone.
+     */
+    suspend fun runMaintenance(planningThroughEpochDay: Long? = null): Boolean {
+        val snapshot = currentSnapshot() ?: return false
+        val now = System.currentTimeMillis()
+        val today = LocalDate.now().toEpochDay()
+        val updated = DesktopTodoOps.purgeDeleted(
+            DesktopTodoOps.materialize(snapshot, today, now, planningThroughEpochDay ?: today),
+            now - DesktopTodoOps.UNDO_WINDOW_MILLIS,
+        )
+        if (updated == snapshot) return false
+        return mutate { current ->
+            DesktopTodoOps.purgeDeleted(
+                DesktopTodoOps.materialize(current, today, now, planningThroughEpochDay ?: today),
+                now - DesktopTodoOps.UNDO_WINDOW_MILLIS,
+            )
+        }
     }
 
     suspend fun toggleTodo(id: Long) = mutate { snapshot ->
-        val now = System.currentTimeMillis()
-        snapshot.copy(todos = snapshot.todos.map { todo ->
-            if (todo.id == id) todo.copy(
-                completedAt = if (todo.completedAt == null) now else null,
-                updatedAt = now,
-            ) else todo
-        })
+        val todo = snapshot.todos.firstOrNull { it.id == id } ?: return@mutate snapshot
+        DesktopTodoOps.setCompleted(snapshot, id, todo.completedAt == null, completeSubtasks = false, now = System.currentTimeMillis())
     }
 
-    suspend fun deleteTodo(id: Long) = mutate { snapshot ->
-        val now = System.currentTimeMillis()
-        snapshot.copy(todos = snapshot.todos.map { todo ->
-            if (todo.id == id) todo.copy(deletedAt = now, updatedAt = now) else todo
-        })
-    }
+    suspend fun deleteTodo(id: Long) = deleteTodoWithUndo(id) != null
 
     suspend fun addCategory(name: String, parentId: Long? = null) = mutate { snapshot ->
         val id = snapshot.categories.maxOfOrNull(CategoryEntity::id)?.plus(1) ?: 1L
