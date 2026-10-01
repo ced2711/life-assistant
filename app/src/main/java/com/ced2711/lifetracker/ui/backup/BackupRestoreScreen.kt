@@ -346,7 +346,8 @@ fun BackupRestoreScreen(
             title = "Connect GitHub",
             initialClientId = cloudState.gitHubClientId,
             initialRepository = cloudState.gitHubRepository,
-            showGitHubFields = true,
+            gitHub = true,
+            showGitHubFields = !cloudState.builtInGitHub,
             onDismiss = { connectGitHubRequested = false },
             onConnect = { password -> password.fill('\u0000') },
             onConnectGitHub = { password, clientId, repository ->
@@ -468,23 +469,11 @@ private fun CloudSyncCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            if (!state.connected || state.provider == CloudProvider.GOOGLE_DRIVE) {
+            if (!state.connected) {
                 Text(
                     localizedText(
-                        "Google Drive needs Drive API access, package com.ced2711.lifetracker, and this " +
-                            "build's signing SHA-1 registered in Google Cloud. Android and Windows must " +
-                            "use the same Google Cloud project and account.",
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            if (!state.connected || state.provider == CloudProvider.GITHUB) {
-                Text(
-                    localizedText(
-                        "GitHub needs a GitHub App with Device Flow on, installed only on one private " +
-                            "repository with Contents read and write permission. Use the same app and " +
-                            "repository on every device.",
+                        "Sign in with GitHub; that is all. Use the same GitHub account and the same " +
+                            "sync password on your phone and your PC.",
                     ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -586,11 +575,13 @@ private fun CloudSyncCard(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Button(enabled = !state.busy, onClick = onConnect) {
-                        Text(localizedText(if (state.busy) "Connecting…" else "Connect Google Drive"))
+                    Button(enabled = !state.busy, onClick = onConnectGitHub) {
+                        Text(localizedText(if (state.busy) "Connecting…" else "Connect GitHub"))
                     }
-                    OutlinedButton(enabled = !state.busy, onClick = onConnectGitHub) {
-                        Text(localizedText("Connect GitHub"))
+                    // Google Drive returns once its Google Cloud project is published; the code
+                    // path stays so existing connections keep working.
+                    OutlinedButton(enabled = false, onClick = onConnect) {
+                        Text(localizedText("Google Drive (coming soon)"))
                     }
                 }
             }
@@ -632,7 +623,9 @@ internal fun CloudSyncPasswordDialog(
     onDismiss: () -> Unit,
     onConnect: (CharArray) -> Unit,
     title: String = "Connect Google Drive",
-    showGitHubFields: Boolean = false,
+    gitHub: Boolean = false,
+    // Only builds without a built-in GitHub sign-in ask for a Client ID and repository.
+    showGitHubFields: Boolean = gitHub,
     initialClientId: String = "",
     initialRepository: String = "",
     onConnectGitHub: (CharArray, String, String) -> Unit = { password, _, _ -> onConnect(password) },
@@ -658,15 +651,15 @@ internal fun CloudSyncPasswordDialog(
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
                     localizedText(
-                        "Choose a sync password. You will enter the same password on Windows or a new device. " +
-                            "Nobody can recover it for you.",
+                        "Choose a sync password. If another device already syncs, enter its password " +
+                            "(on Windows this is your data password). Nobody can recover it for you.",
                     ),
                 )
                 if (showGitHubFields) {
                     OutlinedTextField(
                         value = clientId,
                         onValueChange = { clientId = it.trim(); submitted = false },
-                        label = { Text(localizedText("GitHub App Client ID")) },
+                        label = { Text(localizedText("GitHub Client ID")) },
                         singleLine = true,
                         isError = clientIdMissing,
                         modifier = Modifier.fillMaxWidth(),
@@ -708,7 +701,7 @@ internal fun CloudSyncPasswordDialog(
                     val transferred = password.toCharArray()
                     password = ""
                     confirmation = ""
-                    if (showGitHubFields) onConnectGitHub(transferred, clientId, repository) else onConnect(transferred)
+                    if (gitHub) onConnectGitHub(transferred, clientId, repository) else onConnect(transferred)
                 }
             }) { Text(localizedText("Connect")) }
         },
@@ -719,12 +712,17 @@ internal fun CloudSyncPasswordDialog(
 private fun GitHubCodeDialog(prompt: GitHubCodePrompt, onCancel: () -> Unit) {
     val context = LocalContext.current
     val uiLanguage = LocalUiLanguage.current
+    val copyCode = {
+        val clipboard = context.getSystemService(android.content.ClipboardManager::class.java)
+        clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("GitHub code", prompt.userCode))
+    }
+    LaunchedEffect(prompt.userCode) { copyCode() }
     HingeSafeAlertDialog(
         onDismissRequest = {},
         title = { Text(localizedText("Approve on GitHub")) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(localizedText("Open GitHub, sign in, and enter this code. This screen continues by itself once you approve."))
+                Text(localizedText("The code is copied. Open GitHub, paste it, and choose Authorize. Then come back; this screen continues by itself."))
                 Text(
                     prompt.userCode,
                     style = MaterialTheme.typography.headlineMedium,
@@ -733,11 +731,9 @@ private fun GitHubCodeDialog(prompt: GitHubCodePrompt, onCancel: () -> Unit) {
                 )
                 Text(prompt.verificationUri, style = MaterialTheme.typography.bodySmall)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = {
-                        val clipboard = context.getSystemService(android.content.ClipboardManager::class.java)
-                        clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("GitHub code", prompt.userCode))
-                    }) { Text(localizedText("Copy code")) }
+                    OutlinedButton(onClick = { copyCode() }) { Text(localizedText("Copy code")) }
                     Button(onClick = {
+                        copyCode()
                         runCatching {
                             context.startActivity(
                                 android.content.Intent(android.content.Intent.ACTION_VIEW, prompt.verificationUri.toUri())

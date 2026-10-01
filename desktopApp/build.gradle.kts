@@ -6,6 +6,7 @@ import java.awt.geom.Path2D
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
+import java.util.Properties
 import javax.imageio.ImageIO
 
 plugins {
@@ -41,6 +42,7 @@ sourceSets {
             include("com/ced2711/lifetracker/data/backup/AttachmentStager.kt")
         }
         resources.srcDir(layout.buildDirectory.dir("generated/legal-resources"))
+        resources.srcDir(layout.buildDirectory.dir("generated/cloud-defaults"))
     }
 }
 
@@ -62,7 +64,26 @@ val prepareLegalResources = tasks.register<Sync>("prepareLegalResources") {
     from(rootProject.file("LICENSE"), rootProject.file("ADDITIONAL_PERMISSIONS.md"), rootProject.file("NOTICE"))
     into(layout.buildDirectory.dir("generated/legal-resources/legal"))
 }
-tasks.named("processResources") { dependsOn(prepareLegalResources) }
+// Built-in cloud sign-in clients, so people only press "Connect". The values come from the
+// developer's personal Gradle properties and never from the repository; a build without them
+// falls back to entering the client details in Settings.
+val cloudDefaultsDirectory = layout.buildDirectory.dir("generated/cloud-defaults")
+val generateCloudDefaults = tasks.register("generateCloudDefaults") {
+    val values = mapOf(
+        "google.desktop.clientId" to providers.gradleProperty("lifeassistant.google.desktopClientId"),
+        "google.desktop.clientSecret" to providers.gradleProperty("lifeassistant.google.desktopClientSecret"),
+        "github.clientId" to providers.gradleProperty("lifeassistant.github.clientId"),
+    ).mapValues { (_, value) -> value.orElse("") }
+    values.forEach { (key, value) -> inputs.property(key, value) }
+    val target = cloudDefaultsDirectory.map { it.file("life-assistant-cloud.properties") }
+    outputs.file(target)
+    doLast {
+        val properties = Properties()
+        values.forEach { (key, value) -> properties.setProperty(key, value.get().trim()) }
+        target.get().asFile.apply { parentFile.mkdirs() }.outputStream().use { properties.store(it, null) }
+    }
+}
+tasks.named("processResources") { dependsOn(prepareLegalResources, generateCloudDefaults) }
 
 val windowsIconFile = layout.buildDirectory.file("generated/icons/life-assistant.ico")
 val generateWindowsIcon = tasks.register("generateWindowsIcon") {

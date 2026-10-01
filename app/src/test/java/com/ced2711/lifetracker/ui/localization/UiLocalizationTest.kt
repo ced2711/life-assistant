@@ -41,6 +41,16 @@ class UiLocalizationTest {
     }
 
     @Test
+    fun `one-click GitHub sync messages are localized`() {
+        val chinese = UiLanguage.SIMPLIFIED_CHINESE
+        assertEquals(
+            "找不到 GitHub 仓库 octo/life-assistant-data。",
+            translateUiText("GitHub repository octo/life-assistant-data was not found.", chinese),
+        )
+        assertEquals("GitHub 客户端 ID", translateUiText("GitHub Client ID", chinese))
+    }
+
+    @Test
     fun `English leaves UI text unchanged`() {
         assertEquals("Settings", translateUiText("Settings", UiLanguage.ENGLISH))
         assertEquals("3 reminders", translateUiText("3 reminders", UiLanguage.ENGLISH))

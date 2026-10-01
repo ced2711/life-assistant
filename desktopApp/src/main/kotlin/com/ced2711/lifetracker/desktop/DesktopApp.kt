@@ -1318,6 +1318,21 @@ private fun SettingsPage(
     val scope = rememberSafeCoroutineScope()
     var connectDialog by remember { mutableStateOf(false) }
     var gitHubDialog by remember { mutableStateOf(false) }
+    // Installers carry built-in sign-in clients, so connecting is a single click. Builds without
+    // them ask for the client details instead.
+    val cloudDefaults = DesktopCloudDefaults.builtIn
+    fun connectGoogle() {
+        if (cloudDefaults.hasGoogle) cloud.launch { connect(cloudDefaults.googleClientId, cloudDefaults.googleClientSecret.toCharArray()) }
+        else connectDialog = true
+    }
+    fun connectGitHub() {
+        if (cloudDefaults.hasGitHub) cloud.startGitHubConnect(cloudDefaults.gitHubClientId, "") else gitHubDialog = true
+    }
+    fun reconnectGitHub() {
+        val clientId = config.gitHubClientId.ifBlank { cloudDefaults.gitHubClientId }
+        if (clientId.isNotBlank() && config.gitHubRepository.isNotBlank()) cloud.startGitHubConnect(clientId, config.gitHubRepository)
+        else gitHubDialog = true
+    }
     var importCandidate by remember { mutableStateOf<File?>(null) }
     var importPassword by remember { mutableStateOf("") }
     var importPasswordVisible by remember { mutableStateOf(false) }
@@ -1343,8 +1358,8 @@ private fun SettingsPage(
             if (cloudState.connected) {
                 Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(desktopText("Automatic sync")); Text(desktopText("Syncs a few seconds after each change, when the window is focused, and every 2 minutes while Life Assistant is open."), style = MaterialTheme.typography.bodySmall) }; Switch(cloudState.automaticSync, cloud::setAutomaticSync) }
                 cloudState.lastSyncAt?.let { Text(desktopLastSync(formatTimestamp(it), LocalUiLanguage.current), color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Button(enabled = !cloudState.syncing, onClick = { cloud.launch { synchronize() } }) { Icon(Icons.Default.Refresh, null); Spacer(Modifier.width(8.dp)); Text(desktopText(if (cloudState.syncing) "Syncing…" else "Sync now")) }; TextButton(enabled = !cloudState.syncing, onClick = { if (cloudState.provider == DesktopCloudProvider.GITHUB) gitHubDialog = true else connectDialog = true }) { Text(desktopText("Reconnect")) }; TextButton(enabled = !cloudState.syncing, onClick = { cloud.launch { disconnect() } }) { Text(desktopText("Disconnect / switch account")) } }
-            } else Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Button(enabled = !cloudState.syncing, onClick = { connectDialog = true }) { Text(desktopText("Connect Google Drive")) }; OutlinedButton(enabled = !cloudState.syncing, onClick = { gitHubDialog = true }) { Text(desktopText("Connect GitHub")) } }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Button(enabled = !cloudState.syncing, onClick = { cloud.launch { synchronize() } }) { Icon(Icons.Default.Refresh, null); Spacer(Modifier.width(8.dp)); Text(desktopText(if (cloudState.syncing) "Syncing…" else "Sync now")) }; TextButton(enabled = !cloudState.syncing, onClick = { if (cloudState.provider == DesktopCloudProvider.GITHUB) reconnectGitHub() else connectGoogle() }) { Text(desktopText("Reconnect")) }; TextButton(enabled = !cloudState.syncing, onClick = { cloud.launch { disconnect() } }) { Text(desktopText("Disconnect / switch account")) } }
+            } else Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Button(enabled = !cloudState.syncing, onClick = ::connectGitHub) { Text(desktopText("Connect GitHub")) }; OutlinedButton(enabled = false, onClick = ::connectGoogle) { Text(desktopText("Google Drive (coming soon)")) } }
         } }
         Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { Text(desktopText("Local security"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold); Text(desktopText("Local data is password-encrypted. Windows can remember the password using DPAPI for this Windows account.")); OutlinedButton(onClick = forgetLocalPassword) { Text(desktopText("Forget remembered password")) } } }
         Card(Modifier.fillMaxWidth()) {

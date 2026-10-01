@@ -8,6 +8,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
@@ -17,8 +18,10 @@ import kotlinx.serialization.json.longOrNull
 import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 
 /** What the user types at [verificationUri] to approve this device. */
 data class GitHubDeviceCode(
@@ -30,15 +33,20 @@ data class GitHubDeviceCode(
 )
 
 /**
- * A GitHub App user token. [expiresAtMillis] is null when the app has token expiration turned
- * off, which the setup guide asks for: refreshing would need a client secret that must not ship
- * inside the apps.
+ * A GitHub user token. [expiresAtMillis] is null for OAuth App tokens and for GitHub Apps with
+ * token expiration turned off: refreshing would need a client secret that must not ship inside
+ * the apps.
  */
 data class GitHubToken(val accessToken: String, val expiresAtMillis: Long?)
 
 /**
- * OAuth device flow for a GitHub App. The client ID is public; no client secret is involved.
- * See https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app#using-the-device-flow-to-generate-a-user-access-token
+ * OAuth device flow for GitHub. The client ID is public; no client secret is involved.
+ *
+ * Two kinds of client IDs work. An OAuth App (the one built into release builds) asks for the
+ * `repo` scope, so after one approval the app creates its own private repository and nobody has
+ * to set anything up. A GitHub App (client IDs starting with `Iv`) only reaches the repositories
+ * it was installed on; that is the older, manual setup and keeps working for existing users.
+ * See https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#device-flow
  */
 class GitHubDeviceAuthorization(
     private val clientId: String,
@@ -51,11 +59,15 @@ class GitHubDeviceAuthorization(
     private val json = Json { ignoreUnknownKeys = true }
 
     init {
-        require(clientId.matches(CLIENT_ID)) { "Enter the GitHub App's Client ID (it starts with Iv)." }
+        require(clientId.matches(CLIENT_ID)) { "Enter a valid GitHub Client ID." }
     }
 
+    private val isGitHubApp: Boolean get() = clientId.startsWith("Iv")
+
     suspend fun start(): GitHubDeviceCode = withContext(ioDispatcher) {
-        val body = FormBody.Builder().add("client_id", clientId).build()
+        val body = FormBody.Builder().add("client_id", clientId)
+            .apply { if (!isGitHubApp) add("scope", OAUTH_SCOPE) }
+            .build()
         val result = postForm(webBaseUrl.resolve("login/device/code")!!, body)
         result.error()?.let { throw CloudAuthorizationException(describe(it)) }
         GitHubDeviceCode(
@@ -105,29 +117,101 @@ class GitHubDeviceAuthorization(
     }
 
     /**
-     * Picks the sync repository: the one the user typed, or the only repository the app can
-     * access. The repository must be private, even though every backup is encrypted.
+     * Picks the sync repository: the one the user typed, the only repository a GitHub App can
+     * access, or for an OAuth App the user's own [DEFAULT_REPOSITORY], created on first use. The
+     * repository must be private, even though every backup is encrypted.
      */
     suspend fun resolveRepository(token: String, requested: String): GitHubRepository {
-        val repository = if (requested.isNotBlank()) {
-            GitHubRepository.parse(requested)
-        } else {
-            val available = accessibleRepositories(token)
-            when (available.size) {
-                0 -> throw CloudAuthorizationException("Install the GitHub App on a private repository first.")
-                1 -> GitHubRepository.parse(available.single())
-                else -> throw CloudAuthorizationException(
-                    "The GitHub App can access several repositories (${available.joinToString()}). Enter the one to use.",
-                )
+        val repository = when {
+            requested.isNotBlank() -> GitHubRepository.parse(requested)
+            isGitHubApp -> {
+                val available = accessibleRepositories(token)
+                when (available.size) {
+                    0 -> throw CloudAuthorizationException("Install the GitHub App on a private repository first.")
+                    1 -> GitHubRepository.parse(available.single())
+                    else -> throw CloudAuthorizationException(
+                        "The GitHub App can access several repositories (${available.joinToString()}). Enter the one to use.",
+                    )
+                }
             }
+            else -> return withContext(ioDispatcher) { ensureDefaultRepository(token) }
         }
-        val details = withContext(ioDispatcher) {
-            getJson(apiBaseUrl.newBuilder().addPathSegments("repos/${repository.owner}/${repository.name}").build(), token)
+        val details = withContext(ioDispatcher) { repositoryDetails(token, repository) }
+            ?: throw CloudAuthorizationException("GitHub repository ${repository.fullName} was not found.")
+        details.requirePrivate()
+        return repository
+    }
+
+    /** Finds or creates `<login>/life-assistant-data` as a private repository. */
+    private fun ensureDefaultRepository(token: String): GitHubRepository {
+        val login = getJson(apiBaseUrl.resolve("user")!!, token)["login"]?.jsonPrimitive?.contentOrNull
+            ?: throw CloudTransportException("GitHub returned incomplete data.")
+        val repository = GitHubRepository(login, DEFAULT_REPOSITORY)
+        repositoryDetails(token, repository)?.let { existing ->
+            existing.requirePrivate()
+            return repository
         }
-        if (details["private"]?.jsonPrimitive?.contentOrNull != "true") {
-            throw CloudAuthorizationException("Use a private repository. Backups are encrypted, but their history would be public.")
+        val body = JsonObject(
+            mapOf(
+                "name" to JsonPrimitive(DEFAULT_REPOSITORY),
+                "description" to JsonPrimitive("Encrypted Life Assistant sync data"),
+                "private" to JsonPrimitive(true),
+                "auto_init" to JsonPrimitive(true),
+                "has_issues" to JsonPrimitive(false),
+                "has_projects" to JsonPrimitive(false),
+                "has_wiki" to JsonPrimitive(false),
+            ),
+        )
+        val request = authorized(apiBaseUrl.resolve("user/repos")!!, token)
+            .post(body.toString().toRequestBody(JSON_TYPE)).build()
+        val created = try {
+            client.newCall(request).execute().use { response ->
+                when (response.code) {
+                    in 200..299 -> true
+                    422 -> false // Another device created it a moment ago.
+                    401 -> throw CloudAuthorizationException("GitHub sign-in expired or was revoked. Reconnect GitHub.")
+                    403, 404 -> throw CloudAuthorizationException(
+                        "GitHub did not allow creating the private repository $DEFAULT_REPOSITORY. " +
+                            "Create it yourself on GitHub, then connect again.",
+                    )
+                    else -> throw CloudTransportException("GitHub request failed (${response.code}).")
+                }
+            }
+        } catch (error: IOException) {
+            throw CloudTransportException("Could not reach GitHub.", error)
+        }
+        if (!created) {
+            (repositoryDetails(token, repository) ?: throw CloudTransportException("GitHub request failed (422)."))
+                .requirePrivate()
         }
         return repository
+    }
+
+    /** Repository metadata, or null when it does not exist or this token cannot see it. */
+    private fun repositoryDetails(token: String, repository: GitHubRepository): JsonObject? {
+        val url = apiBaseUrl.newBuilder().addPathSegments("repos/${repository.owner}/${repository.name}").build()
+        return try {
+            client.newCall(authorized(url, token).get().build()).execute().use { response ->
+                when (response.code) {
+                    404 -> null
+                    401 -> throw CloudAuthorizationException("GitHub sign-in expired or was revoked. Reconnect GitHub.")
+                    in 200..299 -> json.parseToJsonElement(
+                        response.body?.string() ?: throw CloudTransportException("GitHub returned an empty response."),
+                    ).jsonObject
+                    else -> throw CloudTransportException("GitHub request failed (${response.code}).")
+                }
+            }
+        } catch (error: IOException) {
+            throw CloudTransportException("Could not reach GitHub.", error)
+        } catch (error: IllegalArgumentException) {
+            throw CloudTransportException("GitHub returned malformed data.", error)
+        }
+    }
+
+    private fun JsonObject.requirePrivate() {
+        if (this["private"]?.jsonPrimitive?.contentOrNull != "true") {
+            throw CloudAuthorizationException("Use a private repository. Backups are encrypted, but their history would be public.")
+        }
     }
 
     private fun postForm(url: HttpUrl, body: FormBody): JsonObject {
@@ -135,14 +219,12 @@ class GitHubDeviceAuthorization(
         return execute(request)
     }
 
-    private fun getJson(url: HttpUrl, token: String): JsonObject {
-        val request = Request.Builder().url(url)
-            .header("Accept", "application/vnd.github+json")
-            .header("Authorization", "Bearer $token")
-            .header("X-GitHub-Api-Version", "2022-11-28")
-            .get().build()
-        return execute(request)
-    }
+    private fun getJson(url: HttpUrl, token: String): JsonObject = execute(authorized(url, token).get().build())
+
+    private fun authorized(url: HttpUrl, token: String): Request.Builder = Request.Builder().url(url)
+        .header("Accept", "application/vnd.github+json")
+        .header("Authorization", "Bearer $token")
+        .header("X-GitHub-Api-Version", "2022-11-28")
 
     private fun execute(request: Request): JsonObject = try {
         client.newCall(request).execute().use { response ->
@@ -167,12 +249,18 @@ class GitHubDeviceAuthorization(
     private fun describe(error: String): String = when (error) {
         "access_denied" -> "GitHub authorization was cancelled."
         "expired_token" -> "The GitHub code expired. Start again."
-        "device_flow_disabled" -> "Device flow is off for this GitHub App. Turn on \"Enable Device Flow\" in its settings."
+        "device_flow_disabled" -> "Device flow is off for this GitHub app. Turn on \"Enable Device Flow\" in its settings."
         "incorrect_client_credentials", "unauthorized_client" -> "GitHub did not recognize this Client ID."
         else -> "GitHub authorization failed ($error)."
     }
 
     companion object {
+        /** Created in the user's account on first connect when no repository is given. */
+        const val DEFAULT_REPOSITORY = "life-assistant-data"
+
+        // Classic OAuth scopes cannot narrow this further: private repositories need `repo`.
+        private const val OAUTH_SCOPE = "repo"
         private val CLIENT_ID = Regex("[A-Za-z0-9._-]{8,64}")
+        private val JSON_TYPE = "application/json; charset=utf-8".toMediaType()
     }
 }

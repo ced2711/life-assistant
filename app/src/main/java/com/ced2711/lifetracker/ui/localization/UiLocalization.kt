@@ -49,6 +49,7 @@ private fun translateDynamicChinese(text: String): String {
     match("The GitHub app cannot write to (.+)\\. Install it on that repository with Contents read and write permission\\.")?.let {
         return "GitHub App 无法写入 ${it.groupValues[1]}。请把它安装到这个仓库，并授予 Contents 读写权限。"
     }
+    match("GitHub repository (.+) was not found\\.")?.let { return "找不到 GitHub 仓库 ${it.groupValues[1]}。" }
     match("The GitHub App can access several repositories \\((.+)\\)\\. Enter the one to use\\.")?.let {
         return "GitHub App 可以访问多个仓库（${it.groupValues[1]}），请填写要使用的那一个。"
     }
@@ -795,30 +796,29 @@ private val zhHans = mapOf(
         "conflicts pause sync." to "每次上传都会生成一个新的加密版本，只保留最近 10 个版本；出现冲突时会暂停同步。",
     "Each upload creates a new encrypted version. The 10 most recent versions are kept; conflicts pause sync until you resolve them." to
         "每次上传都会生成一个新的加密版本，只保留最近 10 个版本；出现冲突时会暂停同步，直到你处理冲突。",
-    "Google Drive needs Drive API access, package com.ced2711.lifetracker, and this " +
-        "build's signing SHA-1 registered in Google Cloud. Android and Windows must " +
-        "use the same Google Cloud project and account." to
-        "Google Drive 需要在 Google Cloud 中启用 Drive API，并登记包名 com.ced2711.lifetracker 和本版本的签名 SHA-1。Android 和 Windows 必须使用同一个 Google Cloud 项目和账号。",
-    "GitHub needs a GitHub App with Device Flow on, installed only on one private " +
-        "repository with Contents read and write permission. Use the same app and " +
-        "repository on every device." to
-        "GitHub 同步需要一个开启 Device Flow 的 GitHub App，只安装在一个私有仓库上，并授予 Contents 读写权限。所有设备使用同一个 App 和仓库。",
-    "Choose a sync password. You will enter the same password on Windows or a new device. " +
-        "Nobody can recover it for you." to "设置一个同步密码。在 Windows 或新设备上要输入同一个密码。任何人都无法帮你找回它。",
-    "GitHub App Client ID" to "GitHub App 客户端 ID",
+    "Sign in with GitHub; that is all. Use the same GitHub account and the same " +
+        "sync password on your phone and your PC." to
+        "用 GitHub 登录就好。手机和电脑上要用同一个 GitHub 账号和同一个同步密码。",
+    "Google Drive (coming soon)" to "Google Drive（即将推出）",
+    "Choose a sync password. If another device already syncs, enter its password " +
+        "(on Windows this is your data password). Nobody can recover it for you." to
+        "设置一个同步密码。如果另一台设备已经在同步，请输入它用的密码（Windows 上就是你的数据密码）。任何人都无法帮你找回它。",
+    "GitHub Client ID" to "GitHub 客户端 ID",
     "Private repository (owner/name, optional)" to "私有仓库（所有者/名称，可选）",
     "Approve on GitHub" to "在 GitHub 上授权",
-    "Open GitHub, sign in, and enter this code. This screen continues by itself once you approve." to
-        "打开 GitHub 并登录，输入下面的代码。授权后此页面会自动继续。",
+    "The code is copied. Open GitHub, paste it, and choose Authorize. Then come back; this screen continues by itself." to
+        "代码已复制。打开 GitHub，粘贴代码，然后点 Authorize。完成后回到这里，此页面会自动继续。",
+    "GitHub opened in your browser and this code is already copied. Paste it there, then choose Authorize. This window continues by itself." to
+        "已在浏览器中打开 GitHub，代码也已复制。在那里粘贴代码，然后点 Authorize。此窗口会自动继续。",
     "Copy code" to "复制代码",
     "Open GitHub" to "打开 GitHub",
     "Get sign-in code" to "获取登录代码",
     "No browser is available to open GitHub." to "没有可以打开 GitHub 的浏览器。",
     "Encrypted snapshots are stored in Life Assistant's private Google Drive app folder or a private GitHub repository. Nothing else in those accounts is read." to
         "加密快照保存在生活助手在 Google Drive 中的私有应用文件夹或 GitHub 私有仓库中，不会读取这些账号里的其他内容。",
-    "Use a GitHub App with Device Flow on, installed only on one private repository with " +
-        "Contents read and write permission. Use the same app and repository on Android." to
-        "使用一个开启 Device Flow 的 GitHub App，只安装在一个私有仓库上，并授予 Contents 读写权限。Android 上要使用同一个 App 和仓库。",
+    "This build has no built-in GitHub sign-in. Enter the Client ID of a GitHub OAuth App with " +
+        "Device Flow on. Leave the repository empty to create a private life-assistant-data repository." to
+        "此版本没有内置 GitHub 登录。请输入一个开启了 Device Flow 的 GitHub OAuth App 的客户端 ID。仓库留空会自动创建私有仓库 life-assistant-data。",
     "Your data password encrypts every backup before upload. Use the same password on every device." to
         "每个备份在上传前都会用你的数据密码加密。所有设备要使用同一个密码。",
     "Desktop OAuth client secret" to "Desktop OAuth 客户端密钥",
@@ -846,14 +846,16 @@ private val zhHans = mapOf(
     "GitHub kept changing while saving. Sync again." to "保存期间 GitHub 上的数据一直在变化，请再次同步。",
     "The GitHub code expired. Start again." to "GitHub 代码已过期，请重新开始。",
     "GitHub authorization was cancelled." to "GitHub 授权已取消。",
-    "Device flow is off for this GitHub App. Turn on \"Enable Device Flow\" in its settings." to
-        "这个 GitHub App 没有开启 Device Flow，请在它的设置中打开“Enable Device Flow”。",
+    "Device flow is off for this GitHub app. Turn on \"Enable Device Flow\" in its settings." to
+        "这个 GitHub 应用没有开启 Device Flow，请在它的设置中打开“Enable Device Flow”。",
+    "GitHub did not allow creating the private repository life-assistant-data. Create it yourself on GitHub, then connect again." to
+        "GitHub 不允许创建私有仓库 life-assistant-data。请在 GitHub 上手动创建后再连接。",
     "GitHub did not recognize this Client ID." to "GitHub 无法识别这个客户端 ID。",
     "Install the GitHub App on a private repository first." to "请先把 GitHub App 安装到一个私有仓库上。",
     "Use a private repository. Backups are encrypted, but their history would be public." to
         "请使用私有仓库。备份虽然是加密的，但它们的历史记录会公开。",
     "Enter the repository as owner/name." to "请按“所有者/名称”的格式输入仓库。",
-    "Enter the GitHub App's Client ID (it starts with Iv)." to "请输入 GitHub App 的客户端 ID（以 Iv 开头）。",
+    "Enter a valid GitHub Client ID." to "请输入有效的 GitHub 客户端 ID。",
     "The backup is larger than GitHub's 100 MB file limit." to "备份超过了 GitHub 单个文件 100 MB 的上限。",
     "The Google Drive API is not enabled in this Google Cloud project. Enable it, then sync again." to
         "这个 Google Cloud 项目没有启用 Google Drive API，请启用后再同步。",

@@ -84,6 +84,8 @@ data class CloudSyncUiState(
     val provider: CloudProvider = CloudProvider.GOOGLE_DRIVE,
     val gitHubRepository: String = "",
     val gitHubClientId: String = "",
+    /** This build carries its own GitHub sign-in, so connecting needs no Client ID. */
+    val builtInGitHub: Boolean = false,
     val gitHubPrompt: GitHubCodePrompt? = null,
 ) {
     val busy: Boolean get() = task != CloudSyncTask.NONE
@@ -279,7 +281,7 @@ class CloudSyncViewModel internal constructor(
         if (!_uiState.value.connected || _uiState.value.busy) return
         val settings = preferences.read()
         if (settings.provider == CloudProvider.GITHUB) {
-            startGitHubAuthorization(settings.gitHubClientId, settings.gitHubRepository, reconnecting = true)
+            startGitHubAuthorization(settings.gitHubClientId.ifBlank { defaultGitHubClientId }, settings.gitHubRepository, reconnecting = true)
             return
         }
         pendingReconnect = true
@@ -511,7 +513,9 @@ class CloudSyncViewModel internal constructor(
             recoveryFiles = engine.recoveryFiles().map { it.name },
             provider = value.provider,
             gitHubRepository = value.gitHubRepository,
-            gitHubClientId = value.gitHubClientId.ifBlank { defaultGitHubClientId },
+            // New connections use the built-in sign-in; reconnecting keeps the saved Client ID.
+            gitHubClientId = defaultGitHubClientId.ifBlank { value.gitHubClientId },
+            builtInGitHub = defaultGitHubClientId.isNotBlank(),
         )
     }
 

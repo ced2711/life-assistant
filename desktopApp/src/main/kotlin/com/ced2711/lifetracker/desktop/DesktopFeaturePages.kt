@@ -457,11 +457,11 @@ internal fun GitHubConnectDialog(
             Column(Modifier.widthIn(max = 560.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
                     desktopText(
-                        "Use a GitHub App with Device Flow on, installed only on one private repository with " +
-                            "Contents read and write permission. Use the same app and repository on Android.",
+                        "This build has no built-in GitHub sign-in. Enter the Client ID of a GitHub OAuth App with " +
+                            "Device Flow on. Leave the repository empty to create a private life-assistant-data repository.",
                     ),
                 )
-                OutlinedTextField(clientId, { clientId = it.trim() }, label = { Text(desktopText("GitHub App Client ID")) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(clientId, { clientId = it.trim() }, label = { Text(desktopText("GitHub Client ID")) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(repository, { repository = it }, label = { Text(desktopText("Private repository (owner/name, optional)")) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 Text(
                     desktopText("Your data password encrypts every backup before upload. Use the same password on every device."),
@@ -480,12 +480,17 @@ internal fun GitHubConnectDialog(
 
 @Composable
 internal fun GitHubCodeDialog(userCode: String, verificationUri: String, onCancel: () -> Unit) {
+    // Copy the code and open the page right away, so the user only pastes and approves.
+    LaunchedEffect(userCode) {
+        runCatching { Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(userCode), null) }
+        runCatching { java.awt.Desktop.getDesktop().browse(URI(verificationUri)) }
+    }
     AlertDialog(
         onDismissRequest = {},
         title = { Text(desktopText("Approve on GitHub")) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(desktopText("Open GitHub, sign in, and enter this code. This screen continues by itself once you approve."))
+                Text(desktopText("GitHub opened in your browser and this code is already copied. Paste it there, then choose Authorize. This window continues by itself."))
                 SelectionContainer {
                     Text(userCode, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                 }

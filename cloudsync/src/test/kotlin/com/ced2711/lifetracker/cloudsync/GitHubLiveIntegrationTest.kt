@@ -14,14 +14,25 @@ import org.junit.Test
 
 /**
  * Talks to real GitHub. Runs only when LA_GITHUB_TEST_REPO (owner/name of a disposable private
- * repository) and LA_GITHUB_TEST_TOKEN are set; ordinary builds skip it.
+ * repository) and LA_GITHUB_TEST_TOKEN are set; ordinary builds skip it. LA_GITHUB_TEST_REPO=auto
+ * resolves the repository like the one-click connect does (creating life-assistant-data if
+ * needed), using the OAuth App in LA_GITHUB_TEST_CLIENT_ID. Either way only the test branch
+ * below is written.
  */
 class GitHubLiveIntegrationTest {
     private val repository = System.getenv("LA_GITHUB_TEST_REPO")
     private val token = System.getenv("LA_GITHUB_TEST_TOKEN")
     private val directory: File = Files.createTempDirectory("github-live").toFile()
 
-    private fun store() = GitHubBackupStore({ token }, GitHubRepository.parse(repository), branch = BRANCH)
+    private val resolved: GitHubRepository by lazy {
+        if (repository == "auto") {
+            runBlocking { GitHubDeviceAuthorization(System.getenv("LA_GITHUB_TEST_CLIENT_ID")).resolveRepository(token, "") }
+        } else {
+            GitHubRepository.parse(repository)
+        }
+    }
+
+    private fun store() = GitHubBackupStore({ token }, resolved, branch = BRANCH)
 
     private fun revision(createdAt: Long, device: String, base: String? = null, merged: List<String> = emptyList()) =
         NewCloudRevision(
