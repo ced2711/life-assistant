@@ -20,6 +20,17 @@ fun main(args: Array<String>) {
     DesktopConfigStore().setUiLanguage(
         if (args.getOrNull(3) == "zh") com.ced2711.lifetracker.domain.model.UiLanguage.SIMPLIFIED_CHINESE else com.ced2711.lifetracker.domain.model.UiLanguage.ENGLISH,
     )
+    // Optional fifth argument: the theme to render with (light or dark), stored in the sample data.
+    args.getOrNull(4)?.let { theme ->
+        val mode = if (theme == "light") com.ced2711.lifetracker.domain.model.ThemeMode.LIGHT else com.ced2711.lifetracker.domain.model.ThemeMode.DARK
+        val password = requireNotNull(DesktopCredentialStore().load(DesktopCredentialStore.LOCAL_PASSWORD)) { "Sample data has no remembered password." }
+        val store = DesktopDataStore()
+        kotlinx.coroutines.runBlocking {
+            check(store.open(password))
+            store.setThemeMode(mode)
+        }
+        store.close()
+    }
     val shortcuts = DesktopShortcuts()
     val scene = ImageComposeScene(width, height, Density(1f)) {
         CompositionLocalProvider(LocalDesktopShortcuts provides shortcuts) {

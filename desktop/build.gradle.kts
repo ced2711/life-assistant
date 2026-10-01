@@ -221,6 +221,7 @@ tasks.register<JavaExec>("renderScreens") {
             providers.gradleProperty("screenWidth").orNull ?: "1600",
             providers.gradleProperty("screenHeight").orNull ?: "1000",
             providers.gradleProperty("screenLanguage").orNull ?: "en",
+            providers.gradleProperty("screenTheme").orNull ?: "dark",
         )
     }
 }
