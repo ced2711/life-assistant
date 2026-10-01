@@ -35,8 +35,10 @@ fun isValidDesktopAmountInput(value: String): Boolean =
 fun desktopSortLabel(sortBy: DesktopTodoSort): String = when (sortBy) {
     DesktopTodoSort.DEADLINE -> "Deadline"
     DesktopTodoSort.PRIORITY -> "Priority"
+    DesktopTodoSort.CREATED -> "Created"
     DesktopTodoSort.TITLE -> "Title"
+    DesktopTodoSort.CUSTOM -> "Custom"
 }
 
-enum class DesktopTodoSort { DEADLINE, PRIORITY, TITLE }
+enum class DesktopTodoSort { DEADLINE, PRIORITY, CREATED, TITLE, CUSTOM }
 

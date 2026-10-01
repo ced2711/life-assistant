@@ -28,6 +28,8 @@ data class DesktopCloudConfig(
     val gitHubRepository: String = "",
 )
 
+data class DesktopWindowBounds(val width: Int, val height: Int, val x: Int?, val y: Int?, val maximized: Boolean)
+
 class DesktopConfigStore(
     private val file: File = File(DesktopDataStore.defaultAppDirectory(), "desktop.properties"),
 ) {
@@ -151,6 +153,32 @@ class DesktopConfigStore(
         save(properties)
     }
 
+    /** The window's last size and position, or null the first time. */
+    @Synchronized
+    fun windowBounds(): DesktopWindowBounds? {
+        val properties = load()
+        val width = properties.getProperty(KEY_WINDOW_WIDTH)?.toIntOrNull() ?: return null
+        val height = properties.getProperty(KEY_WINDOW_HEIGHT)?.toIntOrNull() ?: return null
+        return DesktopWindowBounds(
+            width = width.coerceIn(640, 10_000),
+            height = height.coerceIn(480, 10_000),
+            x = properties.getProperty(KEY_WINDOW_X)?.toIntOrNull(),
+            y = properties.getProperty(KEY_WINDOW_Y)?.toIntOrNull(),
+            maximized = properties.getProperty(KEY_WINDOW_MAXIMIZED)?.toBooleanStrictOrNull() ?: false,
+        )
+    }
+
+    @Synchronized
+    fun setWindowBounds(bounds: DesktopWindowBounds) {
+        val properties = load()
+        properties.setProperty(KEY_WINDOW_WIDTH, bounds.width.toString())
+        properties.setProperty(KEY_WINDOW_HEIGHT, bounds.height.toString())
+        bounds.x?.let { properties.setProperty(KEY_WINDOW_X, it.toString()) } ?: properties.remove(KEY_WINDOW_X)
+        bounds.y?.let { properties.setProperty(KEY_WINDOW_Y, it.toString()) } ?: properties.remove(KEY_WINDOW_Y)
+        properties.setProperty(KEY_WINDOW_MAXIMIZED, bounds.maximized.toString())
+        save(properties)
+    }
+
     private fun load() = Properties().also { properties ->
         if (file.isFile) file.inputStream().use(properties::load)
     }
@@ -190,5 +218,10 @@ class DesktopConfigStore(
         const val KEY_PROVIDER = "cloud.provider"
         const val KEY_GITHUB_CLIENT_ID = "github.clientId"
         const val KEY_GITHUB_REPOSITORY = "github.repository"
+        const val KEY_WINDOW_WIDTH = "window.width"
+        const val KEY_WINDOW_HEIGHT = "window.height"
+        const val KEY_WINDOW_X = "window.x"
+        const val KEY_WINDOW_Y = "window.y"
+        const val KEY_WINDOW_MAXIMIZED = "window.maximized"
     }
 }

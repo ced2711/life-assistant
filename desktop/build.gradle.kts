@@ -206,3 +206,20 @@ tasks.register<JavaExec>("prepareSmokeData") {
         args(output)
     }
 }
+
+tasks.register<JavaExec>("renderScreens") {
+    group = "verification"
+    description = "Renders every desktop page from prepared smoke data into PNG files for layout review."
+    dependsOn(tasks.testClasses)
+    mainClass.set("com.ced2711.lifetracker.desktop.DesktopScreenshotsKt")
+    classpath = sourceSets.test.get().runtimeClasspath
+    doFirst {
+        val appData = providers.gradleProperty("smokeDataDir").get()
+        environment("APPDATA", appData)
+        args(
+            providers.gradleProperty("screensDir").orNull ?: layout.buildDirectory.dir("screens").get().asFile.absolutePath,
+            providers.gradleProperty("screenWidth").orNull ?: "1600",
+            providers.gradleProperty("screenHeight").orNull ?: "1000",
+        )
+    }
+}

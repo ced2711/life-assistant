@@ -32,6 +32,8 @@ import com.ced2711.lifetracker.domain.model.TodoPriority
 import com.ced2711.lifetracker.domain.model.TopLevelDestination
 import com.ced2711.lifetracker.domain.model.VaultEntry
 import com.ced2711.lifetracker.domain.model.WeekStart
+import com.ced2711.lifetracker.domain.model.normalizeCustomTodoOrders
+import com.ced2711.lifetracker.domain.model.swapTodoIds
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -284,6 +286,20 @@ class DesktopDataStore(
             updated
         }
         return deletion.takeIf { done }
+    }
+
+    /** Swaps a todo with its visible neighbour in the custom order, like the phone's move buttons. */
+    suspend fun moveTodo(id: Long, neighborId: Long) = mutate { snapshot ->
+        val ordered = snapshot.todos.filter { it.deletedAt == null && it.completedAt == null }
+            .sortedWith(compareByDescending<TodoEntity> { it.customOrder }.thenByDescending { it.createdAt }.thenByDescending { it.id })
+            .map(TodoEntity::id)
+        val reordered = swapTodoIds(ordered, id, neighborId)
+        if (reordered == ordered) return@mutate snapshot
+        val now = System.currentTimeMillis()
+        val orders = normalizeCustomTodoOrders(reordered).toMap()
+        snapshot.copy(todos = snapshot.todos.map { todo ->
+            orders[todo.id]?.takeIf { it != todo.customOrder }?.let { todo.copy(customOrder = it, updatedAt = maxOf(now, todo.updatedAt)) } ?: todo
+        })
     }
 
     suspend fun undoDeleteTodo(deletion: TodoDeletion) = mutate { snapshot ->

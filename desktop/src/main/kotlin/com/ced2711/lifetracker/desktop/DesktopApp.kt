@@ -82,6 +82,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -164,6 +165,13 @@ private enum class DesktopDestination(val label: String, val icon: ImageVector) 
     CONFESSIONAL("Confessional", Icons.Default.LocalFireDepartment),
     VAULT("Vault", Icons.Default.Lock),
     SETTINGS("Settings", Icons.Default.Settings),
+}
+
+/** Small count shown next to a module in the sidebar. */
+private fun sidebarBadge(destination: DesktopDestination, snapshot: BackupSnapshot): String? = when (destination) {
+    DesktopDestination.TODO -> snapshot.todos.count { it.deletedAt == null && it.completedAt == null }.takeIf { it > 0 }?.toString()
+    DesktopDestination.NOTES -> snapshot.notes.size.takeIf { it > 0 }?.toString()
+    else -> null
 }
 
 private val LocalDesktopErrorReporter = staticCompositionLocalOf<(Throwable) -> Unit> { {} }
@@ -409,61 +417,49 @@ private fun DesktopHome(
         destination = to
         if (to in mainDestinations) configStore.setLastDestination(to.toTopLevelDestination())
     }
+    // Ctrl+1…9 opens the modules in menu order, Ctrl+R syncs, Ctrl+, opens Settings.
+    val shortcuts = LocalDesktopShortcuts.current
+    DisposableEffect(shortcuts, mainDestinations) {
+        shortcuts.onNavigate = { index -> mainDestinations.getOrNull(index)?.let(::navigate) }
+        shortcuts.onSync = { cloud.launch { synchronize() } }
+        shortcuts.onSettings = { destination = DesktopDestination.SETTINGS }
+        onDispose {
+            shortcuts.onNavigate = null
+            shortcuts.onSync = null
+            shortcuts.onSettings = null
+        }
+    }
+    // Due recurring items appear and expired deletions are cleared, also across midnight.
+    LaunchedEffect(dataStore) {
+        while (true) {
+            runCatching { dataStore.runMaintenance() }
+            kotlinx.coroutines.delay(60_000)
+        }
+    }
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val wide = maxWidth >= 850.dp
-        Scaffold(
-            snackbarHost = { SnackbarHost(snackbar) },
-            bottomBar = {
-                if (!wide) {
-                    NavigationBar {
-                        mainDestinations.forEach { item ->
-                            NavigationBarItem(
-                                selected = item == destination,
-                                onClick = { navigate(item) },
-                                icon = { Icon(item.icon, desktopText(item.label)) },
-                                label = { Text(desktopText(item.label)) },
-                            )
-                        }
-                    }
-                }
-            },
-        ) { padding ->
+        // Wide windows get a labelled sidebar; narrow ones a compact icon rail.
+        val expanded = maxWidth >= 1_100.dp
+        Scaffold(snackbarHost = { SnackbarHost(snackbar) }) { padding ->
             Row(Modifier.fillMaxSize().padding(padding)) {
-                if (wide) {
-                    NavigationRail {
-                        Spacer(Modifier.height(12.dp))
-                        mainDestinations.forEach { item ->
-                            NavigationRailItem(
-                                selected = item == destination,
-                                onClick = { navigate(item) },
-                                icon = { Icon(item.icon, desktopText(item.label)) },
-                                label = { Text(desktopText(item.label)) },
-                            )
-                        }
-                    }
-                    HorizontalDivider(Modifier.fillMaxHeight().width(1.dp))
-                }
-                Column(Modifier.weight(1f).fillMaxHeight()) {
-                    Row(
-                        Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Spacer(Modifier.weight(1f))
+                DesktopSidebar(
+                    expanded = expanded,
+                    destinations = mainDestinations.map { SidebarItem(it.label, it.icon, sidebarBadge(it, snapshot)) },
+                    selectedIndex = mainDestinations.indexOf(destination),
+                    onSelect = { navigate(mainDestinations[it]) },
+                    vaultSelected = destination == DesktopDestination.VAULT,
+                    settingsSelected = destination == DesktopDestination.SETTINGS,
+                    onVault = { destination = DesktopDestination.VAULT },
+                    onSettings = { destination = DesktopDestination.SETTINGS },
+                    syncStatus = {
                         DesktopSyncStatusButton(
                             state = cloudState,
                             onSync = { cloud.launch { synchronize() } },
                             onOpenSettings = { destination = DesktopDestination.SETTINGS },
                         )
-                        if (destination == DesktopDestination.SETTINGS || destination == DesktopDestination.VAULT) {
-                            IconButton(onClick = { navigate(mainDestinations.first()) }) {
-                                Icon(Icons.Default.ChevronLeft, desktopText("Back"))
-                            }
-                        } else {
-                            IconButton(onClick = { destination = DesktopDestination.SETTINGS }) {
-                                Icon(Icons.Default.Settings, desktopText("Settings"))
-                            }
-                        }
-                    }
+                    },
+                )
+                VerticalDivider()
+                Column(Modifier.weight(1f).fillMaxHeight()) {
                     when (destination) {
                         DesktopDestination.TODO -> TodoPage(snapshot, dataStore)
                         DesktopDestination.LEDGER -> LedgerPage(snapshot, dataStore)
@@ -508,7 +504,7 @@ private fun DesktopHome(
             AlertDialog(
                 onDismissRequest = cloud::dismissConflict,
                 title = { Text(desktopText("Sync conflict")) },
-                text = { Text(desktopText("Use newest cloud replaces this PC's data. Keep this PC publishes this PC's full dataset. Neither option merges individual records. Previous encrypted cloud versions are kept.")) },
+                text = { Text(desktopText("This PC and the cloud could not be merged automatically, for example because the cloud uses a different data password. Use newest cloud replaces this PC's data; Keep this PC uploads this PC's data. Previous encrypted cloud versions are kept.")) },
                 dismissButton = { TextButton(onClick = cloud::dismissConflict) { Text(desktopText("Cancel")) } },
                 confirmButton = {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -530,246 +526,6 @@ internal fun PageHeader(title: String, subtitle: String? = null) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 18.dp)) {
         Text(desktopText(title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         if (subtitle != null) Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-@Composable
-private fun TodoPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
-    val scope = rememberSafeCoroutineScope()
-    var editing by remember { mutableStateOf<TodoEntity?>(null) }
-    var adding by remember { mutableStateOf(false) }
-    var showCompleted by remember { mutableStateOf(false) }
-    var showFilters by remember { mutableStateOf(false) }
-    var query by remember { mutableStateOf("") }
-    var allCategories by remember { mutableStateOf(true) }
-    var selectedCategories by remember { mutableStateOf(emptySet<Long>()) }
-    var includeUncategorized by remember { mutableStateOf(false) }
-    var priorityFilter by remember { mutableStateOf<TodoPriority?>(null) }
-    var tagFilter by remember { mutableStateOf<String?>(null) }
-    var sortBy by remember { mutableStateOf(DesktopTodoSort.DEADLINE) }
-    var newCategory by remember { mutableStateOf(false) }
-    val includedCategoryIds = descendantCategoryIds(snapshot.categories, selectedCategories)
-    val filter = DesktopTodoFilter(allCategories, selectedCategories, includeUncategorized, priorityFilter, tagFilter, showCompleted)
-    val todos = snapshot.todos
-        .filter { it.deletedAt == null && (filter.showCompleted || it.completedAt == null) }
-        .filter { categoryMatches(it.categoryId, filter, includedCategoryIds) }
-        .filter { priorityFilter == null || it.priority == priorityFilter }
-        .filter { tagFilter == null || it.tagsCsv.split(',').any { tag -> tag.trim().equals(tagFilter, true) } }
-        .filter { query.isBlank() || it.title.contains(query, true) || it.description.contains(query, true) }
-        .sortedWith(compareBy<TodoEntity> { it.completedAt != null }.let { comparator ->
-            when (sortBy) {
-                DesktopTodoSort.DEADLINE -> comparator.thenBy { it.deadlineEpochDay ?: Long.MAX_VALUE }
-                DesktopTodoSort.PRIORITY -> comparator.thenByDescending { it.priority.ordinal }
-                DesktopTodoSort.TITLE -> comparator.thenBy { it.title.lowercase() }
-            }
-        })
-    Scaffold(
-        floatingActionButton = { FloatingActionButton(onClick = { adding = true }) { Icon(Icons.Default.Add, null) } },
-    ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
-            PageHeader("Todo", desktopActiveTasks(todos.count { it.completedAt == null }, LocalUiLanguage.current))
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                OutlinedTextField(query, { query = it }, label = { Text(desktopText("Search")) }, modifier = Modifier.weight(1f))
-                IconButton(onClick = { showFilters = !showFilters }) { Icon(Icons.Default.FilterAlt, desktopText("Filters")) }
-            }
-            if (showFilters) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(showCompleted, { showCompleted = it })
-                    Text(desktopText("Completed"))
-                    Spacer(Modifier.width(12.dp))
-                    Text(desktopText("Sort"), style = MaterialTheme.typography.labelLarge)
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.weight(1f)) {
-                        items(DesktopTodoSort.entries.toList(), key = { it.name }) { item ->
-                            FilterChipSimple(desktopText(desktopSortLabel(item)), sortBy == item) { sortBy = item }
-                        }
-                    }
-                }
-                LazyRow(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    item {
-                        FilterChipSimple(desktopText("All"), allCategories) {
-                            allCategories = true
-                            selectedCategories = emptySet()
-                            includeUncategorized = false
-                        }
-                    }
-                    item {
-                        FilterChipSimple(desktopText("Uncategorized"), !allCategories && includeUncategorized) {
-                            allCategories = false
-                            includeUncategorized = !includeUncategorized
-                        }
-                    }
-                    items(snapshot.categories, key = { it.id }) { category ->
-                        FilterChipSimple(categoryPath(category.id, snapshot), !allCategories && category.id in selectedCategories) {
-                            allCategories = false
-                            selectedCategories = if (category.id in selectedCategories) selectedCategories - category.id else selectedCategories + category.id
-                        }
-                    }
-                    item {
-                        FilterChipSimple(desktopText("Priority"), priorityFilter != null) {
-                            priorityFilter = if (priorityFilter == null) TodoPriority.MEDIUM else null
-                        }
-                    }
-                }
-                val tags = snapshot.todos.flatMap { it.tagsCsv.split(',') }.map(String::trim).filter(String::isNotBlank).distinct().sorted()
-                if (tags.isNotEmpty()) LazyRow(Modifier.fillMaxWidth().padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(tags) { tag -> FilterChipSimple("#${tag}", tagFilter == tag) { tagFilter = if (tagFilter == tag) null else tag } }
-                }
-                TextButton(onClick = { newCategory = true }, modifier = Modifier.padding(horizontal = 24.dp)) { Icon(Icons.Default.Add, null); Text(desktopText("Category")) }
-            }
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items(todos, key = { it.id }) { todo ->
-                    Card(Modifier.fillMaxWidth()) {
-                        Row(
-                            Modifier.fillMaxWidth().padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Checkbox(todo.completedAt != null, { scope.launch { store.toggleTodo(todo.id) } })
-                            Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
-                                Text(todo.title, fontWeight = FontWeight.SemiBold)
-                                if (todo.description.isNotBlank()) Text(
-                                    todo.description,
-                                    maxLines = 2,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                todo.deadlineEpochDay?.let {
-                                    Text(desktopDue(UserFormatting.formatDate(LocalDate.ofEpochDay(it), snapshot.settings.dateFormat, uiLocale(LocalUiLanguage.current)), LocalUiLanguage.current), style = MaterialTheme.typography.bodySmall)
-                                }
-                                AttachmentList(snapshot, AttachmentOwnerType.TODO, todo.id, store)
-                            }
-                            IconButton({ chooseAndAttach(scope, store, AttachmentOwnerType.TODO, todo.id) }) {
-                                Icon(Icons.Default.AttachFile, desktopText("Attach"))
-                            }
-                            IconButton({ editing = todo }) { Icon(Icons.Default.Edit, desktopText("Edit")) }
-                            IconButton({ scope.launch { store.deleteTodo(todo.id) } }) { Icon(Icons.Default.Delete, desktopText("Delete")) }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    if (adding || editing != null) {
-        TodoEditorDialog(
-            todo = editing,
-            snapshot = snapshot,
-            onDismiss = { adding = false; editing = null },
-            onDelete = editing?.let { todo ->
-                {
-                    scope.launch { store.deleteTodo(todo.id) }
-                    adding = false
-                    editing = null
-                }
-            },
-            onSave = { title, description, date, priority, categoryId, tags, completed ->
-                scope.launch {
-                    store.upsertTodo(
-                        editing?.id,
-                        title,
-                        description,
-                        date,
-                        priority,
-                        categoryId,
-                        tags,
-                        completed,
-                    )
-                }
-                adding = false
-                editing = null
-            },
-        )
-    }
-    if (newCategory) {
-        SimpleNameDialog(desktopText("New category"), { newCategory = false }) { name ->
-            scope.launch { store.addCategory(name, selectedCategories.firstOrNull()) }
-            newCategory = false
-        }
-    }
-}
-
-@Composable
-private fun TodoEditorDialog(
-    todo: TodoEntity?,
-    snapshot: BackupSnapshot,
-    onDismiss: () -> Unit,
-    onDelete: (() -> Unit)? = null,
-    onSave: (String, String, Long?, TodoPriority, Long?, String, Boolean) -> Unit,
-) {
-    var title by remember { mutableStateOf(todo?.title.orEmpty()) }
-    var description by remember { mutableStateOf(todo?.description.orEmpty()) }
-    var deadline by remember {
-        mutableStateOf(
-            todo?.deadlineEpochDay?.let {
-                LocalDate.ofEpochDay(it).format(DateTimeFormatter.ofPattern("M/d/yyyy", Locale.US))
-            }.orEmpty(),
-        )
-    }
-    var priority by remember { mutableStateOf(todo?.priority ?: TodoPriority.NONE) }
-    var categoryId by remember { mutableStateOf(todo?.categoryId) }
-    var tags by remember { mutableStateOf(todo?.tagsCsv.orEmpty()) }
-    var completed by remember { mutableStateOf(todo?.completedAt != null) }
-    var confirmDelete by remember { mutableStateOf(false) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(desktopText(if (todo == null) "New todo" else "Edit todo")) },
-        text = {
-            Column(Modifier.widthIn(max = 520.dp).fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(description, { description = it }, label = { Text(desktopText("Description")) }, modifier = Modifier.fillMaxWidth(), minLines = 3)
-                OutlinedTextField(title, { title = it }, label = { Text(desktopText("Title (optional)")) }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(deadline, { deadline = it }, label = { Text(desktopText("Deadline M/D/YYYY, M/D, or day (optional)")) }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(tags, { tags = it }, label = { Text(desktopText("Tags, comma separated (optional)")) }, modifier = Modifier.fillMaxWidth())
-                Text(desktopText("Category"))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    item { FilterChipSimple(desktopText("None"), categoryId == null) { categoryId = null } }
-                    items(snapshot.categories, key = { it.id }) { category ->
-                        FilterChipSimple(
-                            categoryPath(category.id, snapshot),
-                            categoryId == category.id,
-                        ) { categoryId = category.id }
-                    }
-                }
-                Text(desktopText("Priority"))
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    listOf(TodoPriority.NONE, TodoPriority.LOW, TodoPriority.MEDIUM, TodoPriority.HIGH).forEach { item ->
-                        FilterChipSimple(item.name.lowercase().replaceFirstChar(Char::uppercase), item == priority) { priority = item }
-                    }
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(completed, { completed = it })
-                    Text(desktopText("Done"))
-                }
-            }
-        },
-        dismissButton = {
-            Row {
-                if (onDelete != null) {
-                    TextButton(onClick = { confirmDelete = true }) {
-                        Text(desktopText("Delete"), color = MaterialTheme.colorScheme.error)
-                    }
-                }
-                TextButton(onClick = onDismiss) { Text(desktopText("Cancel")) }
-            }
-        },
-        confirmButton = {
-            val day = deadline.takeIf(String::isNotBlank)?.let { SmartDateParser.parse(it, LocalDate.now())?.toEpochDay() }
-            Button(enabled = description.isNotBlank() && (deadline.isBlank() || day != null), onClick = {
-                onSave(title, description, day, priority, categoryId, tags, completed)
-            }) { Text(desktopText("Save")) }
-        },
-    )
-    if (confirmDelete && onDelete != null) {
-        AlertDialog(
-            onDismissRequest = { confirmDelete = false },
-            title = { Text(desktopText("Delete this todo?")) },
-            text = { Text(todo?.title.orEmpty()) },
-            confirmButton = { TextButton(onClick = { confirmDelete = false; onDelete() }) { Text(desktopText("Delete")) } },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(desktopText("Cancel")) } },
-        )
     }
 }
 
@@ -1099,18 +855,7 @@ private fun CalendarPage(
         )
     }
     editingTodo?.let { todo ->
-        TodoEditorDialog(
-            todo,
-            snapshot,
-            { editingTodo = null },
-            onDelete = {
-                scope.launch { store.deleteTodo(todo.id) }
-                editingTodo = null
-            },
-        ) { title, description, day, priority, categoryId, tags, completed ->
-            scope.launch { store.upsertTodo(todo.id, title, description, day, priority, categoryId, tags, completed) }
-            editingTodo = null
-        }
+        TodoEditorWindow(snapshot, store, todo.id) { editingTodo = null }
     }
     editingLedger?.let { entry ->
         LedgerEditorDialog(entry, { editingLedger = null }) { type, cents, day, note, merchant, tags ->
@@ -1249,7 +994,7 @@ private fun NoteEditorDialog(note: NoteEntity?, folders: List<Pair<Long, String>
 }
 
 @Composable
-private fun SimpleNameDialog(title: String, onDismiss: () -> Unit, initial: String = "", onSave: (String) -> Unit) {
+internal fun SimpleNameDialog(title: String, onDismiss: () -> Unit, initial: String = "", onSave: (String) -> Unit) {
     var value by remember { mutableStateOf(initial) }
     AlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = { OutlinedTextField(value, { value = it }, label = { Text(desktopText("Name")) }) }, dismissButton = { TextButton(onClick = onDismiss) { Text(desktopText("Cancel")) } }, confirmButton = { Button(enabled = value.isNotBlank(), onClick = { onSave(value.trim()) }) { Text(desktopText("Save")) } })
 }
@@ -1633,7 +1378,7 @@ private fun GoogleConnectDialog(defaultClientId: String, onDismiss: () -> Unit, 
     AlertDialog(onDismissRequest = onDismiss, title = { Text(desktopText("Connect Google Drive")) }, text = { Column(Modifier.widthIn(max = 560.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) { Text(desktopText("A Google Cloud Desktop OAuth client from the same project as the Android app is required for this open-source build. Sign-in opens in your system browser.")); OutlinedTextField(clientId, { clientId = it.trim() }, label = { Text(desktopText("Desktop OAuth client ID")) }, modifier = Modifier.fillMaxWidth()); OutlinedTextField(secret, { secret = it }, label = { Text(desktopText("Desktop OAuth client secret")) }, modifier = Modifier.fillMaxWidth(), visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(), trailingIcon = { IconButton({ visible = !visible }) { Icon(if (visible) Icons.Default.VisibilityOff else Icons.Default.Visibility, null) } }); Text(desktopText("Google requires the client secret for Desktop clients. It is protected by Windows DPAPI and is application configuration, not a replacement for PKCE."), style = MaterialTheme.typography.bodySmall) } }, dismissButton = { TextButton(onClick = onDismiss) { Text(desktopText("Cancel")) } }, confirmButton = { Button(enabled = clientId.endsWith(".apps.googleusercontent.com") && secret.isNotBlank(), onClick = { val transferred = secret.toCharArray(); secret = ""; onConnect(clientId, transferred) }) { Text(desktopText("Open Google sign-in")) } })
 }
 
-private fun chooseAndAttach(scope: kotlinx.coroutines.CoroutineScope, store: DesktopDataStore, ownerType: AttachmentOwnerType, ownerId: Long) {
+internal fun chooseAndAttach(scope: kotlinx.coroutines.CoroutineScope, store: DesktopDataStore, ownerType: AttachmentOwnerType, ownerId: Long) {
     scope.launch {
         val chooser = JFileChooser()
         val selected = chooser.takeIf { it.showOpenDialog(null) == JFileChooser.APPROVE_OPTION }?.selectedFile
@@ -1642,14 +1387,15 @@ private fun chooseAndAttach(scope: kotlinx.coroutines.CoroutineScope, store: Des
 }
 
 @Composable
-private fun AttachmentList(
+internal fun AttachmentList(
     snapshot: BackupSnapshot,
     ownerType: AttachmentOwnerType,
     ownerId: Long,
     store: DesktopDataStore,
 ) {
     val scope = rememberSafeCoroutineScope()
-    val attachments = snapshot.attachments.filter { it.ownerType == ownerType && it.ownerId == ownerId }
+    // Attachments waiting for removal after a delete are not shown.
+    val attachments = snapshot.attachments.filter { it.ownerType == ownerType && it.ownerId == ownerId && it.pendingDeleteAt == null }
     attachments.forEach { attachment ->
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -1685,7 +1431,7 @@ private fun AttachmentList(
     }
 }
 
-private fun categoryPath(categoryId: Long, snapshot: BackupSnapshot): String {
+internal fun categoryPath(categoryId: Long, snapshot: BackupSnapshot): String {
     val byId = snapshot.categories.associateBy { it.id }
     val path = mutableListOf<String>()
     val visited = mutableSetOf<Long>()

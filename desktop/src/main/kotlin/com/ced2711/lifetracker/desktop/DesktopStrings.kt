@@ -249,3 +249,25 @@ fun desktopText(text: String): String = desktopText(text, LocalUiLanguage.curren
 
 /** User-authored values must bypass the UI label dictionary, even if they match a built-in label. */
 fun desktopUserText(text: String): String = text
+
+fun desktopCompletedCount(count: Int, language: UiLanguage): String = when (language) {
+    UiLanguage.ENGLISH -> "Completed ($count)"
+    UiLanguage.SIMPLIFIED_CHINESE -> "已完成（$count）"
+}
+
+fun desktopOpenSubtasks(count: Int, language: UiLanguage): String = when (language) {
+    UiLanguage.ENGLISH -> if (count == 1) "1 subtask is not done yet. Complete it too?" else "$count subtasks are not done yet. Complete them too?"
+    UiLanguage.SIMPLIFIED_CHINESE -> "还有 $count 个子任务没完成。要一起完成吗？"
+}
+
+fun desktopReminderMinutes(minutes: Long, language: UiLanguage): String {
+    val (amount, unitEn, unitZh) = when {
+        minutes % 1_440L == 0L -> Triple(minutes / 1_440L, "day", "天")
+        minutes % 60L == 0L -> Triple(minutes / 60L, "hour", "小时")
+        else -> Triple(minutes, "min", "分钟")
+    }
+    return when (language) {
+        UiLanguage.ENGLISH -> "$amount $unitEn${if (amount != 1L && unitEn != "min") "s" else ""} before"
+        UiLanguage.SIMPLIFIED_CHINESE -> "提前 $amount $unitZh"
+    }
+}
