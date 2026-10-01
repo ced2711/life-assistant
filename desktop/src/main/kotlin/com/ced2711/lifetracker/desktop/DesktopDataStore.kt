@@ -195,6 +195,29 @@ class DesktopDataStore(
         }
     }
 
+    /** Writes the current data to [destination], encrypted with a separate backup [backupPassword]. */
+    suspend fun exportWithPassword(destination: File, backupPassword: CharArray): Boolean = mutex.withLock {
+        withContext(ioDispatcher) {
+            val snapshot = currentSnapshot() ?: return@withContext false
+            val temporary = File(destination.absoluteFile.parentFile, "${destination.name}.part")
+            try {
+                temporary.outputStream().buffered().use { output ->
+                    BackupCrypto.encrypt(
+                        snapshot,
+                        backupPassword.copyOf(),
+                        output,
+                        BackupAttachmentSource { attachment -> attachmentFiles[attachment.id]?.inputStream() ?: error("Attachment ${attachment.id} is missing") },
+                    )
+                }
+                replaceFile(temporary, destination)
+                true
+            } finally {
+                backupPassword.fill('\u0000')
+                if (temporary.exists()) temporary.delete()
+            }
+        }
+    }
+
     /** Opens a backup only to show what it contains; null when the password is wrong or it is damaged. */
     suspend fun previewEncrypted(source: File, sourcePassword: CharArray): BackupSnapshot? = mutex.withLock {
         withContext(ioDispatcher) {

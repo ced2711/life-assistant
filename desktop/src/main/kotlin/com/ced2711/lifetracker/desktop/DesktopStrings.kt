@@ -11,6 +11,13 @@ import com.ced2711.lifetracker.ui.localization.translateUiText
  * Shared Android translations win whenever a label is already known there.
  */
 private val desktopSimplifiedChinese = mapOf(
+    "Export failed." to "导出失败。",
+    "Lock with my data password" to "用我的数据密码加密",
+    "Lock with a separate backup password" to "用单独的备份密码加密",
+    "Backup password" to "备份密码",
+    "Confirm password" to "确认密码",
+    "At least 8 characters. Nobody can recover it for you." to "至少 8 个字符。任何人都无法帮你找回它。",
+    "Choose where to save" to "选择保存位置",
     "Checking…" to "正在检查…",
     "Review backup" to "查看备份内容",
     "Replace this PC's data with the backup?" to "用备份替换这台电脑的数据？",

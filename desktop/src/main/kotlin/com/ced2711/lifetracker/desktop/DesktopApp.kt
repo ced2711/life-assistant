@@ -598,6 +598,7 @@ private fun SettingsPage(
         else gitHubDialog = true
     }
     var importCandidate by remember { mutableStateOf<File?>(null) }
+    var exportDialog by remember { mutableStateOf(false) }
     // Second step of an import: what the backup holds, shown before anything is replaced.
     var importPreview by remember { mutableStateOf<Pair<File, BackupSnapshot>?>(null) }
     var importPreviewPassword by remember { mutableStateOf<CharArray?>(null) }
@@ -749,21 +750,7 @@ private fun SettingsPage(
                 Text(desktopText("Encrypted backup"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text(desktopText("The .tlb file includes todos, ledger entries, notes, Vault entries, and attached files. Manual import can migrate an older Android backup password to this PC's current data password."))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = {
-                        val chooser = JFileChooser().apply { selectedFile = File("LifeAssistant-backup.tlb") }
-                        val destination = chooser.takeIf {
-                            it.showSaveDialog(null) == JFileChooser.APPROVE_OPTION
-                        }?.selectedFile
-                        if (destination != null) scope.launch {
-                            val upload = dataStore.createUploadSnapshot()
-                            try {
-                                withContext(Dispatchers.IO) { upload.file.copyTo(destination, overwrite = true) }
-                                backupMessage = desktopText("Encrypted backup exported.", language)
-                            } finally {
-                                upload.file.delete()
-                            }
-                        }
-                    }) { Text(desktopText("Export backup")) }
+                    OutlinedButton(onClick = { exportDialog = true }) { Text(desktopText("Export backup")) }
                     OutlinedButton(onClick = {
                         val chooser = JFileChooser()
                         importCandidate = chooser.takeIf {
@@ -869,6 +856,32 @@ private fun SettingsPage(
                         }
                     }
                 }) { Text(desktopText(if (importChecking) "Checking…" else "Review backup")) }
+            },
+        )
+    }
+    if (exportDialog) {
+        ExportBackupDialog(
+            onDismiss = { exportDialog = false },
+            onExport = { backupPassword ->
+                exportDialog = false
+                val chooser = JFileChooser().apply { selectedFile = File("LifeAssistant-backup.tlb") }
+                val destination = chooser.takeIf { it.showSaveDialog(null) == JFileChooser.APPROVE_OPTION }?.selectedFile
+                if (destination == null) {
+                    backupPassword?.fill('\u0000')
+                } else scope.launch {
+                    if (backupPassword != null) {
+                        val done = dataStore.exportWithPassword(destination, backupPassword)
+                        backupMessage = desktopText(if (done) "Encrypted backup exported." else "Export failed.", language)
+                    } else {
+                        val upload = dataStore.createUploadSnapshot()
+                        try {
+                            withContext(Dispatchers.IO) { upload.file.copyTo(destination, overwrite = true) }
+                            backupMessage = desktopText("Encrypted backup exported.", language)
+                        } finally {
+                            upload.file.delete()
+                        }
+                    }
+                }
             },
         )
     }
@@ -1096,3 +1109,42 @@ private val AppLockTimeout.desktopLabel: String
         AppLockTimeout.ONE_MINUTE -> "After 1 minute"
         AppLockTimeout.FIVE_MINUTES -> "After 5 minutes"
     }
+
+/** Chooses how an exported backup is locked: with the data password, or with its own password. */
+@Composable
+private fun ExportBackupDialog(onDismiss: () -> Unit, onExport: (CharArray?) -> Unit) {
+    var separate by remember { mutableStateOf(false) }
+    var password by remember { mutableStateOf("") }
+    var confirmation by remember { mutableStateOf("") }
+    val valid = !separate || (password.length >= 8 && password == confirmation)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(desktopText("Export backup")) },
+        text = {
+            Column(Modifier.widthIn(max = 520.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(!separate, { separate = false })
+                    Text(desktopText("Lock with my data password"))
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(separate, { separate = true })
+                    Text(desktopText("Lock with a separate backup password"))
+                }
+                if (separate) {
+                    OutlinedTextField(password, { password = it }, label = { Text(desktopText("Backup password")) }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(confirmation, { confirmation = it }, label = { Text(desktopText("Confirm password")) }, singleLine = true, visualTransformation = PasswordVisualTransformation(), isError = confirmation.isNotEmpty() && confirmation != password, modifier = Modifier.fillMaxWidth())
+                    Text(desktopText("At least 8 characters. Nobody can recover it for you."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(desktopText("Cancel")) } },
+        confirmButton = {
+            Button(enabled = valid, onClick = {
+                val chosen = if (separate) password.toCharArray() else null
+                password = ""
+                confirmation = ""
+                onExport(chosen)
+            }) { Text(desktopText("Choose where to save")) }
+        },
+    )
+}

@@ -18,6 +18,23 @@ import org.junit.Test
 
 class DesktopDataStoreTest {
     @Test
+    fun exportWithASeparatePasswordOpensOnlyWithThatPassword() = runBlocking {
+        val root = Files.createTempDirectory("life-tracker-desktop-export").toFile()
+        try {
+            val store = DesktopDataStore(root.resolve("app"))
+            assertTrue(store.open(testPassword()))
+            assertTrue(store.addCategory("Exported"))
+            val file = root.resolve("backup.tlb")
+            assertTrue(store.exportWithPassword(file, "separate-backup-1".toCharArray()))
+            assertEquals(listOf("Exported"), store.previewEncrypted(file, "separate-backup-1".toCharArray())?.categories?.map { it.name })
+            assertNull(store.previewEncrypted(file, testPassword()))
+            store.close()
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun encryptedRoundTripKeepsRecordsAndAttachmentBytes() = runBlocking {
         val root = Files.createTempDirectory("life-tracker-desktop-test").toFile()
         val password = testPassword()
