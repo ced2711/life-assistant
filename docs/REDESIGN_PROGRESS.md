@@ -28,3 +28,17 @@ Branch `feat/2.0-redesign`. Nothing is published until the user has tried the bu
 - Never drop a feature: check against the inventory kept by the assistant (Android and desktop feature lists) before replacing a screen.
 - Every new English UI string needs a Chinese translation in `ui/localization/UiLocalization.kt`; `DesktopTranslationCoverageTest` enforces it for desktop.
 - No Claude attribution in commits; commit as the user.
+
+## Status when the session paused (2026-10-02, usage limit)
+
+- Android screen rewrites were running in three git worktrees (Ledger, Calendar, Notes + Diary + Confessional).
+  Each was told to commit its work in progress on its own branch; list them with `git worktree list` and `git branch`.
+  They are not merged and may not compile yet. Finish each against `docs/ANDROID_REDESIGN_BRIEF.md`, then merge.
+- Android Todo screen: old code read, design decided, nothing written yet. Plan: split `ui/todo/TodoScreen.kt` into
+  `TodoUiOperationsViewModel.kt` (unchanged logic), a thin `TodoScreen`, a stateless `TodoContent` (momentum line,
+  quick add, view pills All/Today/Next 7 days/Overdue/No date, search and a filter sheet, rows grouped by deadline,
+  swipe to delete with Undo, completed section, FAB "New task"), and an editor form used in `EditorSheet` on phones
+  and inline as the right pane when `isWide`. Update the two instrumented tests that look for "New task" and "Description *".
+- Not started: Vault, Settings + Backup & sync (with the daily backups list) + app lock screen.
+- `ScreenRenderTest.tabletLandscape` (1280x800) was added: it is the only render device where `isWide` is true.
+- After that: review passes on every device, instrumented tests on a headless emulator, then step 8 (version 2.0.0, builds).
