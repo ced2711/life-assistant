@@ -482,6 +482,7 @@ class MainActivity : FragmentActivity() {
                                     TopLevelDestination.TODAY -> com.ced2711.lifetracker.ui.today.TodayScreen(
                                         viewModel = viewModel,
                                         modifier = Modifier.fillMaxSize(),
+                                        isWide = isWide,
                                         showLedger = TopLevelDestination.LEDGER in visibleDestinations,
                                         showDiary = TopLevelDestination.DIARY in visibleDestinations,
                                         showNotes = TopLevelDestination.NOTES in visibleDestinations,

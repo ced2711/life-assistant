@@ -621,7 +621,7 @@ internal fun BackupContent(
     }
 
     BoxWithConstraints(modifier.fillMaxSize()) {
-        val twoColumns = maxWidth >= 840.dp
+        val twoColumns = maxWidth >= 700.dp
         Box(Modifier.fillMaxSize().verticalScroll(scrollState)) {
             ReadableWidth(maxWidth = if (twoColumns) 1120.dp else 760.dp) {
                 GroupColumns(

@@ -8,7 +8,7 @@ import com.ced2711.lifetracker.ui.today.TodayContent
 
 /** Scenes of the Shell screens for ScreenRenderTest; see RenderScene. */
 internal val shellScenes: List<RenderScene> = listOf(
-    RenderScene("today", TopLevelDestination.TODAY) {
+    RenderScene("today", TopLevelDestination.TODAY) { isWide ->
         TodayContent(
             overview = TodayOverview.of(RenderSamples.todos, RenderSamples.ledger, RenderSamples.today),
             settings = RenderSamples.settings,
@@ -18,6 +18,7 @@ internal val shellScenes: List<RenderScene> = listOf(
             showDiary = true,
             showNotes = true,
             modifier = Modifier.fillMaxSize(),
+            isWide = isWide,
             onToggle = { _, _, _ -> },
             subtasksByTodo = RenderSamples.subtasksByTodo,
             onAdd = {},
@@ -27,7 +28,7 @@ internal val shellScenes: List<RenderScene> = listOf(
             onOpenNote = {},
         )
     },
-    RenderScene("today-empty", TopLevelDestination.TODAY) {
+    RenderScene("today-empty", TopLevelDestination.TODAY) { isWide ->
         TodayContent(
             overview = TodayOverview.of(emptyList(), emptyList(), RenderSamples.today),
             settings = RenderSamples.settings,
@@ -37,6 +38,7 @@ internal val shellScenes: List<RenderScene> = listOf(
             showDiary = false,
             showNotes = true,
             modifier = Modifier.fillMaxSize(),
+            isWide = isWide,
             onToggle = { _, _, _ -> },
             subtasksByTodo = emptyMap(),
             onAdd = {},

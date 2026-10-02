@@ -28,7 +28,9 @@ import com.ced2711.lifetracker.domain.model.ThemeMode
 import com.ced2711.lifetracker.domain.model.TopLevelDestination
 import com.ced2711.lifetracker.domain.model.UiLanguage
 import com.ced2711.lifetracker.ui.adaptive.AdaptiveTaskLedgerScaffold
+import com.ced2711.lifetracker.ui.adaptive.LocalSafePaneLayout
 import com.ced2711.lifetracker.ui.adaptive.TopBarSyncStatus
+import com.ced2711.lifetracker.ui.adaptive.usesWideFeatureLayout
 import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
 import com.ced2711.lifetracker.domain.model.TodayOverview
 import com.ced2711.lifetracker.ui.theme.TaskLedgerTheme
@@ -85,6 +87,11 @@ class ScreenRenderTest {
     @Config(qualifiers = "w1280dp-h800dp-land-xhdpi")
     fun tabletLandscape() = render("tabletLandscape")
 
+    /** Two screens with a gap between them: the only kind of fold that splits the app into panes. */
+    @Test
+    @Config(qualifiers = "w841dp-h701dp-xhdpi")
+    fun dualScreen() = render("dualScreen", fold = FoldingFeature.Orientation.VERTICAL, gap = true)
+
     /** An unfolded book-style foldable held half open: the hinge runs top to bottom. */
     @Test
     @Config(qualifiers = "w841dp-h701dp-xhdpi")
@@ -99,7 +106,7 @@ class ScreenRenderTest {
     @Config(qualifiers = "w411dp-h891dp-xhdpi", fontScale = 1.5f)
     fun largeFont() = render("largeFont")
 
-    private fun render(device: String, fold: FoldingFeature.Orientation? = null) {
+    private fun render(device: String, fold: FoldingFeature.Orientation? = null, gap: Boolean = false) {
         assumeTrue(output != null)
         val scenes = allRenderScenes.filter { only == null || it.name.contains(only, ignoreCase = true) }
         assumeTrue(scenes.isNotEmpty())
@@ -114,9 +121,9 @@ class ScreenRenderTest {
                             val width = with(density) { maxWidth.roundToPx() }
                             val height = with(density) { maxHeight.roundToPx() }
                             if (orientation == FoldingFeature.Orientation.VERTICAL) {
-                                FakeFold(Rect(width / 2, 0, width / 2, height), orientation)
+                                FakeFold(Rect(width / 2 - if (gap) 16 else 0, 0, width / 2 + if (gap) 16 else 0, height), orientation, gap)
                             } else {
-                                FakeFold(Rect(0, height / 2, width, height / 2), orientation)
+                                FakeFold(Rect(0, height / 2, width, height / 2), orientation, gap)
                             }
                         }
                         AdaptiveTaskLedgerScaffold(
@@ -134,7 +141,7 @@ class ScreenRenderTest {
                             },
                         ) { padding ->
                             BoxWithConstraints(Modifier.fillMaxSize().padding(padding)) {
-                                scene.content(maxWidth >= 840.dp)
+                                scene.content(usesWideFeatureLayout(maxWidth, LocalSafePaneLayout.current))
                             }
                         }
                     }
@@ -167,9 +174,9 @@ class ScreenRenderTest {
     }
 
     /** A hinge without width across the middle of the window, half opened. */
-    private class FakeFold(override val bounds: Rect, override val orientation: FoldingFeature.Orientation) : FoldingFeature {
+    private class FakeFold(override val bounds: Rect, override val orientation: FoldingFeature.Orientation, gap: Boolean) : FoldingFeature {
         override val isSeparating = true
-        override val occlusionType = FoldingFeature.OcclusionType.NONE
+        override val occlusionType = if (gap) FoldingFeature.OcclusionType.FULL else FoldingFeature.OcclusionType.NONE
         override val state = FoldingFeature.State.HALF_OPENED
     }
 }

@@ -793,7 +793,12 @@ private fun calculateSafePaneLayout(
     foldingFeature: FoldingFeature?,
     density: Density,
 ): SafePaneLayout {
-    if (foldingFeature == null || !foldingFeature.isSeparating) {
+    // A flexible screen that is half folded is still one screen: the whole of it is used, as on a
+    // tablet. Only a hinge that hides part of the window (two screens with a gap) splits the app
+    // into panes.
+    if (foldingFeature == null || !foldingFeature.isSeparating ||
+        foldingFeature.occlusionType != FoldingFeature.OcclusionType.FULL
+    ) {
         return SafePaneLayout.singlePane(availableWidth, availableHeight)
     }
 

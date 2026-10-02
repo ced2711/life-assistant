@@ -540,7 +540,7 @@ internal fun LedgerContent(
     }
 
     BoxWithConstraints(modifier.fillMaxSize()) {
-        val twoPane = isWide && maxWidth >= 720.dp
+        val twoPane = isWide && maxWidth >= 700.dp
         val sideWidth: Dp = (maxWidth * 0.42f).coerceIn(340.dp, 480.dp)
         val newEntry = { onNewEntry(newLedgerDraft()) }
         Scaffold(

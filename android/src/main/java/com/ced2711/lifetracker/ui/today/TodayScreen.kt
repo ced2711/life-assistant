@@ -1,7 +1,11 @@
 package com.ced2711.lifetracker.ui.today
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -68,6 +72,7 @@ import java.time.format.TextStyle
 fun TodayScreen(
     viewModel: TaskLedgerViewModel,
     modifier: Modifier = Modifier,
+    isWide: Boolean = false,
     showLedger: Boolean,
     showDiary: Boolean,
     showNotes: Boolean,
@@ -94,6 +99,7 @@ fun TodayScreen(
         showDiary = showDiary,
         showNotes = showNotes,
         modifier = modifier,
+        isWide = isWide,
         onToggle = { todo, done, withSubtasks ->
             if (done) viewModel.completeTodo(todo.id, withSubtasks) else viewModel.restoreTodo(todo.id)
         },
@@ -124,6 +130,7 @@ internal fun TodayContent(
     showDiary: Boolean,
     showNotes: Boolean,
     modifier: Modifier = Modifier,
+    isWide: Boolean = false,
     onToggle: (TodoEntity, Boolean, Boolean) -> Unit,
     subtasksByTodo: Map<Long, List<com.ced2711.lifetracker.data.local.SubtaskEntity>>,
     onAdd: (String) -> Unit,
@@ -172,64 +179,10 @@ internal fun TodayContent(
         )
     }
 
-    LazyColumn(
-        modifier,
-        contentPadding = PaddingValues(start = Space.xs, end = Space.xs, top = Space.xs, bottom = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(Space.xs),
-    ) {
-        item {
-            Column(Modifier.padding(horizontal = Space.md), verticalArrangement = Arrangement.spacedBy(Space.md)) {
-                // The top bar names the page; this line says what kind of day it is.
-                Text(subtitle(overview, language), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                val total = overview.completedToday.size + overview.dueToday.size + overview.overdue.size
-                if (total > 0) ProgressLine(overview.progress)
-                LifeTextField(
-                    value = quick,
-                    onValueChange = { quick = it },
-                    placeholder = localizedText("Add a todo for today"),
-                    leadingIcon = Icons.Rounded.Add,
-                    modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = {
-                        quick.trim().takeIf(String::isNotEmpty)?.let(onAdd)
-                        quick = ""
-                    }),
-                )
-            }
-        }
-        if (overview.overdue.isNotEmpty()) {
-            item { SectionLabel(localizedText("Overdue"), Modifier.padding(horizontal = Space.md), count = overview.overdue.size, color = LifeTheme.colors.danger) }
-            overview.overdue.forEach { todo -> item(key = "o${todo.id}") { todoRow(todo, showDate = true) } }
-        }
-        item { SectionLabel(localizedText("Today"), Modifier.padding(horizontal = Space.md), count = overview.dueToday.size) }
-        if (overview.dueToday.isEmpty()) {
-            item {
-                Text(
-                    localizedText(if (overview.completedToday.isEmpty()) "Nothing due today." else "Everything due today is done."),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = Space.md + Space.md, vertical = Space.sm),
-                )
-            }
-        }
-        overview.dueToday.forEach { todo -> item(key = "t${todo.id}") { todoRow(todo, showDate = false) } }
-        if (overview.upcoming.isNotEmpty()) {
-            item { SectionLabel(localizedText("Next 7 days"), Modifier.padding(horizontal = Space.md), count = overview.upcoming.size) }
-            overview.upcoming.take(6).forEach { todo -> item(key = "u${todo.id}") { todoRow(todo, showDate = true) } }
-        }
-        if (overview.completedToday.isNotEmpty()) {
-            item {
-                SectionLabel(
-                    localizedText("Done today"),
-                    Modifier.padding(start = Space.md),
-                    count = overview.completedToday.size,
-                    trailing = { TextButton(onClick = { showDone = !showDone }) { Text(localizedText(if (showDone) "Hide" else "Show")) } },
-                )
-            }
-            if (showDone) overview.completedToday.forEach { todo -> item(key = "d${todo.id}") { todoRow(todo, showDate = false) } }
-        }
+    // Money, diary and pinned notes: under the todos on a phone, beside them on a wide screen.
+    val panels: @Composable () -> Unit = {
+        Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
         if (showLedger) {
-            item {
                 Spacer(Modifier.height(Space.sm))
                 Panel(Modifier.padding(horizontal = Space.md), padding = PaddingValues(Space.lg)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -253,10 +206,8 @@ internal fun TodayContent(
                         )
                     }
                 }
-            }
         }
         if (showDiary) {
-            item {
                 Panel(Modifier.padding(horizontal = Space.md), padding = PaddingValues(Space.lg)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Rounded.AutoStories, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
@@ -271,10 +222,8 @@ internal fun TodayContent(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-            }
         }
         if (showNotes && pinnedNotes.isNotEmpty()) {
-            item {
                 Panel(Modifier.padding(horizontal = Space.md), padding = PaddingValues(vertical = Space.sm)) {
                     Row(Modifier.padding(horizontal = Space.lg, vertical = Space.xs), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Rounded.PushPin, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
@@ -284,8 +233,77 @@ internal fun TodayContent(
                         ListRow(title = note.title, supporting = note.body.replace('\n', ' ').take(80).ifBlank { null }, maxTitleLines = 1, onClick = { onOpenNote(note.id) })
                     }
                 }
-            }
         }
+        }
+    }
+
+    val todos: @Composable (Modifier, Boolean) -> Unit = { listModifier, withPanels ->
+        LazyColumn(
+            listModifier,
+            contentPadding = PaddingValues(start = Space.xs, end = Space.xs, top = Space.xs, bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(Space.xs),
+        ) {
+            item {
+                Column(Modifier.padding(horizontal = Space.md), verticalArrangement = Arrangement.spacedBy(Space.md)) {
+                    // The top bar names the page; this line says what kind of day it is.
+                    Text(subtitle(overview, language), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    val total = overview.completedToday.size + overview.dueToday.size + overview.overdue.size
+                    if (total > 0) ProgressLine(overview.progress)
+                    LifeTextField(
+                        value = quick,
+                        onValueChange = { quick = it },
+                        placeholder = localizedText("Add a todo for today"),
+                        leadingIcon = Icons.Rounded.Add,
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = {
+                            quick.trim().takeIf(String::isNotEmpty)?.let(onAdd)
+                            quick = ""
+                        }),
+                    )
+                }
+            }
+            if (overview.overdue.isNotEmpty()) {
+                item { SectionLabel(localizedText("Overdue"), Modifier.padding(horizontal = Space.md), count = overview.overdue.size, color = LifeTheme.colors.danger) }
+                overview.overdue.forEach { todo -> item(key = "o${todo.id}") { todoRow(todo, showDate = true) } }
+            }
+            item { SectionLabel(localizedText("Today"), Modifier.padding(horizontal = Space.md), count = overview.dueToday.size) }
+            if (overview.dueToday.isEmpty()) {
+                item {
+                    Text(
+                        localizedText(if (overview.completedToday.isEmpty()) "Nothing due today." else "Everything due today is done."),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = Space.md + Space.md, vertical = Space.sm),
+                    )
+                }
+            }
+            overview.dueToday.forEach { todo -> item(key = "t${todo.id}") { todoRow(todo, showDate = false) } }
+            if (overview.upcoming.isNotEmpty()) {
+                item { SectionLabel(localizedText("Next 7 days"), Modifier.padding(horizontal = Space.md), count = overview.upcoming.size) }
+                overview.upcoming.take(6).forEach { todo -> item(key = "u${todo.id}") { todoRow(todo, showDate = true) } }
+            }
+            if (overview.completedToday.isNotEmpty()) {
+                item {
+                    SectionLabel(
+                        localizedText("Done today"),
+                        Modifier.padding(start = Space.md),
+                        count = overview.completedToday.size,
+                        trailing = { TextButton(onClick = { showDone = !showDone }) { Text(localizedText(if (showDone) "Hide" else "Show")) } },
+                    )
+                }
+                if (showDone) overview.completedToday.forEach { todo -> item(key = "d${todo.id}") { todoRow(todo, showDate = false) } }
+            }
+            if (withPanels) item { panels() }
+        }
+    }
+    if (isWide) {
+        Row(modifier) {
+            todos(Modifier.weight(1f).fillMaxHeight(), false)
+            Box(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(top = Space.xs, end = Space.xs, bottom = 32.dp)) { panels() }
+        }
+    } else {
+        todos(modifier, true)
     }
 
     completing?.let { todo ->
