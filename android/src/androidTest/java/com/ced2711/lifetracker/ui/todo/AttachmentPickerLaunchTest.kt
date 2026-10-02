@@ -25,7 +25,7 @@ class AttachmentPickerLaunchTest {
     fun todoAttachmentPickerLaunchesFromFragmentActivity() {
         awaitMainNavigation()
         composeRule.onNodeWithContentDescription("Todo").performClick()
-        composeRule.onNodeWithText("New task").performScrollTo().performClick()
+        composeRule.onNodeWithContentDescription("New task").performClick()
         composeRule.onNodeWithText("Add files (0/10)").performScrollTo().performClick()
 
         val instrumentation = InstrumentationRegistry.getInstrumentation()

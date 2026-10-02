@@ -31,6 +31,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -75,48 +77,92 @@ fun EditorSheet(
     modifier: Modifier = Modifier,
     actionEnabled: Boolean = true,
     working: Boolean = false,
+    snackbarHostState: SnackbarHostState? = null,
     footer: (@Composable RowScope.() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    HingeSafeDialog(onDismissRequest = onClose) {
+    HingeSafeDialog(onDismissRequest = { if (!working) onClose() }) {
         Surface(
             modifier = modifier.hingeSafeDialogSurface(maxWidth = 720.dp, widthFraction = 1f, heightFraction = 1f),
             color = MaterialTheme.colorScheme.background,
             shape = MaterialTheme.shapes.extraLarge,
         ) {
-            Column(Modifier.fillMaxSize().imePadding()) {
-                Row(Modifier.fillMaxWidth().height(60.dp).padding(horizontal = Space.xs), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onClose, enabled = !working) { Icon(Icons.Rounded.Close, localizedText("Close")) }
-                    Text(
-                        title,
-                        style = MaterialTheme.typography.titleLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f).padding(horizontal = Space.xs).semantics { heading() },
-                    )
-                    Button(onClick = onAction, enabled = actionEnabled && !working, modifier = Modifier.padding(end = Space.sm)) {
-                        if (working) {
-                            CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
-                        } else {
-                            Text(actionLabel)
-                        }
+            EditorFrame(title, onClose, actionLabel, onAction, Modifier.imePadding(), actionEnabled, working, snackbarHostState, footer, content)
+        }
+    }
+}
+
+/**
+ * The same editor as [EditorSheet], but placed in the page instead of over it: the right pane of a
+ * two-pane layout on tablets and unfolded foldables.
+ */
+@Composable
+fun EditorPane(
+    title: String,
+    onClose: () -> Unit,
+    actionLabel: String,
+    onAction: () -> Unit,
+    modifier: Modifier = Modifier,
+    actionEnabled: Boolean = true,
+    working: Boolean = false,
+    snackbarHostState: SnackbarHostState? = null,
+    footer: (@Composable RowScope.() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Surface(modifier = modifier, color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.extraLarge) {
+        EditorFrame(title, onClose, actionLabel, onAction, Modifier, actionEnabled, working, snackbarHostState, footer, content)
+    }
+}
+
+@Composable
+private fun EditorFrame(
+    title: String,
+    onClose: () -> Unit,
+    actionLabel: String,
+    onAction: () -> Unit,
+    modifier: Modifier,
+    actionEnabled: Boolean,
+    working: Boolean,
+    snackbarHostState: SnackbarHostState?,
+    footer: (@Composable RowScope.() -> Unit)?,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Box(modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize()) {
+            Row(Modifier.fillMaxWidth().height(60.dp).padding(horizontal = Space.xs), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onClose, enabled = !working) { Icon(Icons.Rounded.Close, localizedText("Close")) }
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f).padding(horizontal = Space.xs).semantics { heading() },
+                )
+                Button(onClick = onAction, enabled = actionEnabled && !working, modifier = Modifier.padding(end = Space.sm)) {
+                    if (working) {
+                        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                    } else {
+                        Text(actionLabel)
                     }
                 }
-                Column(
-                    Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = Space.lg, vertical = Space.sm),
-                    verticalArrangement = Arrangement.spacedBy(Space.sm),
-                    content = content,
-                )
-                if (footer != null) {
-                    Box(Modifier.fillMaxWidth().height(1.dp).background(LifeTheme.colors.divider))
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = Space.md, vertical = Space.sm),
-                        horizontalArrangement = Arrangement.spacedBy(Space.sm),
-                        verticalAlignment = Alignment.CenterVertically,
-                        content = footer,
-                    )
-                }
             }
+            Column(
+                Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = Space.lg, vertical = Space.sm),
+                verticalArrangement = Arrangement.spacedBy(Space.sm),
+                content = content,
+            )
+            if (footer != null) {
+                Box(Modifier.fillMaxWidth().height(1.dp).background(LifeTheme.colors.divider))
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = Space.md, vertical = Space.sm),
+                    horizontalArrangement = Arrangement.spacedBy(Space.sm),
+                    verticalAlignment = Alignment.CenterVertically,
+                    content = footer,
+                )
+            }
+        }
+        if (snackbarHostState != null) {
+            SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter).padding(bottom = if (footer != null) 64.dp else Space.sm))
         }
     }
 }

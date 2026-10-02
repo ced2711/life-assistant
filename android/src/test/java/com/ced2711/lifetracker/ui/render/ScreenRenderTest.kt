@@ -1,6 +1,7 @@
 package com.ced2711.lifetracker.ui.render
 
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Rect
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -13,10 +14,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onLast
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.unit.dp
 import androidx.window.layout.FoldingFeature
 import com.ced2711.lifetracker.data.cloud.CloudSyncIndicator
@@ -139,7 +141,20 @@ class ScreenRenderTest {
             index = position
             compose.waitForIdle()
             // A scene that opens a dialog (an editor, a confirmation) is drawn in the last window.
-            val image = compose.onAllNodes(isRoot()).onLast().captureToImage().asAndroidBitmap()
+            val roots = compose.onAllNodes(isRoot())
+            val image = roots.onFirst().captureToImage().asAndroidBitmap().copy(Bitmap.Config.ARGB_8888, true)
+            // A scene that opens a dialog (an editor, a confirmation) has more windows: draw each
+            // over the page, dimmed as on a device. captureToImage only sees the first window.
+            val canvas = Canvas(image)
+            roots.fetchSemanticsNodes().drop(1).forEach { node ->
+                val window = (node.root as ViewRootForTest).view.rootView
+                canvas.drawColor(0x99000000.toInt())
+                val location = IntArray(2).also(window::getLocationOnScreen)
+                canvas.save()
+                canvas.translate(location[0].toFloat(), location[1].toFloat())
+                window.draw(canvas)
+                canvas.restore()
+            }
             File(directory, "%02d-%s.png".format(position + 1, scene.name)).outputStream().use { stream ->
                 image.compress(Bitmap.CompressFormat.PNG, 100, stream)
             }
