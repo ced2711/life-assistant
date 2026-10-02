@@ -31,8 +31,8 @@ android {
         applicationId = "com.ced2711.lifetracker"
         minSdk = 26
         targetSdk = 36
-        versionCode = 17
-        versionName = "1.9.0"
+        versionCode = 18
+        versionName = "2.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Public GitHub OAuth App client ID for the built-in GitHub sign-in; not a secret.
@@ -180,6 +180,10 @@ dependencies {
     debugImplementation(libs.compose.ui.test.manifest)
 
     testImplementation(libs.junit)
+    // Screens rendered on the JVM (no emulator) for design review; see ScreenRenderTest.
+    testImplementation(libs.robolectric)
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.room.testing)
@@ -196,4 +200,14 @@ tasks.configureEach {
             }
         }
     }
+}
+
+// Design review without an emulator: renders screens to PNG with Robolectric.
+// ./gradlew :android:testStandardDebugUnitTest --tests '*ScreenRenderTest*' -Dscreens.dir=<folder>
+tasks.withType<Test>().configureEach {
+    System.getProperty("screens.dir")?.let { systemProperty("screens.dir", it) }
+    System.getProperty("screens.theme")?.let { systemProperty("screens.theme", it) }
+    System.getProperty("screens.language")?.let { systemProperty("screens.language", it) }
+    System.getProperty("screens.only")?.let { systemProperty("screens.only", it) }
+    System.getProperty("translations.area")?.let { systemProperty("translations.area", it) }
 }

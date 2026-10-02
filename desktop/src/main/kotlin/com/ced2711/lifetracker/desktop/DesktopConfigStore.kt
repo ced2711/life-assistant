@@ -19,7 +19,7 @@ data class DesktopCloudConfig(
     val automaticSync: Boolean,
     val syncState: LocalCloudSyncState,
     val uiLanguage: UiLanguage = UiLanguage.ENGLISH,
-    val lastDestination: TopLevelDestination = TopLevelDestination.TODO,
+    val lastDestination: TopLevelDestination = TopLevelDestination.TODAY,
     val visibleDestinations: Set<TopLevelDestination> = DefaultVisibleDestinations,
     val appLockEnabled: Boolean = false,
     val appLockTimeout: AppLockTimeout = AppLockTimeout.ONE_MINUTE,
@@ -56,7 +56,7 @@ class DesktopConfigStore(
                 ?: UiLanguage.ENGLISH,
             lastDestination = properties.getProperty(KEY_LAST_DESTINATION)
                 ?.let { value -> runCatching { TopLevelDestination.valueOf(value) }.getOrNull() }
-                ?: TopLevelDestination.TODO,
+                ?: TopLevelDestination.TODAY,
             // Hidden rather than visible modules are stored so modules added later start visible.
             // No saved choice yet means the defaults; an empty saved value means every module is shown.
             visibleDestinations = (
@@ -152,6 +152,32 @@ class DesktopConfigStore(
         properties.remove(KEY_LAST_SYNC_AT)
         save(properties)
     }
+
+    /**
+     * Whether the user picked the data password. A new PC starts with a random password that it
+     * keeps itself, so nothing is asked before the app opens; the user picks one only when a
+     * feature needs it (cloud sync, Vault, Confessional, app lock). Earlier versions always asked,
+     * so a missing value means chosen.
+     */
+    @Synchronized
+    fun passwordChosen(): Boolean = load().getProperty(KEY_PASSWORD_CHOSEN)?.toBooleanStrictOrNull() ?: true
+
+    @Synchronized
+    fun setPasswordChosen(chosen: Boolean) = load().let { it.setProperty(KEY_PASSWORD_CHOSEN, chosen.toString()); save(it) }
+
+    /** Whether AI assistants on this PC may use Life Assistant (off until the user turns it on). */
+    @Synchronized
+    fun agentAccess(): Boolean = load().getProperty(KEY_AGENT_ACCESS)?.toBooleanStrictOrNull() ?: false
+
+    @Synchronized
+    fun setAgentAccess(enabled: Boolean) = load().let { it.setProperty(KEY_AGENT_ACCESS, enabled.toString()); save(it) }
+
+    /** Whether those assistants may also change data, not only read it (on by default). */
+    @Synchronized
+    fun agentChanges(): Boolean = load().getProperty(KEY_AGENT_CHANGES)?.toBooleanStrictOrNull() ?: true
+
+    @Synchronized
+    fun setAgentChanges(enabled: Boolean) = load().let { it.setProperty(KEY_AGENT_CHANGES, enabled.toString()); save(it) }
 
     /** Whether the sidebar is folded to icons (off by default). */
     @Synchronized
@@ -253,6 +279,9 @@ class DesktopConfigStore(
         const val KEY_WINDOW_MAXIMIZED = "window.maximized"
         const val KEY_DESKTOP_REMINDERS = "reminders.desktop"
         const val KEY_SIDEBAR_COLLAPSED = "ui.sidebarCollapsed"
+        const val KEY_PASSWORD_CHOSEN = "security.passwordChosen"
+        const val KEY_AGENT_ACCESS = "agent.access"
+        const val KEY_AGENT_CHANGES = "agent.changes"
         const val KEY_KEEP_IN_TRAY = "window.keepInTray"
         const val KEY_REMINDERS_CHECKED_AT = "reminders.checkedAt"
     }

@@ -38,4 +38,27 @@ object DesktopPlatform {
 
     /** Picks the wording for text that names the operating system. */
     fun text(windows: String, linux: String): String = if (isWindows) windows else linux
+
+    /** The installed app's own launcher, or null when running from a development build. */
+    fun launcher(): java.io.File? = ProcessHandle.current().info().command().orElse(null)
+        ?.let(::File)
+        ?.takeIf { it.isFile && !it.name.startsWith("java", ignoreCase = true) }
+
+    /** Starts this app with [arguments] so that it keeps running on its own. */
+    fun launchDetached(arguments: List<String>): Boolean {
+        val launcher = launcher() ?: return false
+        return if (isWindows) {
+            val commandLine = (listOf(launcher.absolutePath) + arguments).joinToString(" ") { "\"$it\"" }
+            com.ced2711.lifetracker.desktop.windows.WindowsDetachedLauncher.launch(commandLine)
+        } else {
+            val setsid = listOf("/usr/bin/setsid", "/bin/setsid").firstOrNull { File(it).canExecute() }
+            runCatching {
+                ProcessBuilder(listOfNotNull(setsid, launcher.absolutePath) + arguments)
+                    .redirectInput(ProcessBuilder.Redirect.from(File("/dev/null")))
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                    .redirectError(ProcessBuilder.Redirect.DISCARD)
+                    .start()
+            }.isSuccess
+        }
+    }
 }

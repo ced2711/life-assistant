@@ -37,7 +37,6 @@ class VaultPasswordSemanticsTest {
                     enabled = true,
                     onPasswordChange = {},
                     onPasswordVisibilityChange = { visible.value = it },
-                    onCopyPassword = {},
                 )
             }
         }

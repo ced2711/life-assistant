@@ -68,6 +68,9 @@ data class DesktopUploadSnapshot(
 /** Local data merged with cloud versions, encrypted with the data password, not applied yet. */
 data class DesktopMergedFile(val file: File, val fingerprint: String, val textConflicts: Int)
 
+/** One daily copy: the data as it was at the end of [day]. */
+data class DesktopDailyBackup(val day: LocalDate, val file: File, val sizeBytes: Long)
+
 sealed interface DesktopReplaceResult {
     data class Applied(val fingerprint: String) : DesktopReplaceResult
     data object LocalChanged : DesktopReplaceResult
@@ -607,6 +610,120 @@ class DesktopDataStore(
         snapshot.copy(diaryEntries = snapshot.diaryEntries.filterNot { it.epochDay == epochDay })
     }
 
+    /**
+     * Encrypts the data and the daily backups with [newPassword] from now on. Used when the user
+     * picks a password for the first time (a new PC starts with a random one it keeps itself) or
+     * takes over the password the other devices already sync with.
+     */
+    suspend fun changePassword(newPassword: CharArray): Boolean = mutex.withLock {
+        withContext(ioDispatcher) {
+            val snapshot = currentSnapshot()
+            val previous = password
+            if (snapshot == null || previous == null) {
+                newPassword.fill('\u0000')
+                return@withContext false
+            }
+            val backups = dailyBackupFiles()
+            try {
+                password = newPassword.copyOf()
+                saveLocked(snapshot)
+                // Daily copies were written with the old password; keep them restorable.
+                backups.forEach { rekey(it, previous) }
+                previous.fill('\u0000')
+                true
+            } catch (_: Throwable) {
+                password?.fill('\u0000')
+                password = previous
+                runCatching { saveLocked(snapshot) }
+                false
+            } finally {
+                newPassword.fill('\u0000')
+            }
+        }
+    }
+
+    private fun rekey(file: File, oldPassword: CharArray) {
+        val loaded = runCatching { loadSnapshot(file, oldPassword) }.getOrNull() ?: return
+        try {
+            val temporary = File(file.parentFile, "${file.name}.part")
+            val secret = password?.copyOf() ?: return
+            try {
+                temporary.outputStream().buffered().use { output ->
+                    BackupCrypto.encrypt(
+                        loaded.snapshot,
+                        secret,
+                        output,
+                        BackupAttachmentSource { attachment -> loaded.files[attachment.id]?.inputStream() ?: error("Attachment ${attachment.id} is missing") },
+                    )
+                }
+                replaceFile(temporary, file)
+            } finally {
+                secret.fill('\u0000')
+                temporary.delete()
+            }
+        } finally {
+            loaded.directory.deleteRecursively()
+        }
+    }
+
+    /** Daily copies of the data, one per day, named after the day whose data they hold. */
+    val dailyBackupDirectory: File get() = File(appDirectory, DAILY_BACKUP_DIRECTORY)
+
+    fun dailyBackups(): List<DesktopDailyBackup> = dailyBackupFiles().mapNotNull { file ->
+        val day = runCatching { LocalDate.parse(file.name.removeSuffix(".tlb")) }.getOrNull() ?: return@mapNotNull null
+        DesktopDailyBackup(day, file, file.length())
+    }.sortedByDescending { it.day }
+
+    private fun dailyBackupFiles(): List<File> = dailyBackupDirectory.listFiles()
+        .orEmpty().filter { it.isFile && it.name.matches(DAILY_BACKUP_NAME) }
+
+    /**
+     * Once a day keeps the data as it was at the end of the previous day (the first run of a day
+     * comes before that day's edits), and removes copies on their third day: on [today] the copies
+     * of yesterday and the day before stay.
+     */
+    suspend fun backUpDaily(today: LocalDate): Boolean = mutex.withLock {
+        withContext(ioDispatcher) {
+            if (_state.value !is DesktopStoreState.Open || !localBackup.isFile) return@withContext false
+            val directory = dailyBackupDirectory.apply { mkdirs() }
+            val target = File(directory, "${today.minusDays(1)}.tlb")
+            val created = if (target.isFile) {
+                false
+            } else {
+                val temporary = File(directory, "${target.name}.part")
+                try {
+                    Files.copy(localBackup.toPath(), temporary.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                    replaceFile(temporary, target)
+                    true
+                } finally {
+                    temporary.delete()
+                }
+            }
+            val oldest = today.minusDays(DAILY_BACKUPS_KEPT.toLong())
+            dailyBackupFiles().forEach { file ->
+                val day = runCatching { LocalDate.parse(file.name.removeSuffix(".tlb")) }.getOrNull()
+                if (day != null && day < oldest) file.delete()
+            }
+            created
+        }
+    }
+
+    /**
+     * Replaces the data with a daily copy. The current data is kept first as
+     * [beforeRestoreFile], so the restore itself can be undone.
+     */
+    suspend fun restoreDailyBackup(backup: DesktopDailyBackup): DesktopReplaceResult {
+        mutex.withLock {
+            withContext(ioDispatcher) {
+                if (localBackup.isFile) Files.copy(localBackup.toPath(), beforeRestoreFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            }
+        }
+        return replaceFromEncrypted(backup.file)
+    }
+
+    /** The data as it was right before the last restore of a daily copy, if any. */
+    val beforeRestoreFile: File get() = File(dailyBackupDirectory.apply { mkdirs() }, "before-restore.tlb")
+
     /** Constant-time check of the open data password, used by the optional app lock. */
     fun verifyPassword(candidate: CharArray): Boolean {
         val current = password
@@ -1008,6 +1125,10 @@ class DesktopDataStore(
 
     companion object {
         const val KEPT_RECOVERY_COPIES = 5
+        const val DAILY_BACKUP_DIRECTORY = "daily-backups"
+        /** Yesterday's and the day before's copies; a copy is removed on its third day. */
+        const val DAILY_BACKUPS_KEPT = 2
+        private val DAILY_BACKUP_NAME = Regex("""\d{4}-\d{2}-\d{2}\.tlb""")
 
         /** Deletes all but the [keep] newest recovery copies in [directory]. */
         fun pruneRecoveryCopies(directory: File, keep: Int) {
@@ -1032,7 +1153,7 @@ class DesktopDataStore(
                 defaultAllDayReminderMinute = 0,
                 defaultReminderOffsetsMinutes = setOf(0L),
                 todoQuickAddFields = emptySet(),
-                lastDestination = TopLevelDestination.TODO,
+                lastDestination = TopLevelDestination.TODAY,
             ),
             categories = emptyList(),
             todoSeries = emptyList(),

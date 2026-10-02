@@ -13,9 +13,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -23,19 +25,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.ChevronLeft
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.EventAvailable
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,13 +42,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -61,17 +66,27 @@ import com.ced2711.lifetracker.domain.format.UserFormatting
 import com.ced2711.lifetracker.domain.model.LedgerType
 import com.ced2711.lifetracker.domain.model.SeriesEditScope
 import com.ced2711.lifetracker.domain.model.TodoDraft
-import com.ced2711.lifetracker.domain.model.TodoPriority
 import com.ced2711.lifetracker.domain.model.diaryPreview
+import com.ced2711.lifetracker.ui.design.CheckCircle
+import com.ced2711.lifetracker.ui.design.Dot
+import com.ced2711.lifetracker.ui.design.EmptyState
+import com.ced2711.lifetracker.ui.design.LifeTextField
+import com.ced2711.lifetracker.ui.design.ListRow
+import com.ced2711.lifetracker.ui.design.MoneyText
+import com.ced2711.lifetracker.ui.design.SectionLabel
+import com.ced2711.lifetracker.ui.design.Segmented
+import com.ced2711.lifetracker.ui.design.Space
+import com.ced2711.lifetracker.ui.design.priorityColor
 import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
 import com.ced2711.lifetracker.ui.localization.uiLocale
+import com.ced2711.lifetracker.ui.theme.LifeTheme
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.TextStyle
 import java.time.temporal.TemporalAdjusters
 import kotlinx.coroutines.launch
 
-private enum class CalendarView(val label: String) { MONTH("Month"), WEEK("Week"), AGENDA("Agenda") }
+private enum class CalendarView(val label: String) { MONTH("Month"), WEEK("Week"), DAY("Day"), AGENDA("Agenda") }
 
 /** Everything that happens on one day, gathered once per render. */
 private class DayContents(snapshot: BackupSnapshot) {
@@ -84,6 +99,12 @@ private class DayContents(snapshot: BackupSnapshot) {
     fun net(day: Long): Long = ledger[day].orEmpty().sumOf { if (it.type == LedgerType.INCOME) it.amountCents else -it.amountCents }
 }
 
+/**
+ * The month (or week, day, or the coming 30 days) with each day's todos and money, and the
+ * selected day beside it to tick todos off, add things and open the diary. Arrow keys move the
+ * selected day, Page Up/Down the page, T jumps to today.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 internal fun CalendarPage(
     snapshot: BackupSnapshot,
@@ -102,30 +123,42 @@ internal fun CalendarPage(
     val weekDays = UserFormatting.orderedDaysOfWeek(snapshot.settings.weekStart, locale)
     val month = YearMonth.from(selected)
     val weekStart = selected.with(TemporalAdjusters.previousOrSame(weekDays.first()))
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    RegisterPageShortcuts(onNew = { editingTodo = -1L })
 
     // Like the phone's planning views, upcoming repeating todos are created for the shown days.
     val visibleEnd = when (view) {
-        CalendarView.MONTH -> month.atEndOfMonth()
+        CalendarView.MONTH -> month.atEndOfMonth().plusDays(7)
         CalendarView.WEEK -> weekStart.plusDays(6)
+        CalendarView.DAY -> selected
         CalendarView.AGENDA -> LocalDate.now().plusDays(30)
     }.toEpochDay()
     LaunchedEffect(visibleEnd) { runCatching { store.runMaintenance(planningThroughEpochDay = visibleEnd) } }
 
     fun move(days: Long) { selected = selected.plusDays(days) }
     fun page(forward: Boolean) {
+        val step = if (forward) 1L else -1L
         selected = when (view) {
-            CalendarView.MONTH -> if (forward) selected.plusMonths(1) else selected.minusMonths(1)
-            CalendarView.WEEK, CalendarView.AGENDA -> if (forward) selected.plusWeeks(1) else selected.minusWeeks(1)
+            CalendarView.MONTH -> selected.plusMonths(step)
+            CalendarView.WEEK, CalendarView.AGENDA -> selected.plusWeeks(step)
+            CalendarView.DAY -> selected.plusDays(step)
         }
     }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val sidePanel = maxWidth >= 980.dp
+        val sidePanel = maxWidth >= 980.dp && view != CalendarView.DAY
+        // Without room for the day beside the grid, choosing a day opens it as the Day view.
+        val select: (LocalDate) -> Unit = { date ->
+            selected = date
+            if (maxWidth < 980.dp && view != CalendarView.DAY) view = CalendarView.DAY
+        }
         Row(Modifier.fillMaxSize()) {
             Column(
                 Modifier.weight(1f).fillMaxHeight()
-                    .onPreviewKeyEvent { event ->
-                        if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    .focusRequester(focus)
+                    .onKeyEvent { event ->
+                        if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
                         when (event.key) {
                             Key.DirectionLeft -> { move(-1); true }
                             Key.DirectionRight -> { move(1); true }
@@ -139,33 +172,52 @@ internal fun CalendarPage(
                     }
                     .focusable(),
             ) {
-                Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { page(false) }) { Icon(Icons.Default.ChevronLeft, desktopText("Previous")) }
+                androidx.compose.foundation.layout.FlowRow(
+                    Modifier.fillMaxWidth().padding(start = PagePadding, end = PagePadding, top = 28.dp, bottom = Space.lg),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalArrangement = Arrangement.spacedBy(Space.sm),
+                    itemVerticalAlignment = Alignment.CenterVertically,
+                ) {
+                  Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         when (view) {
                             CalendarView.MONTH -> monthTitle(month, language)
                             CalendarView.WEEK -> UserFormatting.formatDate(weekStart, snapshot.settings.dateFormat, locale) + " – " +
                                 UserFormatting.formatDate(weekStart.plusDays(6), snapshot.settings.dateFormat, locale)
+                            CalendarView.DAY -> formatDeadline(selected.toEpochDay(), null, snapshot, language)
                             CalendarView.AGENDA -> desktopText("Next 30 days")
                         },
-                        style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.headlineLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
-                    IconButton(onClick = { page(true) }) { Icon(Icons.Default.ChevronRight, desktopText("Next")) }
-                    TextButton(onClick = { selected = LocalDate.now() }) { Text(desktopText("Today")) }
-                    Spacer(Modifier.weight(1f))
-                    CalendarView.entries.forEach { item ->
-                        FilterChipSimple(desktopText(item.label), view == item) { view = item }
-                        Spacer(Modifier.width(6.dp))
+                    if (view != CalendarView.AGENDA) {
+                        Spacer(Modifier.width(Space.sm))
+                        IconButton(onClick = { page(false) }) { Icon(Icons.Rounded.ChevronLeft, desktopText("Previous")) }
+                        IconButton(onClick = { page(true) }) { Icon(Icons.Rounded.ChevronRight, desktopText("Next")) }
+                        if (selected != LocalDate.now()) TextButton(onClick = { selected = LocalDate.now() }) { Text(desktopText("Today")) }
                     }
+                  }
+                    Segmented(CalendarView.entries, view, { view = it }, { desktopText(it.label) })
                 }
                 when (view) {
-                    CalendarView.MONTH -> MonthGrid(snapshot, contents, month, weekDays, selected, showDiary, onSelect = { selected = it }, onOpenTodo = { editingTodo = it })
-                    CalendarView.WEEK -> WeekColumns(snapshot, contents, weekStart, selected, onSelect = { selected = it }, onOpenTodo = { editingTodo = it })
-                    CalendarView.AGENDA -> Agenda(snapshot, contents, onSelect = { selected = it }, onOpenTodo = { editingTodo = it }, onOpenLedger = { editingLedger = it })
+                    CalendarView.MONTH -> MonthGrid(contents, month, weekDays, selected, showDiary, onSelect = select, onOpenTodo = { editingTodo = it })
+                    CalendarView.WEEK -> WeekColumns(snapshot, contents, weekStart, selected, onSelect = select, onOpenTodo = { editingTodo = it })
+                    CalendarView.DAY -> DayPanel(
+                        snapshot, store, contents, selected, showDiary,
+                        onOpenTodo = { editingTodo = it },
+                        onNewTodo = { editingTodo = -1L },
+                        onOpenLedger = { editingLedger = it },
+                        onNewLedger = { addingLedgerOn = selected.toEpochDay() },
+                        onOpenDiary = onOpenDiary,
+                        showDate = false,
+                        modifier = Modifier.fillMaxSize().widthIn(max = 760.dp),
+                    )
+                    CalendarView.AGENDA -> Agenda(snapshot, contents, onOpenTodo = { editingTodo = it }, onOpenLedger = { editingLedger = it })
                 }
             }
             if (sidePanel) {
-                VerticalDivider()
+                ColumnDivider()
                 DayPanel(
                     snapshot, store, contents, selected, showDiary,
                     onOpenTodo = { editingTodo = it },
@@ -173,7 +225,8 @@ internal fun CalendarPage(
                     onOpenLedger = { editingLedger = it },
                     onNewLedger = { addingLedgerOn = selected.toEpochDay() },
                     onOpenDiary = onOpenDiary,
-                    modifier = Modifier.width(380.dp).fillMaxHeight(),
+                    showDate = true,
+                    modifier = Modifier.width(360.dp).fillMaxHeight().background(MaterialTheme.colorScheme.surfaceContainerLow),
                 )
             }
         }
@@ -187,7 +240,6 @@ internal fun CalendarPage(
 
 @Composable
 private fun MonthGrid(
-    snapshot: BackupSnapshot,
     contents: DayContents,
     month: YearMonth,
     weekDays: List<java.time.DayOfWeek>,
@@ -200,61 +252,76 @@ private fun MonthGrid(
     val first = month.atDay(1).with(TemporalAdjusters.previousOrSame(weekDays.first()))
     val weeks = ((month.atEndOfMonth().toEpochDay() - first.toEpochDay()) / 7 + 1).toInt()
     val today = LocalDate.now()
-    Column(Modifier.fillMaxSize().padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
-        Row(Modifier.fillMaxWidth()) {
+    val line = LifeTheme.colors.divider
+    Column(Modifier.fillMaxSize().padding(start = PagePadding, end = PagePadding, bottom = PagePadding)) {
+        Row(Modifier.fillMaxWidth().padding(bottom = Space.sm)) {
             weekDays.forEach { day ->
                 Text(
-                    UserFormatting.formatWeekday(day, uiLocale(language)), Modifier.weight(1f).padding(bottom = 6.dp),
-                    style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    UserFormatting.formatWeekday(day, uiLocale(language)),
+                    Modifier.weight(1f).padding(start = Space.sm),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
-        repeat(weeks) { week ->
-            Row(Modifier.fillMaxWidth().weight(1f)) {
-                repeat(7) { index ->
-                    val date = first.plusDays((week * 7 + index).toLong())
-                    val day = date.toEpochDay()
-                    val inMonth = YearMonth.from(date) == month
-                    val isSelected = date == selected
-                    val todos = contents.todos[day].orEmpty()
-                    val net = contents.net(day)
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = when {
-                            isSelected -> MaterialTheme.colorScheme.secondaryContainer
-                            inMonth -> MaterialTheme.colorScheme.surfaceContainerLow
-                            else -> Color.Transparent
-                        },
-                        modifier = Modifier.weight(1f).fillMaxHeight().padding(2.dp)
-                            .then(if (date == today) Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(10.dp)) else Modifier)
-                            .clickable { onSelect(date) },
-                    ) {
-                        Column(Modifier.padding(6.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    date.dayOfMonth.toString(),
-                                    fontWeight = if (date == today) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (inMonth) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                                    style = MaterialTheme.typography.labelLarge,
-                                )
-                                if (showDiary && day in contents.diary) {
-                                    Spacer(Modifier.width(4.dp))
-                                    Box(Modifier.size(6.dp).background(IncomeColor, CircleShape))
+        Column(Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp)).border(1.dp, line, RoundedCornerShape(16.dp))) {
+            repeat(weeks) { week ->
+                if (week > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(line))
+                Row(Modifier.fillMaxWidth().weight(1f)) {
+                    repeat(7) { index ->
+                        if (index > 0) Box(Modifier.fillMaxHeight().width(1.dp).background(line))
+                        val date = first.plusDays((week * 7 + index).toLong())
+                        val day = date.toEpochDay()
+                        val inMonth = YearMonth.from(date) == month
+                        val isSelected = date == selected
+                        val todos = contents.todos[day].orEmpty()
+                        val net = contents.net(day)
+                        val open = todos.count { it.completedAt == null }
+                        val summary = buildString {
+                            append(date.toString())
+                            if (todos.isNotEmpty()) append(", ${todos.size - open} done, $open open")
+                            if (net != 0L) append(", net ${signedMoney(net)}")
+                            if (showDiary && day in contents.diary) append(", diary")
+                        }
+                        Column(
+                            Modifier.weight(1f).fillMaxHeight()
+                                .background(if (isSelected) LifeTheme.colors.accentSoft else Color.Transparent)
+                                .clickable { onSelect(date) }
+                                .semantics { contentDescription = summary; this.selected = isSelected }
+                                .padding(6.dp),
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.height(24.dp)) {
+                                Box(
+                                    Modifier.size(24.dp).clip(CircleShape).background(if (date == today) MaterialTheme.colorScheme.primary else Color.Transparent),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(
+                                        date.dayOfMonth.toString(),
+                                        style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
+                                        fontWeight = if (date == today) FontWeight.Bold else FontWeight.Medium,
+                                        color = when {
+                                            date == today -> MaterialTheme.colorScheme.onPrimary
+                                            inMonth -> MaterialTheme.colorScheme.onSurface
+                                            else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+                                        },
+                                    )
                                 }
+                                if (showDiary && day in contents.diary) Dot(MaterialTheme.colorScheme.onSurfaceVariant, Modifier.padding(start = 5.dp), size = 5.dp)
                                 Spacer(Modifier.weight(1f))
                                 if (net != 0L) Text(
                                     (if (net > 0) "+" else "−") + compactAmount(kotlin.math.abs(net)),
-                                    style = MaterialTheme.typography.labelSmall, color = if (net > 0) IncomeColor else ExpenseColor, maxLines = 1,
+                                    style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"),
+                                    color = (if (net > 0) LifeTheme.colors.income else LifeTheme.colors.expense).copy(alpha = if (inMonth) 1f else 0.5f),
+                                    maxLines = 1,
                                 )
                             }
                             // As many todo titles as fit, then "+N more".
-                            BoxWithConstraints(Modifier.fillMaxSize()) {
-                                val fits = ((maxHeight.value - 2) / 19).toInt().coerceAtLeast(0)
+                            BoxWithConstraints(Modifier.fillMaxSize().padding(top = 3.dp)) {
+                                val fits = ((maxHeight.value + 2) / 21).toInt().coerceAtLeast(0)
                                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                     val shown = if (todos.size > fits) todos.take((fits - 1).coerceAtLeast(0)) else todos
-                                    shown.forEach { todo -> CellTodo(todo) { onOpenTodo(todo.id) } }
-                                    if (todos.size > shown.size) Text(desktopMoreCount(todos.size - shown.size, language), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    shown.forEach { todo -> CellTodo(todo, dimmed = !inMonth) { onOpenTodo(todo.id) } }
+                                    if (todos.size > shown.size) Text(desktopMoreCount(todos.size - shown.size, language), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp))
                                 }
                             }
                         }
@@ -265,34 +332,33 @@ private fun MonthGrid(
     }
 }
 
+/** A todo inside a day cell: a bar in its priority colour and the title. */
 @Composable
-private fun CellTodo(todo: TodoEntity, onClick: () -> Unit) {
+private fun CellTodo(todo: TodoEntity, dimmed: Boolean = false, onClick: () -> Unit) {
     val done = todo.completedAt != null
-    Surface(
-        shape = RoundedCornerShape(4.dp),
-        color = if (done) Color.Transparent else priorityTint(todo.priority),
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+    val color = priorityColor(todo.priority) ?: MaterialTheme.colorScheme.primary
+    Row(
+        Modifier.fillMaxWidth().height(19.dp).clip(RoundedCornerShape(5.dp))
+            .background(if (done) Color.Transparent else color.copy(alpha = if (dimmed) 0.08f else 0.16f))
+            .clickable(onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
+        Box(Modifier.width(3.dp).fillMaxHeight().background(if (done) Color.Transparent else color.copy(alpha = if (dimmed) 0.5f else 1f)))
         Text(
-            todo.title, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            todo.title,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             style = MaterialTheme.typography.labelSmall,
             textDecoration = if (done) TextDecoration.LineThrough else null,
-            color = if (done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+            color = if (done || dimmed) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(horizontal = 5.dp),
         )
     }
 }
 
-@Composable
-private fun priorityTint(priority: TodoPriority): Color = when (priority) {
-    TodoPriority.URGENT -> MaterialTheme.colorScheme.error.copy(alpha = 0.28f)
-    TodoPriority.HIGH -> Color(0xFFFFB673).copy(alpha = 0.25f)
-    else -> MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
-}
-
 private fun compactAmount(cents: Long): String = when {
-    cents >= 100_000_00 -> "${cents / 100_000_00}M"
-    cents >= 1_000_00 -> "%.1fk".format(cents / 100_000.0)
+    cents >= 100_000_000 -> "%.1fM".format(cents / 100_000_000.0)
+    cents >= 100_000 -> "%.1fk".format(cents / 100_000.0)
     else -> "%.0f".format(cents / 100.0)
 }
 
@@ -307,26 +373,36 @@ private fun WeekColumns(
 ) {
     val language = LocalUiLanguage.current
     val today = LocalDate.now()
-    Row(Modifier.fillMaxSize().padding(start = 16.dp, end = 16.dp, bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    val line = LifeTheme.colors.divider
+    Row(Modifier.fillMaxSize().padding(start = PagePadding, end = PagePadding, bottom = PagePadding).clip(RoundedCornerShape(16.dp)).border(1.dp, line, RoundedCornerShape(16.dp))) {
         repeat(7) { offset ->
+            if (offset > 0) Box(Modifier.fillMaxHeight().width(1.dp).background(line))
             val date = weekStart.plusDays(offset.toLong())
             val day = date.toEpochDay()
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = if (date == selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
-                modifier = Modifier.weight(1f).fillMaxHeight().clickable { onSelect(date) },
+            Column(
+                Modifier.weight(1f).fillMaxHeight()
+                    .background(if (date == selected) LifeTheme.colors.accentSoft else Color.Transparent)
+                    .clickable { onSelect(date) }
+                    .padding(Space.sm)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Column(Modifier.padding(8.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(date.dayOfWeek.getDisplayName(TextStyle.SHORT, uiLocale(language)), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(date.dayOfMonth.toString(), style = MaterialTheme.typography.titleLarge, fontWeight = if (date == today) FontWeight.Bold else FontWeight.Normal, color = if (date == today) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
-                    contents.net(day).takeIf { it != 0L }?.let { net ->
-                        Text((if (net > 0) "+" else "−") + formatMoney(kotlin.math.abs(net)), style = MaterialTheme.typography.labelSmall, color = if (net > 0) IncomeColor else ExpenseColor)
-                    }
-                    contents.todos[day].orEmpty().forEach { todo ->
-                        Column(Modifier.fillMaxWidth().clickable { onOpenTodo(todo.id) }) {
-                            todo.deadlineMinute?.let { Text(UserFormatting.formatMinuteOfDay(it, snapshot.settings.timeFormat, false, uiLocale(language)), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                            CellTodo(todo) { onOpenTodo(todo.id) }
+                Text(date.dayOfWeek.getDisplayName(TextStyle.SHORT, uiLocale(language)), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    date.dayOfMonth.toString(),
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = if (date == today) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                )
+                contents.net(day).takeIf { it != 0L }?.let { net ->
+                    Text(signedMoney(net), style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"), color = if (net > 0) LifeTheme.colors.income else LifeTheme.colors.expense)
+                }
+                Spacer(Modifier.height(2.dp))
+                contents.todos[day].orEmpty().forEach { todo ->
+                    Column {
+                        todo.deadlineMinute?.let {
+                            Text(UserFormatting.formatMinuteOfDay(it, snapshot.settings.timeFormat, false, uiLocale(language)), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
+                        CellTodo(todo) { onOpenTodo(todo.id) }
                     }
                 }
             }
@@ -338,52 +414,63 @@ private fun WeekColumns(
 private fun Agenda(
     snapshot: BackupSnapshot,
     contents: DayContents,
-    onSelect: (LocalDate) -> Unit,
     onOpenTodo: (Long) -> Unit,
     onOpenLedger: (LedgerEntryEntity) -> Unit,
 ) {
     val language = LocalUiLanguage.current
     val today = LocalDate.now().toEpochDay()
-    val overdue = contents.todos.filterKeys { it < today }.values.flatten().filter { it.completedAt == null }
+    val overdue = contents.todos.filterKeys { it < today }.values.flatten().filter { it.completedAt == null }.sortedBy { it.deadlineEpochDay }
     val days = (today..today + 30).filter { contents.todos[it].orEmpty().isNotEmpty() || contents.ledger[it].orEmpty().isNotEmpty() }
-    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    LazyColumn(Modifier.fillMaxSize().padding(horizontal = PagePadding - Space.md).widthIn(max = 820.dp)) {
         if (overdue.isNotEmpty()) {
-            item { Text(desktopText("Overdue"), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp)) }
-            items(overdue, key = { "overdue-${it.id}" }) { todo -> AgendaTodo(todo, snapshot) { onOpenTodo(todo.id) } }
+            item { SectionLabel(desktopText("Overdue"), count = overdue.size, color = LifeTheme.colors.danger, modifier = Modifier.padding(start = Space.md)) }
+            items(overdue, key = { "overdue-${it.id}" }) { todo -> AgendaTodo(todo, snapshot, showDate = true) { onOpenTodo(todo.id) } }
         }
-        if (days.isEmpty() && overdue.isEmpty()) item { Text(desktopText("Nothing planned for the next 30 days."), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 20.dp)) }
+        if (days.isEmpty() && overdue.isEmpty()) item {
+            EmptyState(title = desktopText("Nothing planned for the next 30 days"), icon = Icons.Rounded.EventAvailable, body = desktopText("Todos with a date and ledger entries show up here."))
+        }
         days.forEach { day ->
             item(key = "day-$day") {
-                Text(
-                    formatDeadline(day, null, snapshot, language),
-                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(top = 14.dp).clickable { onSelect(LocalDate.ofEpochDay(day)) },
-                )
-            }
-            items(contents.todos[day].orEmpty(), key = { "todo-${it.id}" }) { todo -> AgendaTodo(todo, snapshot) { onOpenTodo(todo.id) } }
-            items(contents.ledger[day].orEmpty(), key = { "ledger-${it.id}" }) { entry ->
-                Row(Modifier.fillMaxWidth().clickable { onOpenLedger(entry) }.padding(vertical = 6.dp, horizontal = 8.dp)) {
-                    Text(entry.merchant.ifBlank { entry.note.ifBlank { desktopText(if (entry.type == LedgerType.INCOME) "Income" else "Expense") } }, modifier = Modifier.weight(1f))
-                    Text((if (entry.type == LedgerType.INCOME) "+" else "−") + formatMoney(entry.amountCents), color = if (entry.type == LedgerType.INCOME) IncomeColor else ExpenseColor)
+                SectionLabel(formatDeadline(day, null, snapshot, language), modifier = Modifier.padding(start = Space.md, top = Space.md)) {
+                    contents.net(day).takeIf { it != 0L }?.let { net ->
+                        Text(signedMoney(net), style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(end = Space.md))
+                    }
                 }
             }
+            items(contents.todos[day].orEmpty(), key = { "todo-${it.id}" }) { todo -> AgendaTodo(todo, snapshot, showDate = false) { onOpenTodo(todo.id) } }
+            items(contents.ledger[day].orEmpty().sortedBy { it.minuteOfDay }, key = { "ledger-${it.id}" }) { entry ->
+                ListRow(
+                    title = entry.merchant.ifBlank { entry.note.ifBlank { desktopText(if (entry.type == LedgerType.INCOME) "Income" else "Expense") } },
+                    leading = { Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) { Dot(if (entry.type == LedgerType.INCOME) LifeTheme.colors.income else LifeTheme.colors.expense) } },
+                    trailing = { MoneyText(entry.amountCents, entry.type, formatMoney(entry.amountCents), style = MaterialTheme.typography.bodyMedium) },
+                    maxTitleLines = 1,
+                    onClick = { onOpenLedger(entry) },
+                )
+            }
         }
+        item { Spacer(Modifier.height(48.dp)) }
     }
 }
 
 @Composable
-private fun AgendaTodo(todo: TodoEntity, snapshot: BackupSnapshot, onClick: () -> Unit) {
+private fun AgendaTodo(todo: TodoEntity, snapshot: BackupSnapshot, showDate: Boolean, onClick: () -> Unit) {
     val language = LocalUiLanguage.current
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 6.dp, horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            todo.title, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
-            textDecoration = if (todo.completedAt != null) TextDecoration.LineThrough else null,
-        )
-        Text(formatDeadline(todo.deadlineEpochDay!!, todo.deadlineMinute, snapshot, language), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
+    val overdue = todo.completedAt == null && todo.deadlineEpochDay!! < LocalDate.now().toEpochDay()
+    ListRow(
+        title = todo.title,
+        struck = todo.completedAt != null,
+        supporting = when {
+            showDate -> formatDeadline(todo.deadlineEpochDay!!, todo.deadlineMinute, snapshot, language)
+            else -> todo.deadlineMinute?.let { UserFormatting.formatMinuteOfDay(it, snapshot.settings.timeFormat, false, uiLocale(language)) }
+        },
+        supportingColor = if (overdue) LifeTheme.colors.danger else MaterialTheme.colorScheme.onSurfaceVariant,
+        leading = { CheckCircle(todo.completedAt != null, null, color = priorityColor(todo.priority) ?: MaterialTheme.colorScheme.primary) },
+        maxTitleLines = 1,
+        onClick = onClick,
+    )
 }
 
-/** Right column: the selected day's todos, money and diary page, with quick add. */
+/** The selected day: todos to tick off, money and the diary page, with quick add. */
 @Composable
 private fun DayPanel(
     snapshot: BackupSnapshot,
@@ -396,6 +483,7 @@ private fun DayPanel(
     onOpenLedger: (LedgerEntryEntity) -> Unit,
     onNewLedger: () -> Unit,
     onOpenDiary: (Long) -> Unit,
+    showDate: Boolean,
     modifier: Modifier,
 ) {
     val scope = rememberSafeCoroutineScope()
@@ -403,28 +491,41 @@ private fun DayPanel(
     val locale = uiLocale(language)
     val day = date.toEpochDay()
     var quickTodo by remember(day) { mutableStateOf("") }
-    Column(modifier.background(MaterialTheme.colorScheme.surfaceContainerLowest).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(date.dayOfWeek.getDisplayName(TextStyle.FULL, locale), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-        Text(UserFormatting.formatDate(date, snapshot.settings.dateFormat, locale), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-
-        Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(desktopText("Todos"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-            IconButton(onClick = onNewTodo) { Icon(Icons.Default.Add, desktopText("New todo")) }
-        }
-        contents.todos[day].orEmpty().forEach { todo ->
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onOpenTodo(todo.id) }) {
-                Checkbox(todo.completedAt != null, { checked -> scope.launch { store.setTodoCompleted(todo.id, checked) } })
-                Column(Modifier.weight(1f)) {
-                    Text(todo.title, maxLines = 2, overflow = TextOverflow.Ellipsis, textDecoration = if (todo.completedAt != null) TextDecoration.LineThrough else null)
-                    todo.deadlineMinute?.let { Text(UserFormatting.formatMinuteOfDay(it, snapshot.settings.timeFormat, false, locale), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                }
+    Column(
+        modifier.verticalScroll(rememberScrollState()).padding(horizontal = if (showDate) Space.lg else PagePadding - Space.md, vertical = if (showDate) 28.dp else 0.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        if (showDate) {
+            Column(Modifier.padding(horizontal = Space.md).padding(bottom = Space.md)) {
+                Text(date.dayOfWeek.getDisplayName(TextStyle.FULL, locale), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                Text(UserFormatting.formatDate(date, snapshot.settings.dateFormat, locale), style = MaterialTheme.typography.headlineSmall)
             }
         }
-        OutlinedTextField(
+        val todos = contents.todos[day].orEmpty()
+        SectionLabel(desktopText("Todos"), count = todos.size.takeIf { it > 0 }, modifier = Modifier.padding(start = Space.md)) {
+            IconButton(onClick = onNewTodo, modifier = Modifier.size(32.dp)) { Icon(Icons.Rounded.Add, desktopText("New todo"), Modifier.size(18.dp)) }
+        }
+        todos.forEach { todo ->
+            ListRow(
+                title = todo.title,
+                struck = todo.completedAt != null,
+                supporting = todo.deadlineMinute?.let { UserFormatting.formatMinuteOfDay(it, snapshot.settings.timeFormat, false, locale) },
+                leading = {
+                    CheckCircle(
+                        checked = todo.completedAt != null,
+                        onCheckedChange = { checked -> scope.launch { store.setTodoCompleted(todo.id, checked) } },
+                        color = priorityColor(todo.priority) ?: MaterialTheme.colorScheme.primary,
+                        contentDescription = todo.title,
+                    )
+                },
+                onClick = { onOpenTodo(todo.id) },
+            )
+        }
+        LifeTextField(
             quickTodo, { quickTodo = it },
-            placeholder = { Text(desktopText("Add a todo for this day")) },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth().onEnter {
+            placeholder = desktopText("Add a todo for this day"),
+            leadingIcon = Icons.Rounded.Add,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = Space.sm, vertical = Space.xs).onEnter {
                 val text = quickTodo.trim()
                 if (text.isNotEmpty()) {
                     quickTodo = ""
@@ -435,31 +536,40 @@ private fun DayPanel(
             },
         )
 
-        HorizontalDivider(Modifier.padding(vertical = 8.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(desktopText("Ledger"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+        Spacer(Modifier.height(Space.md))
+        val entries = contents.ledger[day].orEmpty().sortedBy { it.minuteOfDay }
+        SectionLabel(desktopText("Ledger"), modifier = Modifier.padding(start = Space.md)) {
             contents.net(day).takeIf { it != 0L }?.let { net ->
-                Text((if (net > 0) "+" else "−") + formatMoney(kotlin.math.abs(net)), color = if (net > 0) IncomeColor else ExpenseColor, fontWeight = FontWeight.SemiBold)
+                Text(signedMoney(net), style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"), color = if (net > 0) LifeTheme.colors.income else LifeTheme.colors.expense)
             }
-            IconButton(onClick = onNewLedger) { Icon(Icons.Default.Add, desktopText("New entry")) }
+            IconButton(onClick = onNewLedger, modifier = Modifier.size(32.dp)) { Icon(Icons.Rounded.Add, desktopText("New entry"), Modifier.size(18.dp)) }
         }
-        val entries = contents.ledger[day].orEmpty()
-        if (entries.isEmpty()) Text(desktopText("No ledger entries"), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-        entries.sortedBy { it.minuteOfDay }.forEach { entry ->
-            Row(Modifier.fillMaxWidth().clickable { onOpenLedger(entry) }.padding(vertical = 6.dp)) {
-                Text(entry.merchant.ifBlank { entry.note.ifBlank { desktopText(if (entry.type == LedgerType.INCOME) "Income" else "Expense") } }, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text((if (entry.type == LedgerType.INCOME) "+" else "−") + formatMoney(entry.amountCents), color = if (entry.type == LedgerType.INCOME) IncomeColor else ExpenseColor)
-            }
+        if (entries.isEmpty()) {
+            Text(desktopText("No ledger entries"), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(horizontal = Space.md, vertical = Space.xs))
+        }
+        entries.forEach { entry ->
+            ListRow(
+                title = entry.merchant.ifBlank { entry.note.ifBlank { desktopText(if (entry.type == LedgerType.INCOME) "Income" else "Expense") } },
+                supporting = UserFormatting.formatMinuteOfDay(entry.minuteOfDay, snapshot.settings.timeFormat, false, locale),
+                trailing = { MoneyText(entry.amountCents, entry.type, formatMoney(entry.amountCents), style = MaterialTheme.typography.bodyMedium) },
+                maxTitleLines = 1,
+                onClick = { onOpenLedger(entry) },
+            )
         }
 
         if (showDiary) {
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(desktopText("Diary"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                val page = contents.diary[day]
+            Spacer(Modifier.height(Space.md))
+            val page = contents.diary[day]
+            SectionLabel(desktopText("Diary"), modifier = Modifier.padding(start = Space.md)) {
                 TextButton(onClick = { onOpenDiary(day) }) { Text(desktopText(if (page != null) "Open diary" else "Write diary")) }
             }
-            contents.diary[day]?.let { Text(diaryPreview(it.body, 240), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            Text(
+                page?.let { diaryPreview(it.body, 240) } ?: desktopText("No diary entry"),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = Space.md),
+            )
         }
+        Spacer(Modifier.height(48.dp))
     }
 }

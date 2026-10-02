@@ -379,7 +379,7 @@ class GitHubBackupStore(
             runCatching { json.parseToJsonElement(text).jsonObject["message"]?.jsonPrimitive?.contentOrNull }.getOrNull()
         }.orEmpty()
         throw when {
-            code == 401 -> CloudAuthorizationException("GitHub sign-in expired or was revoked. Reconnect GitHub.")
+            code == 401 -> GitHubSignInExpiredException()
             code == 403 && message.contains("rate limit", ignoreCase = true) ->
                 CloudTransportException("GitHub's rate limit was reached. Try again in a few minutes.")
             code == 403 || code == 404 -> CloudAuthorizationException(

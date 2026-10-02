@@ -107,9 +107,11 @@ class TaskLedgerRepository(
         dao.observeDailyLedgerTotals(startEpochDay, endEpochDay)
 
     fun subtasks(todoId: Long) = dao.observeSubtasks(todoId)
+    val allSubtasks = dao.observeAllSubtasks()
     fun reminders(todoId: Long) = dao.observeReminders(todoId)
     fun attachments(ownerType: AttachmentOwnerType, ownerId: Long) =
         dao.observeAttachments(ownerType.name, ownerId)
+    fun attachmentOwnerIds(ownerType: AttachmentOwnerType) = dao.observeAttachmentOwnerIds(ownerType.name)
 
     suspend fun getAttachments(ownerType: AttachmentOwnerType, ownerId: Long) =
         dao.getAttachments(ownerType.name, ownerId)

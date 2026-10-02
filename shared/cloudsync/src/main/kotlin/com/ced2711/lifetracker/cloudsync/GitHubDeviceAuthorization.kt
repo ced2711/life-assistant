@@ -109,6 +109,26 @@ class GitHubDeviceAuthorization(
         throw CloudAuthorizationException("The GitHub code expired. Start again.")
     }
 
+    /**
+     * Retires a sign-in this device no longer uses, best effort. GitHub keeps at most ten
+     * sign-ins per account and app and retires the least recently used one when an eleventh is
+     * made, which would otherwise disconnect another device that was simply switched off for a
+     * while. The endpoint is meant for exactly this and takes no authentication.
+     * See https://docs.github.com/en/rest/credentials/revoke
+     */
+    suspend fun revokeToken(token: String) {
+        if (token.isBlank()) return
+        withContext(ioDispatcher) {
+            val body = JsonObject(mapOf("credentials" to kotlinx.serialization.json.JsonArray(listOf(JsonPrimitive(token)))))
+            val request = Request.Builder().url(apiBaseUrl.resolve("credentials/revoke")!!)
+                .header("Accept", "application/vnd.github+json")
+                .header("X-GitHub-Api-Version", "2022-11-28")
+                .post(body.toString().toRequestBody(JSON_TYPE))
+                .build()
+            runCatching { client.newCall(request).execute().close() }
+        }
+    }
+
     /** Repositories the GitHub App is installed on and this user can access, as owner/name. */
     suspend fun accessibleRepositories(token: String): List<String> = withContext(ioDispatcher) {
         val installations = getJson(apiBaseUrl.resolve("user/installations")!!, token)["installations"]
@@ -179,7 +199,7 @@ class GitHubDeviceAuthorization(
                 when (response.code) {
                     in 200..299 -> true
                     422 -> false // Another device created it a moment ago.
-                    401 -> throw CloudAuthorizationException("GitHub sign-in expired or was revoked. Reconnect GitHub.")
+                    401 -> throw GitHubSignInExpiredException()
                     403, 404 -> throw CloudAuthorizationException(
                         "GitHub did not allow creating the private repository $DEFAULT_REPOSITORY. " +
                             "Create it yourself on GitHub, then connect again.",
@@ -204,7 +224,7 @@ class GitHubDeviceAuthorization(
             client.newCall(authorized(url, token).get().build()).execute().use { response ->
                 when (response.code) {
                     404 -> null
-                    401 -> throw CloudAuthorizationException("GitHub sign-in expired or was revoked. Reconnect GitHub.")
+                    401 -> throw GitHubSignInExpiredException()
                     in 200..299 -> json.parseToJsonElement(
                         response.body?.string() ?: throw CloudTransportException("GitHub returned an empty response."),
                     ).jsonObject
@@ -238,7 +258,7 @@ class GitHubDeviceAuthorization(
 
     private fun execute(request: Request): JsonObject = try {
         client.newCall(request).execute().use { response ->
-            if (response.code == 401) throw CloudAuthorizationException("GitHub sign-in expired or was revoked. Reconnect GitHub.")
+            if (response.code == 401) throw GitHubSignInExpiredException()
             if (response.code == 404) throw CloudAuthorizationException("GitHub did not recognize this Client ID.")
             if (response.code !in 200..299) throw CloudTransportException("GitHub request failed (${response.code}).")
             val text = response.body?.string().orEmpty()

@@ -34,6 +34,7 @@ import com.ced2711.lifetracker.worker.ReminderReschedulePolicy
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -104,6 +105,10 @@ class TaskLedgerViewModel(private val container: AppContainer) : ViewModel() {
         SharingStarted.WhileSubscribed(5_000),
         emptyList(),
     )
+    /** Subtasks by todo, so lists can show progress and offer "task and subtasks". */
+    val subtasksByTodo = repository.allSubtasks
+        .map { all -> all.groupBy { it.todoId } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
     val settings = settingsRepository.settings.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
@@ -401,6 +406,9 @@ class TaskLedgerViewModel(private val container: AppContainer) : ViewModel() {
 
     fun attachments(ownerType: AttachmentOwnerType, ownerId: Long) =
         repository.attachments(ownerType, ownerId)
+
+    /** Ids of the ledger entries that have files attached. */
+    val ledgerAttachmentOwnerIds = repository.attachmentOwnerIds(AttachmentOwnerType.LEDGER)
 
     fun attachmentOwnerExists(
         ownerType: AttachmentOwnerType,

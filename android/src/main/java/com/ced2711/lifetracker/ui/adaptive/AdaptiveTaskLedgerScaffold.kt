@@ -1,5 +1,16 @@
 package com.ced2711.lifetracker.ui.adaptive
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.heading
+import com.ced2711.lifetracker.ui.theme.LifeTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -16,11 +27,13 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.Book
 import androidx.compose.material.icons.outlined.CalendarMonth
@@ -43,6 +56,7 @@ import com.ced2711.lifetracker.ui.localization.localizedText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -71,6 +85,12 @@ import com.ced2711.lifetracker.domain.model.TopLevelDestination
 private val NoInsets = WindowInsets(0, 0, 0, 0)
 private val LocalAuxiliaryTitle = staticCompositionLocalOf<String?> { null }
 // The modules the user chose to show, in navigation order.
+/**
+ * A small overview of the day for the half of a folded screen that otherwise only holds the
+ * navigation: above the hinge in tabletop posture, under the module list in book posture.
+ */
+private val LocalGlance = staticCompositionLocalOf<(@Composable () -> Unit)?> { null }
+
 private val LocalNavigationDestinations = staticCompositionLocalOf<List<TopLevelDestination>> { TopLevelDestination.entries }
 private val CompactHeightThreshold = 320.dp
 private val RailWidth = 80.dp
@@ -97,6 +117,7 @@ fun AdaptiveTaskLedgerScaffold(
     foldingFeature: FoldingFeature? = null,
     destinations: List<TopLevelDestination> = TopLevelDestination.entries,
     syncStatus: TopBarSyncStatus? = null,
+    glance: (@Composable () -> Unit)? = null,
     content: @Composable (PaddingValues) -> Unit,
 ) {
     val effectiveAuxiliaryTitle = if (isSettings) auxiliaryTitle ?: "Settings" else null
@@ -110,8 +131,13 @@ fun AdaptiveTaskLedgerScaffold(
     val latestContentStateKey by rememberUpdatedState(contentStateKey)
     val movableFeatureContent = remember(contentStateHolder) {
         movableContentOf<PaddingValues> { paddingValues ->
-            contentStateHolder.SaveableStateProvider(latestContentStateKey) {
-                latestContent(paddingValues)
+            // key(): a page that replaces another must start as a new group. Reusing the group
+            // left the new page out of the saved state, so a todo being edited was lost when the
+            // screen was rotated or folded after switching pages.
+            key(latestContentStateKey) {
+                contentStateHolder.SaveableStateProvider(latestContentStateKey) {
+                    latestContent(paddingValues)
+                }
             }
         }
     }
@@ -135,6 +161,7 @@ fun AdaptiveTaskLedgerScaffold(
             LocalAuxiliaryTitle provides effectiveAuxiliaryTitle,
             LocalNavigationDestinations provides destinations,
             LocalTopBarSyncStatus provides syncStatus,
+            LocalGlance provides glance,
         ) {
             FoldAwareScaffold(
                 safePaneLayout = safePaneLayout,
@@ -282,16 +309,28 @@ private fun VerticalFoldScaffold(
                 } else {
                     Alignment.CenterStart
                 }
-                TaskLedgerNavigationRail(
-                    selected = selected,
-                    onSelected = onSelected,
-                    isSettings = isSettings,
-                    compact = compactChrome,
-                    modifier = Modifier
-                        .align(navigationAlignment)
-                        .width(navigationWidth)
-                        .fillMaxHeight(),
-                )
+                if (!compactChrome && maxWidth >= 260.dp) {
+                    // A whole pane beside the hinge: a full sidebar with names instead of a thin
+                    // rail in an empty half.
+                    TaskLedgerNavigationPane(
+                        selected = selected,
+                        onSelected = onSelected,
+                        onSettings = onSettings,
+                        isSettings = isSettings,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    TaskLedgerNavigationRail(
+                        selected = selected,
+                        onSelected = onSelected,
+                        isSettings = isSettings,
+                        compact = compactChrome,
+                        modifier = Modifier
+                            .align(navigationAlignment)
+                            .width(navigationWidth)
+                            .fillMaxHeight(),
+                    )
+                }
             }
         }
     }
@@ -336,7 +375,7 @@ private fun HorizontalFoldScaffold(
             color = MaterialTheme.colorScheme.surface,
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
-                if (chromeIsAboveContent) Spacer(Modifier.weight(1f))
+                if (chromeIsAboveContent) GlanceArea(Modifier.weight(1f), show = !compactChrome)
                 if (!chromeIsAboveContent) {
                     TaskLedgerNavigationBar(
                         selected = selected,
@@ -359,7 +398,7 @@ private fun HorizontalFoldScaffold(
                         compact = compactChrome,
                     )
                 }
-                if (!chromeIsAboveContent) Spacer(Modifier.weight(1f))
+                if (!chromeIsAboveContent) GlanceArea(Modifier.weight(1f), show = !compactChrome)
             }
         }
     }
@@ -371,6 +410,17 @@ private fun HorizontalFoldScaffold(
             contentWindowInsets = NoInsets,
             content = content,
         )
+    }
+}
+
+/** The free part of the chrome pane: the overview of the day when there is one and room for it. */
+@Composable
+private fun GlanceArea(modifier: Modifier, show: Boolean) {
+    val glance = LocalGlance.current
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        if (glance != null && show && maxHeight >= 150.dp) {
+            Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 16.dp)) { glance() }
+        }
     }
 }
 
@@ -467,6 +517,11 @@ private fun ExpandedScaffold(
     }
 }
 
+/**
+ * Bottom navigation: a flat bar with a hairline on top. The selected module's icon sits on a
+ * soft accent pill; labels show when there is room (five modules or fewer), otherwise only the
+ * selected one is named.
+ */
 @Composable
 private fun TaskLedgerNavigationBar(
     selected: TopLevelDestination,
@@ -474,31 +529,69 @@ private fun TaskLedgerNavigationBar(
     isSettings: Boolean,
     compact: Boolean,
 ) {
-    NavigationBar(
-        modifier = Modifier.height(if (compact) 48.dp else 72.dp),
-        windowInsets = NoInsets,
-    ) {
-        val destinations = LocalNavigationDestinations.current
-        // Six items do not fit readable labels on a phone; show only the selected label then.
-        val crowded = destinations.size > 5
-        destinations.forEach { destination ->
-            val localizedLabel = localizedText(destination.label)
-            NavigationBarItem(
-                selected = !isSettings && selected == destination,
-                onClick = { onSelected(destination) },
-                modifier = Modifier.semantics {
-                    contentDescription = localizedLabel
-                },
-                icon = {
-                    DestinationIcon(
+    val destinations = LocalNavigationDestinations.current
+    // More than five items do not fit readable labels on a phone; name only the selected one then.
+    val crowded = destinations.size > 5
+    Surface(color = MaterialTheme.colorScheme.surfaceContainerLow) {
+        Column {
+            Box(Modifier.fillMaxWidth().height(1.dp).background(LifeTheme.colors.divider))
+            Row(
+                Modifier.fillMaxWidth().height(if (compact) 47.dp else 71.dp).padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                destinations.forEach { destination ->
+                    val isSelected = !isSettings && selected == destination
+                    NavigationEntry(
                         destination = destination,
-                        contentDescription = null,
+                        selected = isSelected,
+                        showLabel = !compact && (!crowded || isSelected),
+                        onClick = { onSelected(destination) },
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
                     )
-                },
-                label = if (compact) null else {
-                    { Text(localizedLabel, maxLines = 1) }
-                },
-                alwaysShowLabel = !compact && !crowded,
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NavigationEntry(
+    destination: TopLevelDestination,
+    selected: Boolean,
+    showLabel: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val localizedLabel = localizedText(destination.label)
+    val pill by animateColorAsState(if (selected) LifeTheme.colors.accentSoft else Color.Transparent, label = "navigation-pill")
+    val tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    Column(
+        modifier
+            .selectable(
+                selected = selected,
+                role = Role.Tab,
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            )
+            .semantics { contentDescription = localizedLabel },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Box(
+            Modifier.clip(CircleShape).background(pill).padding(horizontal = 16.dp, vertical = 4.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(destination.icon, null, Modifier.size(22.dp), tint = tint)
+        }
+        if (showLabel) {
+            Text(
+                localizedLabel,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.labelSmall,
+                color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 3.dp).clearAndSetSemantics { },
             )
         }
     }
@@ -514,45 +607,107 @@ private fun TaskLedgerNavigationRail(
 ) {
     val island = LocalHeaderCutoutIsland.current
     var railTopClearance by remember { mutableIntStateOf(0) }
-    NavigationRail(
+    Surface(
         modifier = if (island == null) modifier else modifier.onGloballyPositioned { coordinates ->
             val bounds = coordinates.boundsInWindow()
             val overlaps = island.left < bounds.right && island.right > bounds.left && island.top < bounds.bottom
             railTopClearance = if (overlaps) (island.bottom - bounds.top.roundToInt()).coerceAtLeast(0) else 0
         },
-        windowInsets = NoInsets,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxHeight()
                 .padding(top = with(LocalDensity.current) { railTopClearance.toDp() })
+                .padding(vertical = if (compact) 4.dp else 12.dp)
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(if (compact) 0.dp else 4.dp),
         ) {
             LocalNavigationDestinations.current.forEach { destination ->
-                val localizedLabel = localizedText(destination.label)
-                NavigationRailItem(
-                selected = !isSettings && selected == destination,
-                onClick = { onSelected(destination) },
-                modifier = (if (compact) Modifier.height(48.dp) else Modifier).semantics {
-                    contentDescription = localizedLabel
-                },
-                icon = {
-                    DestinationIcon(
-                        destination = destination,
-                        contentDescription = null,
-                    )
-                },
-                    label = if (compact) null else {
-                        { Text(localizedLabel, maxLines = 1) }
-                    },
-                    alwaysShowLabel = !compact,
+                NavigationEntry(
+                    destination = destination,
+                    selected = !isSettings && selected == destination,
+                    showLabel = !compact,
+                    onClick = { onSelected(destination) },
+                    modifier = Modifier.fillMaxWidth().height(if (compact) 48.dp else 60.dp),
                 )
             }
         }
     }
 }
 
+/**
+ * Navigation for a pane of its own (a book-style foldable held half open): the app's name and
+ * every module as a row with its name, and Settings at the bottom.
+ */
+@Composable
+private fun TaskLedgerNavigationPane(
+    selected: TopLevelDestination,
+    onSelected: (TopLevelDestination) -> Unit,
+    onSettings: () -> Unit,
+    isSettings: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Surface(modifier = modifier, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+        Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 20.dp)) {
+            Text(
+                localizedText("Life Assistant"),
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.padding(start = 12.dp, bottom = 16.dp).semantics { heading() },
+            )
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                LocalNavigationDestinations.current.forEach { destination ->
+                    NavigationPaneRow(
+                        icon = destination.icon,
+                        label = localizedText(destination.label),
+                        selected = !isSettings && selected == destination,
+                        onClick = { onSelected(destination) },
+                    )
+                }
+                LocalGlance.current?.let { glance ->
+                    Box(Modifier.padding(top = 20.dp, start = 12.dp, end = 12.dp)) { glance() }
+                }
+            }
+            if (LocalAuxiliaryTitle.current == null || isSettings) {
+                NavigationPaneRow(
+                    icon = Icons.Outlined.Settings,
+                    label = localizedText("Settings"),
+                    selected = isSettings,
+                    onClick = { if (!isSettings) onSettings() },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun NavigationPaneRow(icon: ImageVector, label: String, selected: Boolean, onClick: () -> Unit) {
+    val background by animateColorAsState(if (selected) LifeTheme.colors.accentSoft else Color.Transparent, label = "navigation-row")
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .widthIn(max = 420.dp)
+            .clip(MaterialTheme.shapes.large)
+            .background(background)
+            .selectable(selected = selected, role = Role.Tab, onClick = onClick)
+            .height(52.dp)
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, Modifier.size(22.dp), tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            label,
+            style = MaterialTheme.typography.titleMedium,
+            color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 16.dp),
+        )
+    }
+}
+
+/** The page's name with the sync status and the way to Settings (or back from it). */
 @Composable
 private fun TaskLedgerTopBar(
     selected: TopLevelDestination,
@@ -572,7 +727,7 @@ private fun TaskLedgerTopBar(
                 barTop = bounds.top,
                 barRight = bounds.right,
                 barBottom = bounds.bottom,
-                titleStart = 16.dp.roundToPx(),
+                titleStart = 20.dp.roundToPx(),
                 trailingWidth = (if (syncStatus == null) 52.dp else 100.dp).roundToPx(),
                 minimumTitleWidth = 48.dp.roundToPx(),
                 gap = 8.dp.roundToPx(),
@@ -588,44 +743,39 @@ private fun TaskLedgerTopBar(
                 bounds.right.roundToInt(), bounds.bottom.roundToInt(),
             )
         },
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 2.dp,
+        color = MaterialTheme.colorScheme.background,
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(if (compact) 48.dp else 56.dp)
-                .padding(start = 16.dp, end = 4.dp)
+                .height(if (compact) 48.dp else 60.dp)
+                .padding(start = if (isSettings) 4.dp else 20.dp, end = 4.dp)
                 .padding(
                     start = with(density) { cutoutPadding.start.toDp() },
                     end = with(density) { cutoutPadding.end.toDp() },
                 ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (isSettings) {
+                IconButton(onClick = onSettings) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, localizedText("Back"), tint = MaterialTheme.colorScheme.onSurface)
+                }
+            }
             Text(
                 text = localizedText(auxiliaryTitle ?: if (isSettings) "Settings" else selected.label),
                 modifier = Modifier
                     .weight(1f)
-                    .padding(end = with(density) { cutoutPadding.titleEnd.toDp() }),
-                style = MaterialTheme.typography.titleLarge,
+                    .padding(end = with(density) { cutoutPadding.titleEnd.toDp() })
+                    .semantics { heading() },
+                style = if (compact) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineMedium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             syncStatus?.let { CloudSyncStatusButton(it) }
-            IconButton(onClick = onSettings) {
-                Icon(
-                    imageVector = if (isSettings) {
-                        Icons.AutoMirrored.Filled.ArrowBack
-                    } else {
-                        Icons.Outlined.Settings
-                    },
-                    contentDescription = localizedText(if (isSettings) "Back" else "Settings"),
-                    tint = if (isSettings) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
+            if (!isSettings) {
+                IconButton(onClick = onSettings) {
+                    Icon(Icons.Outlined.Settings, localizedText("Settings"), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
     }
@@ -649,7 +799,12 @@ private fun calculateSafePaneLayout(
     foldingFeature: FoldingFeature?,
     density: Density,
 ): SafePaneLayout {
-    if (foldingFeature == null || !foldingFeature.isSeparating) {
+    // A flexible screen that is half folded is still one screen: the whole of it is used, as on a
+    // tablet. Only a hinge that hides part of the window (two screens with a gap) splits the app
+    // into panes.
+    if (foldingFeature == null || !foldingFeature.isSeparating ||
+        foldingFeature.occlusionType != FoldingFeature.OcclusionType.FULL
+    ) {
         return SafePaneLayout.singlePane(availableWidth, availableHeight)
     }
 
@@ -699,6 +854,7 @@ private fun PixelPaneBounds.toDpBounds(density: Density): SafePaneBounds = with(
 
 internal val TopLevelDestination.label: String
     get() = when (this) {
+        TopLevelDestination.TODAY -> "Today"
         TopLevelDestination.TODO -> "Todo"
         TopLevelDestination.LEDGER -> "Ledger"
         TopLevelDestination.CALENDAR -> "Calendar"
@@ -709,6 +865,7 @@ internal val TopLevelDestination.label: String
 
 internal val TopLevelDestination.icon: ImageVector
     get() = when (this) {
+        TopLevelDestination.TODAY -> Icons.Outlined.WbSunny
         TopLevelDestination.TODO -> Icons.Outlined.CheckCircle
         TopLevelDestination.LEDGER -> Icons.Outlined.AccountBalanceWallet
         TopLevelDestination.CALENDAR -> Icons.Outlined.CalendarMonth

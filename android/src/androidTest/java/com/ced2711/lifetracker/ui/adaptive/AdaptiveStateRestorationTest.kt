@@ -26,8 +26,8 @@ class AdaptiveStateRestorationTest {
     fun newTodoDraftSurvivesActivityRecreation() {
         awaitMainNavigation()
         composeRule.onNodeWithContentDescription("Todo").performClick()
-        composeRule.onNodeWithText("New task").performScrollTo().performClick()
-        composeRule.onNodeWithText("Description *").assertExists().performTextInput(DRAFT_TEXT)
+        composeRule.onNodeWithContentDescription("New task").performClick()
+        composeRule.onNodeWithContentDescription("Description").assertExists().performTextInput(DRAFT_TEXT)
         composeRule.onNode(hasSetTextAction() and hasText(DRAFT_TEXT)).assertExists()
 
         val originalActivity = composeRule.activity
@@ -36,7 +36,7 @@ class AdaptiveStateRestorationTest {
             composeRule.activity !== originalActivity
         }
 
-        composeRule.onNodeWithText("Description *").assertExists()
+        composeRule.onNodeWithContentDescription("Description").assertExists()
         composeRule.onNode(hasSetTextAction() and hasText(DRAFT_TEXT)).assertExists()
     }
 

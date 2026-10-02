@@ -90,6 +90,8 @@ enum class ReminderOffsetPreset(val minutesBeforeDue: Long) {
 }
 
 enum class TopLevelDestination {
+    /** The day at a glance: what is due, what was spent, the diary and what comes next. */
+    TODAY,
     TODO,
     LEDGER,
     CALENDAR,

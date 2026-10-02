@@ -66,8 +66,23 @@ fun main(args: Array<String>) {
             shortcuts.onToggleSidebar?.invoke()
         }
     }
-    shortcuts.onSettings?.invoke()
-    save("9-settings")
+    // The Ledger's other tabs and every Settings topic, each opened fresh.
+    val ledgerIndex = TopLevelDestination.entries.indexOf(TopLevelDestination.LEDGER)
+    listOf("STATISTICS", "RECURRING").forEach { tab ->
+        DesktopStartHints.ledgerTab = tab
+        shortcuts.onNavigate?.invoke(0)
+        settle(4)
+        shortcuts.onNavigate?.invoke(ledgerIndex)
+        save("${ledgerIndex + 1}-ledger-${tab.lowercase()}")
+    }
+    DesktopStartHints.ledgerTab = null
+    listOf("SYNC", "APPEARANCE", "REMINDERS", "SECURITY", "AI", "ABOUT").forEachIndexed { index, section ->
+        DesktopStartHints.settingsSection = section
+        shortcuts.onNavigate?.invoke(0)
+        settle(4)
+        shortcuts.onSettings?.invoke()
+        save("9${'a' + index}-settings-${section.lowercase()}")
+    }
     scene.close()
     kotlin.system.exitProcess(0)
 }

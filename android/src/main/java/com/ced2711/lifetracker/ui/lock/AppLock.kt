@@ -6,13 +6,28 @@ import android.content.ContextWrapper
 import android.os.SystemClock
 import androidx.biometric.BiometricManager.Authenticators
 import androidx.biometric.BiometricPrompt
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import com.ced2711.lifetracker.ui.design.Space
+import com.ced2711.lifetracker.ui.theme.LifeTheme
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -155,26 +170,52 @@ fun AppLockScreen(controller: AppLockController) {
         }
     }
 
+    // The prompt opens by itself; the button is there for a second try.
     LaunchedEffect(Unit) { if (deviceSecure) unlock() }
 
-    Surface(modifier = Modifier.fillMaxSize()) {
+    AppLockContent(deviceSecure = deviceSecure, error = error, onUnlock = ::unlock)
+}
+
+/**
+ * What a locked app shows instead of its content: the lock, one sentence, the last error, and
+ * Unlock. Without a screen lock on the device there is nothing to check, so it warns and lets
+ * the user continue.
+ */
+@Composable
+internal fun AppLockContent(
+    deviceSecure: Boolean,
+    error: String?,
+    onUnlock: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(32.dp),
+                .safeDrawingPadding()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = Space.xxxl, vertical = Space.xxl),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically),
+            verticalArrangement = Arrangement.spacedBy(Space.md, Alignment.CenterVertically),
         ) {
-            Icon(
-                imageVector = Icons.Outlined.Lock,
-                contentDescription = null,
-                modifier = Modifier.size(56.dp),
-                tint = MaterialTheme.colorScheme.primary,
-            )
+            Box(
+                Modifier.size(88.dp).clip(CircleShape).background(LifeTheme.colors.accentSoft),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Lock,
+                    contentDescription = null,
+                    modifier = Modifier.size(40.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
+            Spacer(Modifier.height(Space.xs))
             Text(
                 text = localizedText("Life Assistant is locked"),
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center,
+                modifier = Modifier.semantics { heading() },
             )
             Text(
                 text = localizedText(
@@ -184,17 +225,25 @@ fun AppLockScreen(controller: AppLockController) {
                         "This device has no screen lock, so the app lock cannot verify you. Set a screen lock to protect the app."
                     },
                 ),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (deviceSecure) MaterialTheme.colorScheme.onSurfaceVariant else LifeTheme.colors.warning,
                 textAlign = TextAlign.Center,
+                modifier = Modifier.widthIn(max = 360.dp),
             )
-            error?.let {
+            if (error != null) {
                 Text(
-                    text = it,
-                    color = MaterialTheme.colorScheme.error,
+                    text = error,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = LifeTheme.colors.danger,
                     textAlign = TextAlign.Center,
+                    modifier = Modifier.widthIn(max = 360.dp),
                 )
             }
-            Button(onClick = ::unlock) {
+            Spacer(Modifier.height(Space.sm))
+            Button(
+                onClick = onUnlock,
+                modifier = Modifier.widthIn(min = 200.dp).heightIn(min = 48.dp),
+            ) {
                 Text(localizedText(if (deviceSecure) "Unlock" else "Continue"))
             }
         }

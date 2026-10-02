@@ -56,8 +56,13 @@ class CloudSyncWorker(
                 notifyAttention("Open Life Assistant to reconnect Google Drive.")
                 Result.success()
             }
+            AndroidCloudSyncResult.NeedsGitHubSignIn -> {
+                container.cloudSyncPreferences.setAttention(CloudSyncAttention.GITHUB_SIGN_IN)
+                notifyAttention("GitHub sign-in expired. Tap to reconnect; your data and settings stay as they are.")
+                Result.success()
+            }
             is AndroidCloudSyncResult.Failed -> {
-                container.cloudSyncPreferences.setAttention(CloudSyncAttention.FAILED)
+                container.cloudSyncPreferences.setAttention(CloudSyncAttention.FAILED, result.message)
                 if (runAttemptCount < 3) Result.retry() else Result.failure()
             }
         }
@@ -83,7 +88,7 @@ class CloudSyncWorker(
                 NotificationManager.IMPORTANCE_DEFAULT,
             ).apply {
                 description = translateUiText(
-                    "Google Drive sync needs attention",
+                    "Cloud sync needs attention",
                     appSettings.uiLanguage,
                 )
             },

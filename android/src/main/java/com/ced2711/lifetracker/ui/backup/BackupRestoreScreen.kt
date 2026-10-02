@@ -1,63 +1,47 @@
 package com.ced2711.lifetracker.ui.backup
 
-import androidx.core.net.toUri
-import com.ced2711.lifetracker.data.cloud.CloudProvider
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.foundation.layout.FlowRow
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.Cloud
-import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.Upload
+import androidx.compose.material.icons.rounded.Cloud
+import androidx.compose.material.icons.rounded.CloudDone
+import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
-import com.ced2711.lifetracker.ui.localization.localizedText
-import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
-import com.ced2711.lifetracker.ui.localization.translateUiText
-import com.ced2711.lifetracker.domain.model.UiLanguage
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -65,25 +49,43 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.DialogProperties
+import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ced2711.lifetracker.cloudsync.ConflictResolution
+import com.ced2711.lifetracker.data.cloud.CloudProvider
 import com.ced2711.lifetracker.data.cloud.CloudSyncAttention
-import com.ced2711.lifetracker.ui.adaptive.HingeSafeAlertDialog
+import com.ced2711.lifetracker.domain.format.UserFormatting
+import com.ced2711.lifetracker.domain.model.DateFormatOption
+import com.ced2711.lifetracker.domain.model.UiLanguage
+import com.ced2711.lifetracker.ui.components.ConfirmDialog
+import com.ced2711.lifetracker.ui.design.EmptyState
+import com.ced2711.lifetracker.ui.design.IconTile
+import com.ced2711.lifetracker.ui.design.ReadableWidth
+import com.ced2711.lifetracker.ui.design.Space
+import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
+import com.ced2711.lifetracker.ui.localization.localizedText
+import com.ced2711.lifetracker.ui.localization.translateUiText
+import com.ced2711.lifetracker.ui.localization.uiLocale
+import com.ced2711.lifetracker.ui.settings.GroupColumns
+import com.ced2711.lifetracker.ui.settings.SettingDivider
+import com.ced2711.lifetracker.ui.settings.SettingRow
+import com.ced2711.lifetracker.ui.settings.SettingSwitchRow
+import com.ced2711.lifetracker.ui.settings.SettingsGroup
+import com.ced2711.lifetracker.ui.theme.LifeTheme
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 private enum class RestoreReviewStep {
@@ -93,8 +95,9 @@ private enum class RestoreReviewStep {
 }
 
 /**
- * Hinge-safe auxiliary page. Repository work, Vault authentication, and result mapping are owned by
- * [actions]; this screen only launches the Storage Access Framework and enforces the review flow.
+ * Backup & sync. Repository work, Vault authentication, and result mapping are owned by
+ * [actions] and [cloudViewModel]; this part only launches the Storage Access Framework, owns the
+ * dialogs and enforces the review flow of a restore. [BackupContent] draws the page.
  */
 @Composable
 fun BackupRestoreScreen(
@@ -113,11 +116,15 @@ fun BackupRestoreScreen(
     var reviewStep by remember { mutableStateOf(RestoreReviewStep.PREVIEW) }
     var connectCloudRequested by remember { mutableStateOf(false) }
     var connectGitHubRequested by remember { mutableStateOf(false) }
+    var confirmDisconnect by remember { mutableStateOf(false) }
+    var dailyRestoreRequested by remember { mutableStateOf<DailyBackupCopy?>(null) }
     var recoveryFileName by rememberSaveable { mutableStateOf<String?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
     val uiLanguage = LocalUiLanguage.current
     val cloudState by cloudViewModel.uiState.collectAsStateWithLifecycle()
     val cloudConsent by cloudViewModel.consentRequest.collectAsStateWithLifecycle()
+    val dailyBackups by actions.dailyBackups.collectAsStateWithLifecycle()
 
     val createBackupLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument(TASK_LEDGER_BACKUP_MIME_TYPE),
@@ -150,6 +157,7 @@ fun BackupRestoreScreen(
         }
     }
 
+    LaunchedEffect(Unit) { actions.refreshDailyBackups() }
     LaunchedEffect(uiState.task) {
         if (uiState.task != BackupRestoreTask.NONE) pendingSubmission = null
     }
@@ -158,8 +166,15 @@ fun BackupRestoreScreen(
     }
     LaunchedEffect(uiState.notice, uiLanguage) {
         val notice = uiState.notice ?: return@LaunchedEffect
-        snackbarHostState.showSnackbar(translateUiText(notice.message, uiLanguage))
+        // A restored daily copy can be taken back right from its message.
+        val offersUndo = notice == BackupRestoreNotice.DAILY_RESTORE_COMPLETE
+        val result = snackbarHostState.showSnackbar(
+            message = translateUiText(notice.message, uiLanguage),
+            actionLabel = if (offersUndo) translateUiText("Undo restore", uiLanguage) else null,
+            duration = if (offersUndo) SnackbarDuration.Long else SnackbarDuration.Short,
+        )
         actions.acknowledgeNotice()
+        if (offersUndo && result == SnackbarResult.ActionPerformed) actions.undoDailyRestore()
     }
     LaunchedEffect(cloudState.message, uiLanguage) {
         val message = cloudState.message ?: return@LaunchedEffect
@@ -172,7 +187,8 @@ fun BackupRestoreScreen(
     val hasPasswordPrompt = exportDestination != null ||
         restoreSource != null ||
         includedRestoreRequested ||
-        connectCloudRequested
+        connectCloudRequested ||
+        connectGitHubRequested
     val isBlocked = shouldBlockBackupExit(uiState, isLocallySubmitted) || cloudState.busy
     val isSensitive = shouldProtectBackupWindow(
         uiState = uiState,
@@ -191,108 +207,30 @@ fun BackupRestoreScreen(
     }
     BackHandler(enabled = isBlocked) { }
 
-    Scaffold(
-        modifier = modifier.fillMaxSize(),
-        contentWindowInsets = WindowInsets.safeDrawing,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-    ) { contentPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(contentPadding),
-            contentAlignment = Alignment.TopCenter,
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = 920.dp)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-            ) {
-                CloudSyncCard(
-                    state = cloudState,
-                    onConnect = { connectCloudRequested = true },
-                    onConnectGitHub = { connectGitHubRequested = true },
-                    onSync = { cloudViewModel.syncNow() },
-                    onAutomaticChange = cloudViewModel::setAutomaticSync,
-                    onReconnect = cloudViewModel::reconnect,
-                    onDisconnect = cloudViewModel::disconnect,
-                )
-                Spacer(Modifier.height(16.dp))
-                if (cloudState.recoveryFiles.isNotEmpty()) {
-                    CloudRecoveryCard(
-                        files = cloudState.recoveryFiles,
-                        enabled = !isBlocked && uiState.restorePreview == null,
-                        onExport = { name ->
-                            recoveryFileName = name
-                            exportRecoveryLauncher.launch(name)
-                        },
-                    )
-                    Spacer(Modifier.height(16.dp))
-                }
-                OfflineEncryptionCard()
-                Spacer(Modifier.height(16.dp))
-                if (hasIncludedPersonalBackup) {
-                    IncludedPersonalBackupCard(
-                        enabled = !isBlocked && uiState.restorePreview == null,
-                        onRestore = { includedRestoreRequested = true },
-                    )
-                    Spacer(Modifier.height(16.dp))
-                }
-                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                    val useTwoColumns = maxWidth >= 680.dp
-                    if (useTwoColumns) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        ) {
-                            ExportCard(
-                                enabled = !isBlocked && uiState.restorePreview == null,
-                                modifier = Modifier.weight(1f),
-                                onChooseDestination = {
-                                    createBackupLauncher.launch(ensureBackupExtension(defaultExportFileName))
-                                },
-                            )
-                            RestoreCard(
-                                enabled = !isBlocked && uiState.restorePreview == null,
-                                modifier = Modifier.weight(1f),
-                                onChooseSource = {
-                                    openBackupLauncher.launch(
-                                        arrayOf(
-                                            TASK_LEDGER_BACKUP_MIME_TYPE,
-                                            "application/octet-stream",
-                                        ),
-                                    )
-                                },
-                            )
-                        }
-                    } else {
-                        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                            ExportCard(
-                                enabled = !isBlocked && uiState.restorePreview == null,
-                                modifier = Modifier.fillMaxWidth(),
-                                onChooseDestination = {
-                                    createBackupLauncher.launch(ensureBackupExtension(defaultExportFileName))
-                                },
-                            )
-                            RestoreCard(
-                                enabled = !isBlocked && uiState.restorePreview == null,
-                                modifier = Modifier.fillMaxWidth(),
-                                onChooseSource = {
-                                    openBackupLauncher.launch(
-                                        arrayOf(
-                                            TASK_LEDGER_BACKUP_MIME_TYPE,
-                                            "application/octet-stream",
-                                        ),
-                                    )
-                                },
-                            )
-                        }
-                    }
-                }
-                Spacer(Modifier.height(32.dp))
-            }
-        }
+    Box(modifier.fillMaxSize()) {
+        BackupContent(
+            cloud = cloudState,
+            daily = dailyBackups,
+            actionsEnabled = !isBlocked && uiState.restorePreview == null,
+            hasIncludedPersonalBackup = hasIncludedPersonalBackup,
+            onConnectGitHub = { connectGitHubRequested = true },
+            onSync = { cloudViewModel.syncNow() },
+            onReconnect = cloudViewModel::reconnect,
+            onAutomaticSync = cloudViewModel::setAutomaticSync,
+            onDisconnect = { confirmDisconnect = true },
+            onExportRecovery = { name ->
+                recoveryFileName = name
+                exportRecoveryLauncher.launch(name)
+            },
+            onRestoreDaily = { dailyRestoreRequested = it },
+            onUndoDailyRestore = actions::undoDailyRestore,
+            onExport = { createBackupLauncher.launch(ensureBackupExtension(defaultExportFileName)) },
+            onChooseBackupFile = {
+                openBackupLauncher.launch(arrayOf(TASK_LEDGER_BACKUP_MIME_TYPE, "application/octet-stream"))
+            },
+            onRestoreIncluded = { includedRestoreRequested = true },
+        )
+        SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter))
     }
 
     exportDestination?.let { destination ->
@@ -331,6 +269,8 @@ fun BackupRestoreScreen(
         )
     }
 
+    // Google Drive is not offered for new connections at the moment; the dialog stays for the
+    // day it returns.
     if (connectCloudRequested) {
         CloudSyncPasswordDialog(
             onDismiss = { connectCloudRequested = false },
@@ -358,14 +298,70 @@ fun BackupRestoreScreen(
     }
 
     cloudState.gitHubPrompt?.let { prompt ->
-        GitHubCodeDialog(prompt = prompt, onCancel = cloudViewModel::cancelGitHubConnect)
+        val copyCode = {
+            context.getSystemService(ClipboardManager::class.java)
+                ?.setPrimaryClip(ClipData.newPlainText("GitHub code", prompt.userCode))
+            Unit
+        }
+        LaunchedEffect(prompt.userCode) { copyCode() }
+        GitHubCodeDialog(
+            prompt = prompt,
+            onCopy = copyCode,
+            onOpenGitHub = {
+                copyCode()
+                runCatching {
+                    context.startActivity(
+                        Intent(Intent.ACTION_VIEW, prompt.verificationUri.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                }.onFailure {
+                    Toast.makeText(
+                        context,
+                        translateUiText("No browser is available to open GitHub.", uiLanguage),
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            },
+            onCancel = cloudViewModel::cancelGitHubConnect,
+        )
     }
 
     cloudState.conflict?.let {
         CloudConflictDialog(
+            provider = cloudState.providerName,
             onKeepLocal = { cloudViewModel.syncNow(ConflictResolution.KEEP_LOCAL) },
             onUseCloud = { cloudViewModel.syncNow(ConflictResolution.USE_CLOUD) },
             onDismiss = cloudViewModel::dismissConflict,
+        )
+    }
+
+    if (confirmDisconnect) {
+        ConfirmDialog(
+            title = localizedText("Disconnect cloud sync?"),
+            text = localizedText("This device stops syncing. Your data stays on this device and in the cloud; you can connect again any time."),
+            confirmLabel = localizedText("Disconnect"),
+            destructive = true,
+            onConfirm = {
+                confirmDisconnect = false
+                cloudViewModel.disconnect()
+            },
+            onDismiss = { confirmDisconnect = false },
+        )
+    }
+
+    dailyRestoreRequested?.let { copy ->
+        ConfirmDialog(
+            title = localizedText("Go back to this copy?"),
+            text = dailyRestoreWarning(
+                UserFormatting.formatDate(copy.day, dailyBackups.dateFormat, uiLocale(uiLanguage)),
+                uiLanguage,
+            ),
+            confirmLabel = localizedText("Restore"),
+            destructive = true,
+            onConfirm = {
+                dailyRestoreRequested = null
+                actions.restoreDailyBackup(copy.day)
+            },
+            onDismiss = { dailyRestoreRequested = null },
         )
     }
 
@@ -399,853 +395,339 @@ fun BackupRestoreScreen(
     }
 }
 
+/**
+ * The Backup & sync page without any Android service: cloud sync, the copies kept on this device
+ * and the backup file, as groups of rows. [actionsEnabled] is false while a backup task runs.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun CloudSyncCard(
-    state: CloudSyncUiState,
-    onConnect: () -> Unit,
+internal fun BackupContent(
+    cloud: CloudSyncUiState,
+    daily: DailyBackupsUiState,
+    modifier: Modifier = Modifier,
+    actionsEnabled: Boolean = true,
+    hasIncludedPersonalBackup: Boolean = false,
+    today: LocalDate = LocalDate.now(),
+    scrollState: ScrollState = rememberScrollState(),
     onConnectGitHub: () -> Unit,
     onSync: () -> Unit,
-    onAutomaticChange: (Boolean) -> Unit,
     onReconnect: () -> Unit,
+    onAutomaticSync: (Boolean) -> Unit,
     onDisconnect: () -> Unit,
+    onExportRecovery: (String) -> Unit,
+    onRestoreDaily: (DailyBackupCopy) -> Unit,
+    onUndoDailyRestore: () -> Unit,
+    onExport: () -> Unit,
+    onChooseBackupFile: () -> Unit,
+    onRestoreIncluded: () -> Unit,
 ) {
-    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                verticalAlignment = Alignment.CenterVertically,
+    val language = LocalUiLanguage.current
+
+    @Composable
+    fun migrationGroup() {
+        SettingsGroup(localizedText("Restore your previous data")) {
+            SettingRow(
+                title = localizedText("Your original backup is included"),
+                supporting = localizedText(
+                    "This personal migration build contains your original encrypted backup. " +
+                        "Enter its password to validate it, review the contents, and restore. The password " +
+                        "and decrypted data are not built into the app.",
+                ),
+                stacked = true,
             ) {
-                Surface(
-                    shape = MaterialTheme.shapes.medium,
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                Button(enabled = actionsEnabled, onClick = onRestoreIncluded) { Text(localizedText("Restore included backup")) }
+            }
+        }
+    }
+
+    @Composable
+    fun cloudGroup() {
+        SettingsGroup(
+            title = localizedText("Cloud sync"),
+            description = localizedText("Keeps your phone and your PC the same. Everything is encrypted before it leaves this device, and changes from both devices are merged automatically."),
+        ) {
+            if (!cloud.connected) {
+                SettingRow(
+                    title = "GitHub",
+                    supporting = localizedText("Uses a private repository in your own GitHub account. One sign-in, nothing else to set up."),
+                    leading = { IconTile(Icons.Rounded.Cloud) },
+                    stacked = true,
                 ) {
-                    Icon(Icons.Outlined.Cloud, null, modifier = Modifier.padding(10.dp).size(28.dp))
+                    Button(enabled = !cloud.busy, onClick = onConnectGitHub) {
+                        Text(localizedText(if (cloud.busy) "Connecting…" else "Connect GitHub"))
+                    }
                 }
-                Column(modifier = Modifier.weight(1f)) {
-                    val gitHub = state.connected && state.provider == CloudProvider.GITHUB
-                    Text(
-                        localizedText(
-                            when {
-                                !state.connected -> "Cloud sync"
-                                gitHub -> "GitHub sync"
-                                else -> "Google Drive sync"
-                            },
-                        ),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        when {
-                            gitHub -> localizedText("Connected") + " · " + state.gitHubRepository
-                            state.connected -> localizedText("Connected")
-                            else -> localizedText("Not connected")
-                        },
-                        color = if (state.connected) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
-                }
-            }
-            Text(
-                localizedText(
-                    "Sync password-encrypted snapshots between Android and Windows through Google Drive's " +
-                        "private app folder or a private GitHub repository. Cloud sync is optional; " +
-                        "Life Assistant works offline by default.",
-                ),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                localizedText(
-                    "Each upload creates a new encrypted version. The 10 most recent versions are kept; " +
-                        "conflicts pause sync.",
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (!state.connected) {
-                Text(
-                    localizedText(
-                        "Sign in with GitHub; that is all. Use the same GitHub account and the same " +
-                            "sync password on your phone and your PC.",
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                cloud.connectionError?.let { error -> AttentionLine(localizedText(error)) }
+                SettingDivider()
+                // Google Drive returns once its Google Cloud project is published; existing
+                // connections keep working.
+                SettingRow(title = "Google Drive", supporting = localizedText("Coming soon."), enabled = false)
+                SettingDivider()
+                SettingRow(
+                    title = localizedText("Works without sync too"),
+                    supporting = localizedText("Life Assistant is fully usable offline on this device alone. Sync is optional."),
                 )
-            }
-            state.connectionError?.let { error ->
-                Text(
-                    localizedText(error),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-            if (state.connected) {
-                Text(
-                    localizedText(
-                        "When Vault contains entries, background sync pauses until you unlock it " +
-                            "in Life Assistant. This keeps Vault keys protected by Android.",
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(localizedText("Automatic sync"), style = MaterialTheme.typography.titleSmall)
-                        Text(
-                            localizedText("Syncs a few seconds after each change, when you open the app, and about every 15 minutes in the background."),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(
-                        checked = state.automaticSync,
-                        enabled = !state.busy,
-                        onCheckedChange = onAutomaticChange,
-                    )
-                }
-                state.lastSyncAt?.let { timestamp ->
-                    Text(
-                        localizedText(
-                            "Last sync: ${formatCloudSyncTime(timestamp, LocalUiLanguage.current)}",
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                state.attention?.let { attention ->
-                    val text = when (attention) {
-                        CloudSyncAttention.CONFLICT ->
-                            "Cloud changes need review. Sync now to choose which version to keep."
-                        CloudSyncAttention.VAULT_UNLOCK ->
-                            "Automatic sync is waiting for Vault authentication."
-                        CloudSyncAttention.GOOGLE_CONSENT ->
-                            "Google Drive permission needs to be renewed."
-                        CloudSyncAttention.FAILED ->
-                            "The last automatic sync failed. Try syncing again."
-                    }
-                    Text(
-                        localizedText(text),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(
-                        enabled = !state.busy,
-                        onClick = if (state.attention == CloudSyncAttention.GOOGLE_CONSENT) {
-                            onReconnect
-                        } else {
-                            onSync
-                        },
-                    ) {
-                        if (state.busy) {
-                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                        } else {
-                            Icon(Icons.Outlined.Refresh, null, modifier = Modifier.size(18.dp))
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            localizedText(
-                                when {
-                                    state.busy -> "Syncing…"
-                                    state.attention == CloudSyncAttention.GOOGLE_CONSENT -> "Reconnect"
-                                    else -> "Sync now"
-                                },
-                            ),
-                        )
-                    }
-                    TextButton(enabled = !state.busy, onClick = onDisconnect) {
-                        Text(localizedText("Disconnect"))
-                    }
-                }
             } else {
-                // FlowRow keeps both choices readable on narrow cover screens and small windows.
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                val needsReconnect = cloud.attention == CloudSyncAttention.GOOGLE_CONSENT || cloud.attention == CloudSyncAttention.GITHUB_SIGN_IN
+                val connected = localizedText("Connected")
+                SettingRow(
+                    title = cloud.providerName,
+                    supporting = listOfNotNull(connected, cloud.gitHubRepository.takeIf { cloud.provider == CloudProvider.GITHUB && it.isNotBlank() }).joinToString(" · "),
+                    supportingColor = MaterialTheme.colorScheme.primary,
+                    leading = { IconTile(Icons.Rounded.CloudDone) },
+                )
+                cloud.attention?.let { attention ->
+                    AttentionLine(
+                        text = when (attention) {
+                            CloudSyncAttention.CONFLICT ->
+                                localizedText("Cloud changes need review. Sync now to choose which version to keep.")
+                            CloudSyncAttention.VAULT_UNLOCK ->
+                                localizedText("Automatic sync is waiting for Vault authentication.")
+                            CloudSyncAttention.GOOGLE_CONSENT ->
+                                localizedText("Google Drive permission needs to be renewed.")
+                            CloudSyncAttention.GITHUB_SIGN_IN ->
+                                localizedText("GitHub sign-in expired. Reconnect; your data and settings stay as they are.")
+                            CloudSyncAttention.FAILED ->
+                                // The reason says more than "failed": no network, wrong password, …
+                                cloud.lastError?.takeIf(String::isNotBlank)?.let { syncFailedBecause(localizedText(it), language) }
+                                    ?: localizedText("The last automatic sync failed. Try syncing again.")
+                        },
+                        actionLabel = localizedText("Reconnect").takeIf { needsReconnect },
+                        actionEnabled = !cloud.busy,
+                        onAction = onReconnect,
+                    )
+                }
+                SettingDivider()
+                SettingSwitchRow(
+                    title = localizedText("Automatic sync"),
+                    supporting = localizedText("Syncs a few seconds after each change, when you open the app, and about every 15 minutes in the background."),
+                    checked = cloud.automaticSync,
+                    enabled = !cloud.busy,
+                    onCheckedChange = onAutomaticSync,
+                )
+                SettingDivider()
+                SettingRow(
+                    title = localizedText("Last sync"),
+                    supporting = cloud.lastSyncAt?.let { formatCloudSyncTime(it, language) } ?: localizedText("Never synced"),
                 ) {
-                    Button(enabled = !state.busy, onClick = onConnectGitHub) {
-                        Text(localizedText(if (state.busy) "Connecting…" else "Connect GitHub"))
-                    }
-                    // Google Drive returns once its Google Cloud project is published; the code
-                    // path stays so existing connections keep working.
-                    OutlinedButton(enabled = false, onClick = onConnect) {
-                        Text(localizedText("Google Drive (coming soon)"))
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CloudRecoveryCard(files: List<String>, enabled: Boolean, onExport: (String) -> Unit) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
-    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(localizedText("Local sync recovery"), style = MaterialTheme.typography.titleMedium)
-            Text(
-                localizedText("Before using a cloud version, Life Assistant keeps an encrypted local recovery copy. Export a copy and use Restore backup to recover it with its original sync password. The 5 most recent copies are kept."),
-                style = MaterialTheme.typography.bodySmall,
-            )
-            TextButton(onClick = { expanded = !expanded }) {
-                Text(localizedText(if (expanded) "Hide recovery copies" else "Show recovery copies"))
-            }
-            if (expanded) {
-                Column(Modifier.heightIn(max = 240.dp).verticalScroll(rememberScrollState())) {
-                    files.forEach { name ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-                            TextButton(enabled = enabled, onClick = { onExport(name) }) {
-                                Text(localizedText("Export"))
+                    if (!needsReconnect) {
+                        Button(enabled = !cloud.busy, onClick = onSync) {
+                            if (cloud.busy) {
+                                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            } else {
+                                Icon(Icons.Rounded.Refresh, null, Modifier.size(18.dp))
                             }
+                            Spacer(Modifier.width(Space.sm))
+                            Text(localizedText(if (cloud.busy) "Syncing…" else "Sync now"))
                         }
+                    }
+                }
+                SettingDivider()
+                SettingRow(
+                    title = localizedText("Connection"),
+                    supporting = localizedText("Reconnect signs in again and keeps everything. Disconnect stops syncing on this device; your data stays here."),
+                    stacked = true,
+                ) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                        if (!needsReconnect) {
+                            OutlinedButton(enabled = !cloud.busy, onClick = onReconnect) { Text(localizedText("Reconnect")) }
+                        }
+                        OutlinedButton(
+                            enabled = !cloud.busy,
+                            onClick = onDisconnect,
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = LifeTheme.colors.danger),
+                        ) { Text(localizedText("Disconnect")) }
+                    }
+                }
+            }
+        }
+        if (cloud.connected) {
+            Footnote(localizedText("When Vault contains entries, background sync pauses until you unlock it in Life Assistant. This keeps Vault keys protected by Android."))
+        }
+    }
+
+    @Composable
+    fun recoveryGroup() {
+        SettingsGroup(
+            title = localizedText("Sync recovery copies"),
+            description = localizedText("Before a cloud version replaces local data, an encrypted copy is kept on this device (the 5 most recent). Export one, then restore it with the sync password it was made with."),
+        ) {
+            cloud.recoveryFiles.forEachIndexed { index, name ->
+                if (index > 0) SettingDivider()
+                SettingRow(title = recoveryCopyLabel(name, language)) {
+                    OutlinedButton(enabled = actionsEnabled, onClick = { onExportRecovery(name) }) { Text(localizedText("Export")) }
+                }
+            }
+        }
+    }
+
+    @Composable
+    fun dailyGroup() {
+        SettingsGroup(
+            title = localizedText("Daily backups"),
+            description = localizedText("The app keeps a copy of yesterday and the day before on this device."),
+        ) {
+            if (daily.copies.isEmpty()) {
+                EmptyState(
+                    title = localizedText("No copies yet"),
+                    body = localizedText("The first copy is made tomorrow."),
+                )
+            }
+            daily.copies.forEachIndexed { index, copy ->
+                if (index > 0) SettingDivider()
+                SettingRow(
+                    title = dailyCopyLabel(copy.day, today, daily.dateFormat, language),
+                    supporting = formatBackupByteCount(copy.sizeBytes),
+                ) {
+                    OutlinedButton(enabled = actionsEnabled, onClick = { onRestoreDaily(copy) }) { Text(localizedText("Restore")) }
+                }
+            }
+            if (daily.canUndo) {
+                SettingDivider()
+                SettingRow(
+                    title = localizedText("Undo the last restore"),
+                    supporting = localizedText("Puts back the data from right before you restored a daily copy."),
+                ) {
+                    TextButton(enabled = actionsEnabled, onClick = onUndoDailyRestore) {
+                        Text(localizedText("Undo restore"), fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
         }
     }
-}
 
-@Composable
-internal fun CloudSyncPasswordDialog(
-    onDismiss: () -> Unit,
-    onConnect: (CharArray) -> Unit,
-    title: String = "Connect Google Drive",
-    gitHub: Boolean = false,
-    // Only builds without a built-in GitHub sign-in ask for a Client ID and repository.
-    showGitHubFields: Boolean = gitHub,
-    initialClientId: String = "",
-    initialRepository: String = "",
-    onConnectGitHub: (CharArray, String, String) -> Unit = { password, _, _ -> onConnect(password) },
-) {
-    var password by remember { mutableStateOf("") }
-    var confirmation by remember { mutableStateOf("") }
-    var visible by remember { mutableStateOf(false) }
-    var submitted by remember { mutableStateOf(false) }
-    var clientId by rememberSaveable { mutableStateOf(initialClientId) }
-    var repository by rememberSaveable { mutableStateOf(initialRepository) }
-    val issue = if (submitted) exportPasswordIssue(password, confirmation) else null
-    val clientIdMissing = showGitHubFields && submitted && clientId.isBlank()
-    val dismiss = {
-        password = ""
-        confirmation = ""
-        onDismiss()
+    @Composable
+    fun fileGroup() {
+        SettingsGroup(
+            title = localizedText("Backup file"),
+            description = localizedText("A single encrypted .tlb file with everything: todos, ledger, notes, diary, Vault and attached files. Use it to move data or keep a copy elsewhere."),
+        ) {
+            SettingRow(
+                title = localizedText("Export"),
+                supporting = localizedText("Choose where to save the file, then give it a password. Exporting the Vault may ask for device authentication."),
+                stacked = true,
+            ) {
+                OutlinedButton(enabled = actionsEnabled, onClick = onExport) { Text(localizedText("Export backup")) }
+            }
+            SettingDivider()
+            SettingRow(
+                title = localizedText("Restore"),
+                supporting = localizedText("Replace this device's data with a backup file, after reviewing what it contains."),
+                stacked = true,
+            ) {
+                OutlinedButton(enabled = actionsEnabled, onClick = onChooseBackupFile) { Text(localizedText("Choose backup file")) }
+            }
+        }
     }
-    HingeSafeAlertDialog(
-        onDismissRequest = dismiss,
-        title = { Text(localizedText(title)) },
-        text = {
-            // HingeSafeAlertDialog already scrolls its body; a second vertical scroll here crashes.
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    localizedText(
-                        "Choose a sync password. If another device already syncs, enter its password " +
-                            "(on Windows this is your data password). Nobody can recover it for you.",
-                    ),
-                )
-                if (showGitHubFields) {
-                    OutlinedTextField(
-                        value = clientId,
-                        onValueChange = { clientId = it.trim(); submitted = false },
-                        label = { Text(localizedText("GitHub Client ID")) },
-                        singleLine = true,
-                        isError = clientIdMissing,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    OutlinedTextField(
-                        value = repository,
-                        onValueChange = { repository = it },
-                        label = { Text(localizedText("Private repository (owner/name, optional)")) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                PasswordField(
-                    value = password,
-                    label = "Sync password",
-                    visible = visible,
-                    isError = issue == BackupPasswordIssue.TOO_SHORT,
-                    onValueChange = { password = it; submitted = false },
-                    onVisibilityChange = { visible = !visible },
-                )
-                PasswordField(
-                    value = confirmation,
-                    label = "Confirm password",
-                    visible = visible,
-                    isError = issue == BackupPasswordIssue.DOES_NOT_MATCH,
-                    onValueChange = { confirmation = it; submitted = false },
-                    onVisibilityChange = { visible = !visible },
-                )
-                if (issue != null) {
-                    Text(localizedText(issue.message), color = MaterialTheme.colorScheme.error)
-                }
-            }
-        },
-        dismissButton = { TextButton(onClick = dismiss) { Text(localizedText("Cancel")) } },
-        confirmButton = {
-            Button(onClick = {
-                submitted = true
-                if (exportPasswordIssue(password, confirmation) == null && !(showGitHubFields && clientId.isBlank())) {
-                    val transferred = password.toCharArray()
-                    password = ""
-                    confirmation = ""
-                    if (gitHub) onConnectGitHub(transferred, clientId, repository) else onConnect(transferred)
-                }
-            }) { Text(localizedText("Connect")) }
-        },
-    )
-}
 
-@Composable
-private fun GitHubCodeDialog(prompt: GitHubCodePrompt, onCancel: () -> Unit) {
-    val context = LocalContext.current
-    val uiLanguage = LocalUiLanguage.current
-    val copyCode = {
-        val clipboard = context.getSystemService(android.content.ClipboardManager::class.java)
-        clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("GitHub code", prompt.userCode))
+    BoxWithConstraints(modifier.fillMaxSize()) {
+        val twoColumns = maxWidth >= 700.dp
+        Box(Modifier.fillMaxSize().verticalScroll(scrollState)) {
+            ReadableWidth(maxWidth = if (twoColumns) 1120.dp else 760.dp) {
+                GroupColumns(
+                    twoColumns = twoColumns,
+                    modifier = Modifier.padding(horizontal = if (twoColumns) Space.xxl else Space.lg).padding(top = Space.xs, bottom = Space.xxxl),
+                    first = {
+                        if (hasIncludedPersonalBackup) migrationGroup()
+                        cloudGroup()
+                        if (cloud.recoveryFiles.isNotEmpty()) recoveryGroup()
+                    },
+                    second = {
+                        dailyGroup()
+                        fileGroup()
+                    },
+                )
+            }
+        }
     }
-    LaunchedEffect(prompt.userCode) { copyCode() }
-    HingeSafeAlertDialog(
-        onDismissRequest = {},
-        title = { Text(localizedText("Approve on GitHub")) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(localizedText("The code is copied. Open GitHub, paste it, and choose Authorize. Then come back; this screen continues by itself."))
-                Text(
-                    prompt.userCode,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                )
-                Text(prompt.verificationUri, style = MaterialTheme.typography.bodySmall)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { copyCode() }) { Text(localizedText("Copy code")) }
-                    Button(onClick = {
-                        copyCode()
-                        runCatching {
-                            context.startActivity(
-                                android.content.Intent(android.content.Intent.ACTION_VIEW, prompt.verificationUri.toUri())
-                                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
-                            )
-                        }.onFailure {
-                            android.widget.Toast.makeText(
-                                context,
-                                translateUiText("No browser is available to open GitHub.", uiLanguage),
-                                android.widget.Toast.LENGTH_LONG,
-                            ).show()
-                        }
-                    }) { Text(localizedText("Open GitHub")) }
-                }
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            }
-        },
-        confirmButton = {},
-        dismissButton = { TextButton(onClick = onCancel) { Text(localizedText("Cancel")) } },
+}
+
+/** Something about sync that needs the user: a red line inside the panel, with its action. */
+@Composable
+private fun AttentionLine(
+    text: String,
+    actionLabel: String? = null,
+    actionEnabled: Boolean = true,
+    onAction: () -> Unit = {},
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = Space.md, vertical = Space.xs)
+            .clip(MaterialTheme.shapes.medium)
+            .background(LifeTheme.colors.dangerContainer)
+            .padding(Space.md),
+        verticalArrangement = Arrangement.spacedBy(Space.sm),
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+            Icon(Icons.Rounded.ErrorOutline, null, Modifier.padding(top = 1.dp).size(18.dp), tint = LifeTheme.colors.danger)
+            Text(text, style = MaterialTheme.typography.bodyMedium, color = LifeTheme.colors.danger, modifier = Modifier.weight(1f))
+        }
+        if (actionLabel != null) {
+            Button(
+                onClick = onAction,
+                enabled = actionEnabled,
+                colors = ButtonDefaults.buttonColors(containerColor = LifeTheme.colors.danger, contentColor = MaterialTheme.colorScheme.surface),
+                modifier = Modifier.padding(start = 26.dp),
+            ) { Text(actionLabel) }
+        }
+    }
+}
+
+/** A quiet note under a group. */
+@Composable
+private fun Footnote(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = Space.xs),
     )
 }
 
-@Composable
-private fun CloudConflictDialog(
-    onKeepLocal: () -> Unit,
-    onUseCloud: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    HingeSafeAlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(localizedText("Sync conflict")) },
-        text = {
-            Text(
-                localizedText(
-                    "This device and Google Drive both changed since the last sync. " +
-                        "Use cloud replaces all local data. Keep this device uploads the current " +
-                        "local data as the next encrypted snapshot.",
-                ),
-            )
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(localizedText("Cancel")) } },
-        confirmButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = onUseCloud) { Text(localizedText("Use cloud")) }
-                Button(onClick = onKeepLocal) { Text(localizedText("Keep this device")) }
-            }
-        },
-    )
+private val CloudSyncUiState.providerName: String
+    get() = if (provider == CloudProvider.GITHUB) "GitHub" else "Google Drive"
+
+private fun syncFailedBecause(reason: String, language: UiLanguage): String = when (language) {
+    UiLanguage.ENGLISH -> "The last sync failed: $reason"
+    UiLanguage.SIMPLIFIED_CHINESE -> "上次同步失败：$reason"
+}
+
+private fun dailyRestoreWarning(date: String, language: UiLanguage): String = when (language) {
+    UiLanguage.ENGLISH ->
+        "Everything except the Password vault is replaced by the copy from $date. What you have now is kept, so you can undo this."
+    UiLanguage.SIMPLIFIED_CHINESE ->
+        "除密码库以外的所有数据都会被 $date 的备份替换。现在的数据会保留，所以可以撤销。"
+}
+
+/** "Yesterday · 10/01/2026": which day a daily copy is from, in words and in the user's format. */
+internal fun dailyCopyLabel(day: LocalDate, today: LocalDate, dateFormat: DateFormatOption, language: UiLanguage): String {
+    val locale = uiLocale(language)
+    val inWords = when (ChronoUnit.DAYS.between(day, today)) {
+        1L -> translateUiText("Yesterday", language)
+        2L -> when (language) {
+            UiLanguage.ENGLISH -> "2 days ago"
+            UiLanguage.SIMPLIFIED_CHINESE -> "前天"
+        }
+        else -> day.dayOfWeek.getDisplayName(TextStyle.FULL, locale)
+    }
+    return "$inWords · ${UserFormatting.formatDate(day, dateFormat, locale)}"
+}
+
+/** A recovery copy is named after the moment it was made; show that moment instead of the file name. */
+private fun recoveryCopyLabel(fileName: String, language: UiLanguage): String {
+    val madeAt = fileName.removePrefix("life-tracker-cloud-recovery-").substringBefore('-').toLongOrNull()
+    return madeAt?.takeIf { it > 0L }?.let { formatCloudSyncTime(it, language) } ?: fileName
 }
 
 private fun formatCloudSyncTime(timestamp: Long, language: UiLanguage): String = runCatching {
     val (pattern, locale) = when (language) {
-        UiLanguage.ENGLISH -> "MMM d, yyyy, h:mm a" to Locale.US
-        UiLanguage.SIMPLIFIED_CHINESE -> "yyyy/M/d HH:mm" to Locale.SIMPLIFIED_CHINESE
+        UiLanguage.ENGLISH -> "MMM d, h:mm a" to Locale.US
+        UiLanguage.SIMPLIFIED_CHINESE -> "M月d日 HH:mm" to Locale.SIMPLIFIED_CHINESE
     }
     DateTimeFormatter.ofPattern(pattern, locale)
         .format(Instant.ofEpochMilli(timestamp).atZone(ZoneId.systemDefault()))
-}.getOrDefault("Unknown")
-
-@Composable
-private fun IncludedPersonalBackupCard(
-    enabled: Boolean,
-    onRestore: () -> Unit,
-) {
-    BackupActionCard(
-        title = "Restore your previous data",
-        description = "This personal migration build contains your original encrypted backup. " +
-            "Enter its password to validate it, review the contents, and restore. The password " +
-            "and decrypted data are not built into the app.",
-        icon = {
-            Icon(Icons.Outlined.Lock, null, modifier = Modifier.size(28.dp))
-        },
-        action = {
-            Button(
-                enabled = enabled,
-                onClick = onRestore,
-            ) {
-                Text(localizedText("Restore included backup"))
-            }
-        },
-        modifier = Modifier.fillMaxWidth(),
-    )
-}
-
-@Composable
-private fun OfflineEncryptionCard() {
-    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.padding(20.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.Top,
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.Lock,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-            )
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    text = localizedText("Private, offline backup"),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = localizedText(
-                        "Your todos, ledger, notes, settings, attachments, and Vault are encrypted " +
-                            "into one local .tlb file. Nothing is uploaded.",
-                    ),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    text = localizedText("The backup password is never saved and cannot be recovered."),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error,
-                    fontWeight = FontWeight.Medium,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ExportCard(
-    enabled: Boolean,
-    modifier: Modifier,
-    onChooseDestination: () -> Unit,
-) {
-    BackupActionCard(
-        title = "Export encrypted backup",
-        description = "Choose where to create a .tlb file, then protect it with a password of at " +
-            "least 8 characters. Exporting the Vault may require device authentication.",
-        icon = {
-            Icon(Icons.Outlined.Upload, null, modifier = Modifier.size(28.dp))
-        },
-        action = {
-            Button(
-                enabled = enabled,
-                onClick = onChooseDestination,
-            ) {
-                Text(localizedText("Choose export location"))
-            }
-        },
-        modifier = modifier,
-    )
-}
-
-@Composable
-private fun RestoreCard(
-    enabled: Boolean,
-    modifier: Modifier,
-    onChooseSource: () -> Unit,
-) {
-    BackupActionCard(
-        title = "Restore from backup",
-        description = "Open a .tlb file and enter its password. The backup is decrypted and fully " +
-            "validated before you see a required preview or any data is changed.",
-        icon = {
-            Icon(Icons.Outlined.Download, null, modifier = Modifier.size(28.dp))
-        },
-        action = {
-            FilledTonalButton(
-                enabled = enabled,
-                onClick = onChooseSource,
-            ) {
-                Text(localizedText("Choose backup file"))
-            }
-        },
-        modifier = modifier,
-    )
-}
-
-@Composable
-private fun BackupActionCard(
-    title: String,
-    description: String,
-    icon: @Composable () -> Unit,
-    action: @Composable () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    ElevatedCard(modifier = modifier) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Surface(
-                shape = MaterialTheme.shapes.medium,
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-            ) {
-                Box(
-                    modifier = Modifier.padding(10.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    icon()
-                }
-            }
-            Text(
-                text = localizedText(title),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = localizedText(description),
-                modifier = Modifier.weight(1f, fill = false),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            action()
-        }
-    }
-}
-
-@Composable
-private fun ExportPasswordDialog(
-    onDismiss: () -> Unit,
-    onExport: (CharArray) -> Unit,
-) {
-    var password by remember { mutableStateOf("") }
-    var confirmation by remember { mutableStateOf("") }
-    var showPassword by remember { mutableStateOf(false) }
-    var submitted by remember { mutableStateOf(false) }
-    val issue = if (submitted) exportPasswordIssue(password, confirmation) else null
-    val dismiss = {
-        password = ""
-        confirmation = ""
-        onDismiss()
-    }
-
-    HingeSafeAlertDialog(
-        onDismissRequest = dismiss,
-        title = { Text(localizedText("Encrypt backup")) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    localizedText("Use at least 8 characters. This password is not saved and cannot be recovered."),
-                )
-                PasswordField(
-                    value = password,
-                    label = "Backup password",
-                    visible = showPassword,
-                    isError = issue == BackupPasswordIssue.TOO_SHORT,
-                    onValueChange = {
-                        password = it
-                        submitted = false
-                    },
-                    onVisibilityChange = { showPassword = !showPassword },
-                )
-                PasswordField(
-                    value = confirmation,
-                    label = "Confirm password",
-                    visible = showPassword,
-                    isError = issue == BackupPasswordIssue.DOES_NOT_MATCH,
-                    onValueChange = {
-                        confirmation = it
-                        submitted = false
-                    },
-                    onVisibilityChange = { showPassword = !showPassword },
-                )
-                if (issue != null) {
-                    Text(
-                        text = localizedText(issue.message),
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = dismiss) { Text(localizedText("Cancel")) }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    submitted = true
-                    if (exportPasswordIssue(password, confirmation) == null) {
-                        val transferredPassword = password.toCharArray()
-                        password = ""
-                        confirmation = ""
-                        onExport(transferredPassword)
-                    }
-                },
-            ) {
-                Text(localizedText("Export"))
-            }
-        },
-    )
-}
-
-@Composable
-private fun RestorePasswordDialog(
-    onDismiss: () -> Unit,
-    onOpen: (CharArray) -> Unit,
-) {
-    var password by remember { mutableStateOf("") }
-    var showPassword by remember { mutableStateOf(false) }
-    var submitted by remember { mutableStateOf(false) }
-    val issue = if (submitted) restorePasswordIssue(password) else null
-    val dismiss = {
-        password = ""
-        onDismiss()
-    }
-
-    HingeSafeAlertDialog(
-        onDismissRequest = dismiss,
-        title = { Text(localizedText("Unlock backup")) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    localizedText("Enter the password used when this backup was created. It is not saved."),
-                )
-                PasswordField(
-                    value = password,
-                    label = "Backup password",
-                    visible = showPassword,
-                    isError = issue != null,
-                    onValueChange = {
-                        password = it
-                        submitted = false
-                    },
-                    onVisibilityChange = { showPassword = !showPassword },
-                )
-                if (issue != null) {
-                    Text(
-                        text = localizedText(issue.message),
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = dismiss) { Text(localizedText("Cancel")) }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    submitted = true
-                    if (restorePasswordIssue(password) == null) {
-                        val transferredPassword = password.toCharArray()
-                        password = ""
-                        onOpen(transferredPassword)
-                    }
-                },
-            ) {
-                Text(localizedText("Decrypt & review"))
-            }
-        },
-    )
-}
-
-@Composable
-private fun PasswordField(
-    value: String,
-    label: String,
-    visible: Boolean,
-    isError: Boolean,
-    onValueChange: (String) -> Unit,
-    onVisibilityChange: () -> Unit,
-) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        modifier = Modifier.fillMaxWidth(),
-        label = { Text(localizedText(label)) },
-        singleLine = true,
-        isError = isError,
-        visualTransformation = if (visible) {
-            VisualTransformation.None
-        } else {
-            PasswordVisualTransformation()
-        },
-        keyboardOptions = KeyboardOptions(
-            keyboardType = KeyboardType.Password,
-            imeAction = ImeAction.Done,
-        ),
-        trailingIcon = {
-            IconButton(onClick = onVisibilityChange) {
-                Icon(
-                    imageVector = if (visible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                    contentDescription = localizedText(if (visible) "Hide password" else "Show password"),
-                )
-            }
-        },
-    )
-}
-
-@Composable
-private fun RestorePreviewDialog(
-    preview: BackupRestorePreview,
-    onCancel: () -> Unit,
-    onContinue: () -> Unit,
-) {
-    HingeSafeAlertDialog(
-        onDismissRequest = onCancel,
-        title = { Text(localizedText("Review backup")) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    localizedText("The backup was decrypted and validated. Review it before continuing."),
-                )
-                HorizontalDivider()
-                PreviewValue("Created", preview.createdAtLabel)
-                PreviewValue("Todos", preview.todoCount.toString())
-                PreviewValue("Ledger entries", preview.ledgerCount.toString())
-                PreviewValue("Notes", preview.noteCount.toString())
-                PreviewValue("Diary entries", preview.diaryCount.toString())
-                PreviewValue("Vault entries", preview.vaultCount.toString())
-                PreviewValue(
-                    "Attachments",
-                    "${preview.attachmentCount} (${formatBackupByteCount(preview.attachmentBytes)})",
-                )
-                PreviewValue("Total backup size", formatBackupByteCount(preview.totalBytes))
-                HorizontalDivider()
-                Text(
-                    text = localizedText("Continuing does not restore yet. You will see a final replacement warning."),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onCancel) { Text(localizedText("Cancel restore")) }
-        },
-        confirmButton = {
-            Button(onClick = onContinue) { Text(localizedText("Continue")) }
-        },
-    )
-}
-
-@Composable
-private fun PreviewValue(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Top,
-    ) {
-        Text(
-            text = localizedText(label),
-            modifier = Modifier.weight(1f),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.width(16.dp))
-        Text(
-            text = value,
-            modifier = Modifier.weight(1f),
-            textAlign = TextAlign.End,
-            fontWeight = FontWeight.SemiBold,
-        )
-    }
-}
-
-@Composable
-private fun RestoreReplacementConfirmationDialog(
-    onBackToPreview: () -> Unit,
-    onRestore: () -> Unit,
-) {
-    HingeSafeAlertDialog(
-        onDismissRequest = onBackToPreview,
-        title = { Text(localizedText("Replace all local data?")) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    localizedText(
-                        "This is a complete replacement, not a merge. It permanently replaces your " +
-                            "current todos, ledger, notes, settings, attachments, and Vault with the backup.",
-                    ),
-                    color = MaterialTheme.colorScheme.error,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    localizedText(
-                        "Once restore starts, it cannot be cancelled. The existing data is left " +
-                            "unchanged if validation or preparation fails.",
-                    ),
-                )
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onBackToPreview) { Text(localizedText("Back to preview")) }
-        },
-        confirmButton = {
-            Button(onClick = onRestore) { Text(localizedText("Replace & restore")) }
-        },
-    )
-}
-
-@Composable
-private fun BlockingBackupDialog(task: BackupRestoreTask) {
-    val (title, message) = when (task) {
-        BackupRestoreTask.EXPORTING ->
-            "Creating encrypted backup" to "Keep Life Assistant open while the file is written."
-        BackupRestoreTask.VALIDATING_RESTORE ->
-            "Checking backup" to "Decrypting and validating everything before making changes."
-        BackupRestoreTask.COMMITTING_RESTORE ->
-            "Restoring backup" to "Replacing local data. This cannot be cancelled."
-        BackupRestoreTask.NONE -> return
-    }
-    HingeSafeAlertDialog(
-        onDismissRequest = { },
-        properties = DialogProperties(
-            dismissOnBackPress = false,
-            dismissOnClickOutside = false,
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false,
-        ),
-        icon = { CircularProgressIndicator(modifier = Modifier.size(28.dp)) },
-        title = { Text(localizedText(title)) },
-        text = { Text(localizedText(message)) },
-        confirmButton = { },
-    )
-}
+}.getOrDefault(translateUiText("Unknown", language))
 
 internal fun ensureBackupExtension(fileName: String): String {
     val trimmed = fileName.trim().ifEmpty { "LifeAssistant-backup" }

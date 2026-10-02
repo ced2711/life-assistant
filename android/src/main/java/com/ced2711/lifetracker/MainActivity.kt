@@ -66,6 +66,7 @@ import com.ced2711.lifetracker.ui.notes.NotesScreen
 import com.ced2711.lifetracker.ui.settings.SettingsScreen
 import com.ced2711.lifetracker.ui.theme.TaskLedgerTheme
 import com.ced2711.lifetracker.ui.theme.isTaskLedgerDarkTheme
+import com.ced2711.lifetracker.ui.today.TodayGlance
 import com.ced2711.lifetracker.ui.todo.TodoScreen
 import com.ced2711.lifetracker.ui.vault.VaultScreen
 import com.ced2711.lifetracker.ui.vault.VaultAccessState
@@ -381,6 +382,7 @@ class MainActivity : FragmentActivity() {
                     AdaptiveTaskLedgerScaffold(
                     destinations = visibleDestinations,
                     selected = selected,
+                    glance = { TodayGlance(viewModel, showLedger = TopLevelDestination.LEDGER in visibleDestinations) },
                     onSelected = { destination ->
                         if (!showBackup ||
                             (backupUiState.task == BackupRestoreTask.NONE && !cloudSyncUiState.busy)
@@ -477,6 +479,39 @@ class MainActivity : FragmentActivity() {
 
                             null -> {
                                 when (selected) {
+                                    TopLevelDestination.TODAY -> com.ced2711.lifetracker.ui.today.TodayScreen(
+                                        viewModel = viewModel,
+                                        modifier = Modifier.fillMaxSize(),
+                                        isWide = isWide,
+                                        showLedger = TopLevelDestination.LEDGER in visibleDestinations,
+                                        showDiary = TopLevelDestination.DIARY in visibleDestinations,
+                                        showNotes = TopLevelDestination.NOTES in visibleDestinations,
+                                        onOpenTodo = { todoId ->
+                                            pendingReminderTodoId = todoId
+                                            selectedOverride = TopLevelDestination.TODO.name
+                                            auxiliaryName = null
+                                            viewModel.setLastDestination(TopLevelDestination.TODO)
+                                        },
+                                        onOpenLedger = {
+                                            // "Add entry" lands in the amount field with the keyboard open.
+                                            pendingWidgetQuickAddAction = WidgetNavigation.ACTION_OPEN_LEDGER
+                                            pendingWidgetQuickAddToken = newWidgetRequestToken()
+                                            selectedOverride = TopLevelDestination.LEDGER.name
+                                            auxiliaryName = null
+                                            viewModel.setLastDestination(TopLevelDestination.LEDGER)
+                                        },
+                                        onOpenDiary = { epochDay ->
+                                            requestedDiaryDay = epochDay
+                                            selectedOverride = TopLevelDestination.DIARY.name
+                                            auxiliaryName = null
+                                            viewModel.setLastDestination(TopLevelDestination.DIARY)
+                                        },
+                                        onOpenNote = {
+                                            selectedOverride = TopLevelDestination.NOTES.name
+                                            auxiliaryName = null
+                                            viewModel.setLastDestination(TopLevelDestination.NOTES)
+                                        },
+                                    )
                                     TopLevelDestination.TODO -> TodoScreen(
                                         viewModel = viewModel,
                                         modifier = Modifier.fillMaxSize(),

@@ -1,6 +1,6 @@
 # Life Assistant
 
-Life Assistant is an open-source, offline-first personal organizer for Android, Windows and Linux. It combines Todo, Ledger, Calendar, and Notes, with encrypted backup and optional one-click GitHub synchronization. The Android interface uses device-independent sizing for phones, tablets and foldables, including narrow clamshell layouts such as the Samsung Galaxy Z Flip series. The Windows and Linux apps are native desktop applications with their own bundled Java runtime; no browser or separate Java installation is required.
+Life Assistant is an open-source, offline-first personal organizer for Android, Windows and Linux. It combines a Today page, Todo, Ledger, Calendar, and Notes, with encrypted backup and optional one-click GitHub synchronization. The Android interface uses device-independent sizing for phones, tablets and foldables, including narrow clamshell layouts such as the Samsung Galaxy Z Flip series. The Windows and Linux apps are native desktop applications with their own bundled Java runtime; no browser or separate Java installation is required.
 
 By **ced2711** · 中文名：**生活助手** · [Source](https://github.com/ced2711/life-assistant)
 
@@ -18,6 +18,11 @@ All versions and release notes: [Releases](https://github.com/ced2711/life-assis
 
 ## Highlights
 
+- **Today**: what is overdue and due today, the coming week, what you spent, the diary page and pinned notes on one page.
+- One design on the phone and the computer: calm surfaces, rows instead of cards, the same wording. See [the design notes](docs/DESIGN.md).
+- **Daily backups**: each day the apps keep a copy of the day before and delete it on the third day; restore one in Settings, with Undo.
+- **AI assistants on the computer**: switch on Settings → AI assistants and add Life Assistant to Claude Desktop or Claude Code with one click. An assistant can then read and, if allowed, change todos, ledger entries, notes, diary pages and categories through the Model Context Protocol (`Life Assistant.exe --mcp`). The Vault and the Confessional are never exposed. Off by default.
+- The computer opens without asking for a password and works offline on its own; you choose a data password only when you first use the Vault, the app lock, sealed confessions or cloud sync.
 - Nested Todo categories, subtasks, priorities, tags, search, reminders, attachments, recurring tasks, and completion momentum.
 - Manual Income/Expense ledger entries, recurring entries, attachments, summaries, and close-fit trend charts.
 - Month, week, day, and agenda calendar views with daily net amounts and completed/incomplete Todo counts.
@@ -89,7 +94,7 @@ Release Android signing is configured locally, never through committed credentia
 
 ## Verification
 
-The project includes JVM, Android instrumentation, sync transport/branch-conflict, Windows encrypted-store/attachment, and Windows DPAPI tests. See the [release notes](docs/releases/): [1.9.0](docs/releases/RELEASE_1.9.0.md), [1.8.0](docs/releases/RELEASE_1.8.0.md), [1.7.1 fullscreen and compatibility report](docs/releases/RELEASE_1.7.1.md), [1.7.0](docs/releases/RELEASE_1.7.0.md) and the historical [1.6.0 verification report](docs/releases/RELEASE_1.6.0.md). The cloud tests use a local HTTP fixture; a real OAuth end-to-end check additionally requires the developer's configured Google Cloud project and interactive consent. Unit tests alone do not establish that live Google authorization is configured.
+The project includes JVM, Android instrumentation, sync transport/branch-conflict, Windows encrypted-store/attachment, and Windows DPAPI tests. See the [release notes](docs/releases/): [2.0.0](docs/releases/RELEASE_2.0.0.md), [1.9.0](docs/releases/RELEASE_1.9.0.md), [1.8.0](docs/releases/RELEASE_1.8.0.md), [1.7.1 fullscreen and compatibility report](docs/releases/RELEASE_1.7.1.md), [1.7.0](docs/releases/RELEASE_1.7.0.md) and the historical [1.6.0 verification report](docs/releases/RELEASE_1.6.0.md). The cloud tests use a local HTTP fixture; a real OAuth end-to-end check additionally requires the developer's configured Google Cloud project and interactive consent. Unit tests alone do not establish that live Google authorization is configured.
 
 Android support remains **Android 8.0 (API 26) and newer**, for phone/tablet app environments. There is no Samsung-only restriction. Tests on Android 8 and Android 16 emulators and resized/folded layouts do not prove compatibility with every OEM, keyboard, or future OS release. Camera hardware cannot be removed; system-owned authentication, permission or external-app screens control their own bars. Flip cover-screen launch access is controlled by Samsung/One UI (and may require its supported launcher/settings); adapting the app's small-window layout does not bypass those restrictions.
 

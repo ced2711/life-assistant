@@ -1,205 +1,144 @@
 package com.ced2711.lifetracker.desktop
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items as gridItems
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Notes
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Book
-import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.LocalFireDepartment
-import androidx.compose.material.icons.filled.Payments
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.TaskAlt
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.icons.filled.FilterAlt
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.automirrored.rounded.Notes
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
+import androidx.compose.material.icons.rounded.AccountBalanceWallet
+import androidx.compose.material.icons.rounded.AutoStories
+import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.InsertDriveFile
+import androidx.compose.material.icons.rounded.LocalFireDepartment
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.TaskAlt
+import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ColorScheme
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationRail
-import androidx.compose.material3.NavigationRailItem
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.VerticalDivider
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalWindowInfo
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ced2711.lifetracker.cloudsync.ConflictResolution
 import com.ced2711.lifetracker.data.backup.BackupSnapshot
-import com.ced2711.lifetracker.data.local.LedgerEntryEntity
-import com.ced2711.lifetracker.data.local.NoteEntity
-import com.ced2711.lifetracker.data.local.TodoEntity
-import com.ced2711.lifetracker.domain.model.AttachmentOwnerType
 import com.ced2711.lifetracker.domain.model.AccentColor
 import com.ced2711.lifetracker.domain.model.AppIdentity
 import com.ced2711.lifetracker.domain.model.AppLockTimeout
+import com.ced2711.lifetracker.domain.model.AttachmentOwnerType
+import com.ced2711.lifetracker.domain.model.ThemeMode
+import com.ced2711.lifetracker.domain.model.TopLevelDestination
+import com.ced2711.lifetracker.domain.model.UiLanguage
 import com.ced2711.lifetracker.domain.model.appLockExpired
-import com.ced2711.lifetracker.domain.model.diaryPreview
 import com.ced2711.lifetracker.domain.model.normalizeVisibleDestinations
 import com.ced2711.lifetracker.domain.model.resolveVisibleDestination
-import com.ced2711.lifetracker.domain.model.DateFormatOption
-import com.ced2711.lifetracker.domain.model.LedgerType
-import com.ced2711.lifetracker.domain.model.ThemeMode
-import com.ced2711.lifetracker.domain.model.TimeFormatOption
-import com.ced2711.lifetracker.domain.model.TopLevelDestination
-import com.ced2711.lifetracker.domain.model.TodoPriority
-import com.ced2711.lifetracker.domain.model.UiLanguage
-import com.ced2711.lifetracker.domain.model.VaultEntry
-import com.ced2711.lifetracker.domain.model.WeekStart
-import com.ced2711.lifetracker.domain.date.SmartDateParser
-import com.ced2711.lifetracker.domain.format.UserFormatting
+import com.ced2711.lifetracker.ui.design.LifeTextField
+import com.ced2711.lifetracker.ui.design.PageTitle
+import com.ced2711.lifetracker.ui.design.Pill
+import com.ced2711.lifetracker.ui.design.Space
 import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
-import com.ced2711.lifetracker.ui.localization.uiLocale
+import com.ced2711.lifetracker.ui.theme.LifeTheme
 import com.ced2711.lifetracker.ui.theme.TaskLedgerTheme
+import java.awt.Desktop
 import java.io.File
 import java.io.IOException
-import java.awt.Desktop
-import java.net.URI
 import java.text.NumberFormat
-import java.math.BigDecimal
-import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
-import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeParseException
 import java.util.Currency
 import java.util.Locale
 import javax.swing.JFileChooser
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 private enum class DesktopDestination(val label: String, val icon: ImageVector) {
-    TODO("Todo", Icons.Default.TaskAlt),
-    LEDGER("Ledger", Icons.Default.Payments),
-    CALENDAR("Calendar", Icons.Default.CalendarMonth),
-    NOTES("Notes", Icons.AutoMirrored.Filled.Notes),
-    DIARY("Diary", Icons.Default.Book),
-    CONFESSIONAL("Confessional", Icons.Default.LocalFireDepartment),
-    VAULT("Vault", Icons.Default.Lock),
-    SETTINGS("Settings", Icons.Default.Settings),
+    TODAY("Today", Icons.Rounded.WbSunny),
+    TODO("Todo", Icons.Rounded.TaskAlt),
+    LEDGER("Ledger", Icons.Rounded.AccountBalanceWallet),
+    CALENDAR("Calendar", Icons.Rounded.CalendarMonth),
+    NOTES("Notes", Icons.AutoMirrored.Rounded.Notes),
+    DIARY("Diary", Icons.Rounded.AutoStories),
+    CONFESSIONAL("Confessional", Icons.Rounded.LocalFireDepartment),
+    VAULT("Vault", Icons.Rounded.Lock),
+    SETTINGS("Settings", Icons.Rounded.Settings),
 }
 
-/** Small count shown next to a module in the sidebar. */
-private fun sidebarBadge(destination: DesktopDestination, snapshot: BackupSnapshot): String? = when (destination) {
-    DesktopDestination.TODO -> snapshot.todos.count { it.deletedAt == null && it.completedAt == null }.takeIf { it > 0 }?.toString()
-    DesktopDestination.NOTES -> snapshot.notes.size.takeIf { it > 0 }?.toString()
-    else -> null
+/** Small count shown next to a module in the sidebar; Today's is red while something is overdue. */
+private fun sidebarItem(destination: DesktopDestination, snapshot: BackupSnapshot): SidebarItem {
+    val today = LocalDate.now().toEpochDay()
+    val open = snapshot.todos.filter { it.deletedAt == null && it.completedAt == null }
+    return when (destination) {
+        DesktopDestination.TODAY -> {
+            val due = open.count { (it.deadlineEpochDay ?: Long.MAX_VALUE) <= today }
+            SidebarItem(destination.label, destination.icon, due.takeIf { it > 0 }?.toString(), badgeAlert = open.any { (it.deadlineEpochDay ?: Long.MAX_VALUE) < today })
+        }
+        DesktopDestination.NOTES -> SidebarItem(destination.label, destination.icon, snapshot.notes.size.takeIf { it > 0 }?.toString())
+        else -> SidebarItem(destination.label, destination.icon)
+    }
 }
 
 private val LocalDesktopErrorReporter = staticCompositionLocalOf<(Throwable) -> Unit> { {} }
 
-private fun lifeTrackerColors(accentColor: AccentColor): ColorScheme = darkColorScheme(
-    primary = when (accentColor) {
-        AccentColor.TEAL -> Color(0xFF5FD1C6)
-        AccentColor.BLUE -> Color(0xFF87B9FF)
-        AccentColor.VIOLET -> Color(0xFFC6A7FF)
-        AccentColor.ROSE -> Color(0xFFFFA9C2)
-        AccentColor.ORANGE -> Color(0xFFFFB673)
-        AccentColor.GREEN -> Color(0xFF78D993)
-    },
-    onPrimary = Color(0xFF003733),
-    primaryContainer = Color(0xFF31413F),
-    onPrimaryContainer = Color(0xFFE0F3EF),
-    secondary = Color(0xFFB0CCC8),
-    background = Color(0xFF111414),
-    surface = Color(0xFF171A1A),
-    surfaceVariant = Color(0xFF3F4947),
-    error = Color(0xFFFFB4AB),
-)
-
+/**
+ * The whole desktop app. It opens straight into the data: a new PC keeps its own random key, and
+ * a PC whose password is remembered uses that. Only data whose password is not remembered asks.
+ */
 @Composable
-fun LifeTrackerDesktopApp() {
-    val dataStore = remember { DesktopDataStore() }
-    val credentials = remember { DesktopCredentialStore() }
-    val config = remember { DesktopConfigStore() }
+fun LifeTrackerDesktopApp(
+    onShowWindow: () -> Unit = {},
+    // Tests run the whole app in a folder of their own.
+    appDirectory: File = DesktopPlatform.appDirectory(),
+    protection: DeviceProtection = DesktopPlatform.protection,
+) {
+    val dataStore = remember { DesktopDataStore(appDirectory) }
+    val credentials = remember { DesktopCredentialStore(File(appDirectory, "credentials"), protection) }
+    val config = remember { DesktopConfigStore(File(appDirectory, "desktop.properties")) }
     val oauth = remember { DesktopGoogleOAuth(config, credentials) }
     val cloud = remember { DesktopCloudSyncController(dataStore, config, oauth, credentials = credentials) }
     val storeState by dataStore.state.collectAsDesktopState()
@@ -212,7 +151,7 @@ fun LifeTrackerDesktopApp() {
         CoroutineExceptionHandler { _, error -> reportError(error) }
     }
     val scope = rememberCoroutineScope { rootHandler }
-    // Optional app lock. It re-asks for the data password even when Windows remembers it.
+    // Optional app lock. It re-asks for the data password even when this PC remembers it.
     var appLockEnabled by remember { mutableStateOf(config.read().appLockEnabled) }
     var appLockTimeout by remember { mutableStateOf(config.read().appLockTimeout) }
     var appLocked by remember { mutableStateOf(false) }
@@ -232,80 +171,78 @@ fun LifeTrackerDesktopApp() {
     DisposableEffect(Unit) {
         onDispose { dataStore.close() }
     }
+    // AI assistants (through `--mcp`) and a second start of the app reach this window here.
+    val agentLocked by rememberUpdatedState(appLockEnabled && appLocked)
+    val agentServer = remember {
+        DesktopAgentServer(
+            appDirectory = dataStore.appDirectory,
+            tools = DesktopAgentTools(dataStore),
+            accessEnabled = config::agentAccess,
+            changesAllowed = config::agentChanges,
+            locked = { agentLocked || dataStore.currentSnapshot() == null },
+            onShowWindow = onShowWindow,
+        )
+    }
+    DisposableEffect(agentServer) {
+        runCatching { agentServer.start() }
+        onDispose { agentServer.stop() }
+    }
+    // Nothing is asked at start: the remembered password, or a new PC's own random one, opens the data.
+    var starting by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) {
-        val saved = credentials.load(DesktopCredentialStore.LOCAL_PASSWORD)
-        if (saved != null) {
-            if (dataStore.open(saved.copyOf())) {
-                appLocked = appLockEnabled
-                cloud.start(scope)
-            }
-            saved.fill('\u0000')
+        if (DesktopLocalKey.openWithoutAsking(dataStore, credentials, config)) {
+            appLocked = appLockEnabled
+            cloud.start(scope)
         }
+        starting = false
+    }
+    val security = remember {
+        DesktopSecurity(
+            passwordChosen = config::passwordChosen,
+            verify = dataStore::verifyPassword,
+            choose = { password -> DesktopLocalKey.choose(password, dataStore, credentials, config) },
+        )
     }
 
     val accent = (storeState as? DesktopStoreState.Open)?.snapshot?.settings?.accentColor ?: AccentColor.TEAL
     val theme = (storeState as? DesktopStoreState.Open)?.snapshot?.settings?.themeMode ?: ThemeMode.DARK
-    CompositionLocalProvider(LocalDesktopErrorReporter provides reportError) {
-        CompositionLocalProvider(LocalUiLanguage provides uiLanguage) {
-            TaskLedgerTheme(theme, accent) {
-            Surface(Modifier.fillMaxSize()) {
+    CompositionLocalProvider(LocalDesktopErrorReporter provides reportError, LocalUiLanguage provides uiLanguage, LocalDesktopSecurity provides security) {
+        TaskLedgerTheme(theme, accent) {
+            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                val unlock: (CharArray, Boolean) -> Unit = { password, rememberOnPc ->
+                    scope.launch {
+                        if (dataStore.open(password.copyOf())) {
+                            appLocked = false
+                            if (rememberOnPc) credentials.save(DesktopCredentialStore.LOCAL_PASSWORD, password.copyOf())
+                            cloud.start(scope)
+                        }
+                        password.fill(' ')
+                    }
+                }
                 when (val current = storeState) {
-                DesktopStoreState.Locked -> UnlockScreen(
-                    error = null,
-                    existingData = dataStore.encryptedFile.isFile,
-                    onUnlock = { password, rememberOnPc ->
-                        scope.launch {
-                            val copyForStore = password.copyOf()
-                            val opened = dataStore.open(copyForStore)
-                            if (opened) {
-                                appLocked = false
-                                if (rememberOnPc) {
-                                    credentials.save(
-                                        DesktopCredentialStore.LOCAL_PASSWORD,
-                                        password.copyOf(),
-                                    )
-                                }
-                                cloud.start(scope)
-                            }
-                            password.fill('\u0000')
-                        }
-                    },
-                )
-                is DesktopStoreState.Error -> UnlockScreen(
-                    error = current.message,
-                    existingData = dataStore.encryptedFile.isFile,
-                    onUnlock = { password, rememberOnPc ->
-                        scope.launch {
-                            val opened = dataStore.open(password.copyOf())
-                            if (opened) {
-                                appLocked = false
-                                if (rememberOnPc) credentials.save(
-                                    DesktopCredentialStore.LOCAL_PASSWORD,
-                                    password.copyOf(),
-                                )
-                                cloud.start(scope)
-                            }
-                            password.fill('\u0000')
-                        }
-                    },
-                )
-                is DesktopStoreState.Open -> if (appLockEnabled && appLocked) {
-                    DesktopAppLockScreen(verify = dataStore::verifyPassword, onUnlocked = { appLocked = false })
-                } else DesktopHome(
-                    snapshot = current.snapshot,
-                    dataStore = dataStore,
-                    cloud = cloud,
-                    configStore = config,
-                    credentials = credentials,
-                    onUiLanguageChanged = { uiLanguage = it },
-                    appLockEnabled = appLockEnabled,
-                    appLockTimeout = appLockTimeout,
-                    onAppLockChanged = { enabled, timeout ->
-                        config.setAppLock(enabled, timeout)
-                        appLockEnabled = enabled
-                        appLockTimeout = timeout
-                    },
-                )
+                    DesktopStoreState.Locked -> if (starting) Box(Modifier.fillMaxSize()) else UnlockScreen(error = null, onUnlock = unlock)
+                    is DesktopStoreState.Error -> UnlockScreen(error = current.message, onUnlock = unlock)
+                    is DesktopStoreState.Open -> if (appLockEnabled && appLocked) {
+                        DesktopAppLockScreen(verify = dataStore::verifyPassword, onUnlocked = { appLocked = false })
+                    } else {
+                        DesktopHome(
+                            snapshot = current.snapshot,
+                            dataStore = dataStore,
+                            cloud = cloud,
+                            configStore = config,
+                            credentials = credentials,
+                            protection = protection,
+                            agentActivity = agentServer.activity,
+                            onUiLanguageChanged = { uiLanguage = it },
+                            appLockEnabled = appLockEnabled,
+                            appLockTimeout = appLockTimeout,
+                            onAppLockChanged = { enabled, timeout ->
+                                config.setAppLock(enabled, timeout)
+                                appLockEnabled = enabled
+                                appLockTimeout = timeout
+                            },
+                        )
+                    }
                 }
             }
             appError?.let { message ->
@@ -317,68 +254,38 @@ fun LifeTrackerDesktopApp() {
                 )
             }
         }
-        }
     }
 }
 
+/** Shown only when existing data cannot be opened without the password (it is not remembered). */
 @Composable
-private fun UnlockScreen(
-    error: String?,
-    existingData: Boolean,
-    onUnlock: (CharArray, Boolean) -> Unit,
-) {
+private fun UnlockScreen(error: String?, onUnlock: (CharArray, Boolean) -> Unit) {
     var password by remember { mutableStateOf("") }
-    var visible by remember { mutableStateOf(false) }
     var rememberOnPc by remember { mutableStateOf(true) }
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Card(Modifier.widthIn(max = 460.dp).padding(24.dp)) {
-            Column(
-                Modifier.padding(28.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                Icon(Icons.Default.CheckCircle, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
-                Text(desktopText(AppIdentity.NAME), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                Text(
-                    desktopText(if (existingData) "Unlock your encrypted local data." else
-                        "Create an encrypted local data file. Use this same password for Google Drive sync."),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = { password = it },
-                    label = { Text(desktopText("Data password")) },
-                    singleLine = true,
-                    visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
-                    trailingIcon = {
-                        IconButton(onClick = { visible = !visible }) {
-                            Icon(if (visible) Icons.Default.VisibilityOff else Icons.Default.Visibility, null)
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(rememberOnPc, { rememberOnPc = it })
-                    Text(desktopText(DesktopPlatform.text("Remember securely with Windows", "Remember securely on this computer")))
-                }
-                if (error != null) Text(desktopText(error), color = MaterialTheme.colorScheme.error)
-                Button(
-                    enabled = password.length >= 8,
-                    onClick = {
-                        val transferred = password.toCharArray()
-                        password = ""
-                        onUnlock(transferred, rememberOnPc)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(desktopText(if (existingData) "Unlock" else "Create local data"))
-                }
-                Text(
-                    desktopText(DesktopPlatform.text("Your password is never uploaded. If remembered, it is protected by Windows DPAPI for this Windows account.", "Your password is never uploaded. If remembered, it is encrypted with a key kept in your desktop keyring or a file only you can read.")),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    fun submit() {
+        if (password.length < 8) return
+        val transferred = password.toCharArray()
+        password = ""
+        onUnlock(transferred, rememberOnPc)
+    }
+    CenteredCard {
+        Icon(Icons.Rounded.TaskAlt, null, Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
+        Text(desktopText(AppIdentity.NAME), style = MaterialTheme.typography.headlineSmall)
+        Text(desktopText("Enter your data password to open your data."), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        PasswordField(password, { password = it }, desktopText("Data password"), Modifier.fillMaxWidth().focusRequester(focus).onEnter(::submit), isError = error != null)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(rememberOnPc, { rememberOnPc = it })
+            Text(desktopText("Remember on this PC, so it opens without asking"), style = MaterialTheme.typography.bodyMedium)
         }
+        if (error != null) Text(desktopText(error), color = LifeTheme.colors.danger, style = MaterialTheme.typography.bodySmall)
+        Button(enabled = password.length >= 8, onClick = ::submit, modifier = Modifier.fillMaxWidth()) { Text(desktopText("Unlock")) }
+        Text(
+            desktopText(DesktopPlatform.text("Your password is never uploaded. If remembered, it is protected by Windows DPAPI for this Windows account.", "Your password is never uploaded. If remembered, it is encrypted with a key kept in your desktop keyring or a file only you can read.")),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -389,6 +296,8 @@ private fun DesktopHome(
     cloud: DesktopCloudSyncController,
     configStore: DesktopConfigStore,
     credentials: DesktopCredentialStore,
+    protection: DeviceProtection,
+    agentActivity: StateFlow<List<DesktopAgentActivity>>,
     onUiLanguageChanged: (UiLanguage) -> Unit,
     appLockEnabled: Boolean,
     appLockTimeout: AppLockTimeout,
@@ -399,7 +308,10 @@ private fun DesktopHome(
         .toDesktopDestination()
     var destination by remember { mutableStateOf(configuredDestination) }
     var requestedDiaryDay by remember { mutableStateOf<Long?>(null) }
-    val confessionStore = remember { DesktopConfessionStore() }
+    var requestedNoteId by remember { mutableStateOf<Long?>(null) }
+    val confessionStore = remember {
+        DesktopConfessionStore(File(dataStore.appDirectory, "confessional/sealed.bin"), protection::protect, protection::unprotect)
+    }
     val scope = rememberSafeCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
     val cloudState by cloud.state.collectAsDesktopState()
@@ -456,6 +368,8 @@ private fun DesktopHome(
     // Due recurring items appear and expired deletions are cleared, also across midnight.
     LaunchedEffect(dataStore) {
         while (true) {
+            // The first run of a day keeps yesterday's data, before anything changes today.
+            runCatching { dataStore.backUpDaily(LocalDate.now()) }
             runCatching { dataStore.runMaintenance() }
             kotlinx.coroutines.delay(60_000)
         }
@@ -464,11 +378,11 @@ private fun DesktopHome(
         // Wide windows get a labelled sidebar unless it was folded; narrow ones a compact icon rail.
         val roomy = maxWidth >= 1_100.dp
         val expanded = roomy && !sidebarCollapsed
-        Scaffold(snackbarHost = { SnackbarHost(snackbar) }) { padding ->
+        Scaffold(snackbarHost = { SnackbarHost(snackbar) }, containerColor = MaterialTheme.colorScheme.background) { padding ->
             Row(Modifier.fillMaxSize().padding(padding)) {
                 DesktopSidebar(
                     expanded = expanded,
-                    destinations = mainDestinations.map { SidebarItem(it.label, it.icon, sidebarBadge(it, snapshot)) },
+                    destinations = mainDestinations.map { sidebarItem(it, snapshot) },
                     selectedIndex = mainDestinations.indexOf(destination),
                     onSelect = { navigate(mainDestinations[it]) },
                     vaultSelected = destination == DesktopDestination.VAULT,
@@ -481,12 +395,29 @@ private fun DesktopHome(
                             state = cloudState,
                             onSync = { cloud.launch { synchronize() } },
                             onOpenSettings = { destination = DesktopDestination.SETTINGS },
+                            expanded = expanded,
                         )
                     },
                 )
-                VerticalDivider()
+                ColumnDivider()
                 Column(Modifier.weight(1f).fillMaxHeight()) {
                     when (destination) {
+                        DesktopDestination.TODAY -> TodayPage(
+                            snapshot = snapshot,
+                            store = dataStore,
+                            showDiary = DesktopDestination.DIARY in mainDestinations,
+                            showNotes = DesktopDestination.NOTES in mainDestinations,
+                            showLedger = DesktopDestination.LEDGER in mainDestinations,
+                            onOpenDiary = { day ->
+                                requestedDiaryDay = day
+                                navigate(DesktopDestination.DIARY)
+                            },
+                            onOpenNote = { id ->
+                                requestedNoteId = id
+                                navigate(DesktopDestination.NOTES)
+                            },
+                            onOpenLedger = { navigate(DesktopDestination.LEDGER) },
+                        )
                         DesktopDestination.TODO -> TodoPage(snapshot, dataStore)
                         DesktopDestination.LEDGER -> LedgerPage(snapshot, dataStore)
                         DesktopDestination.CALENDAR -> CalendarPage(
@@ -500,26 +431,26 @@ private fun DesktopHome(
                         )
                         DesktopDestination.DIARY -> DiaryPage(snapshot, dataStore, requestedDiaryDay) { requestedDiaryDay = null }
                         DesktopDestination.CONFESSIONAL -> ConfessionalPage(confessionStore, dataStore::verifyPassword)
-                        DesktopDestination.NOTES -> NotesPage(snapshot, dataStore) { destination = DesktopDestination.VAULT }
+                        DesktopDestination.NOTES -> NotesPage(snapshot, dataStore, requestedNoteId, { requestedNoteId = null }) { destination = DesktopDestination.VAULT }
                         DesktopDestination.VAULT -> VaultPage(snapshot, dataStore)
                         DesktopDestination.SETTINGS -> SettingsPage(
+                            snapshot = snapshot,
                             cloudState = cloudState,
                             cloud = cloud,
-                            config = configStore.read(),
                             configStore = configStore,
                             dataStore = dataStore,
-                            openVault = { destination = DesktopDestination.VAULT },
+                            credentials = credentials,
+                            agentActivity = agentActivity,
                             onUiLanguageChanged = onUiLanguageChanged,
-                            forgetLocalPassword = { credentials.delete(DesktopCredentialStore.LOCAL_PASSWORD) },
                             visibleDestinations = visibleDestinations.toSet(),
                             onVisibleDestinationsChanged = { selected ->
                                 configStore.setVisibleDestinations(selected)
                                 visibleDestinations = normalizeVisibleDestinations(selected)
                             },
+                            moduleLabel = { it.toDesktopDestination().label },
                             appLockEnabled = appLockEnabled,
                             appLockTimeout = appLockTimeout,
                             onAppLockChanged = onAppLockChanged,
-                            verifyPassword = dataStore::verifyPassword,
                         )
                     }
                 }
@@ -544,439 +475,99 @@ private fun DesktopHome(
                 },
             )
         }
+        cloudState.gitHubCode?.let { code -> GitHubCodeDialog(code.userCode, code.verificationUri, cloud::cancelGitHubConnect) }
+        // Connecting sync asks for the password all devices share, only when it is needed.
+        cloudState.passwordPrompt?.let { prompt ->
+            when (prompt.kind) {
+                DesktopPasswordPromptKind.CHOOSE -> ChoosePasswordDialog(
+                    title = "Choose your sync password",
+                    message = "Everything is encrypted with this password before it leaves this PC. Enter the same one when you connect your phone.",
+                    onChosen = {},
+                    onDismiss = cloud::cancelSyncPassword,
+                    onSubmit = cloud::submitSyncPassword,
+                )
+                DesktopPasswordPromptKind.MATCH, DesktopPasswordPromptKind.MATCH_RETRY -> SyncPasswordDialog(
+                    retry = prompt.kind == DesktopPasswordPromptKind.MATCH_RETRY,
+                    onSubmit = cloud::submitSyncPassword,
+                    onDismiss = cloud::cancelSyncPassword,
+                )
+            }
+        }
     }
 }
 
+/** Asks for the password the user's other devices already sync with. */
 @Composable
-internal fun PageHeader(title: String, subtitle: String? = null) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 18.dp)) {
-        Text(desktopText(title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        if (subtitle != null) Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant)
+private fun SyncPasswordDialog(retry: Boolean, onSubmit: (CharArray) -> Unit, onDismiss: () -> Unit) {
+    var password by remember(retry) { mutableStateOf("") }
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(retry) { runCatching { focus.requestFocus() } }
+    fun submit() {
+        if (password.length < 8) return
+        val typed = password.toCharArray()
+        password = ""
+        onSubmit(typed)
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(desktopText("Enter your sync password")) },
+        text = {
+            Column(Modifier.widthIn(max = 460.dp), verticalArrangement = Arrangement.spacedBy(Space.md)) {
+                Text(desktopText("Your cloud already holds data from another device. Enter the password that device uses (on the phone: the sync password), so this PC can read it."))
+                PasswordField(password, { password = it }, desktopText("Sync password"), Modifier.fillMaxWidth().focusRequester(focus).onEnter(::submit), isError = retry)
+                if (retry) Text(desktopText("That password does not open the cloud data. Try again."), color = LifeTheme.colors.danger, style = MaterialTheme.typography.bodySmall)
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(desktopText("Cancel")) } },
+        confirmButton = { Button(enabled = password.length >= 8, onClick = ::submit) { Text(desktopText("Continue")) } },
+    )
+}
+
+/** A page's title with its actions; in a narrow window the actions move to a line of their own. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+internal fun PageHeader(title: String, subtitle: String? = null, actions: @Composable RowScope.() -> Unit = {}) {
+    androidx.compose.foundation.layout.FlowRow(
+        Modifier.fillMaxWidth().padding(start = PagePadding, end = PagePadding, top = 28.dp, bottom = 16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalArrangement = Arrangement.spacedBy(Space.md),
+        itemVerticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.padding(end = Space.lg)) {
+            Text(desktopText(title), style = MaterialTheme.typography.headlineLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(Space.xs), verticalAlignment = Alignment.CenterVertically, content = actions)
     }
 }
 
+/** A choice pill (see Pill in the shared design); a check box or radio button for screen readers. */
 @Composable
-internal fun FilterChipSimple(
-label: String, selected: Boolean, onClick: () -> Unit) {
-    Surface(
-        modifier = Modifier.clip(RoundedCornerShape(50)).clickable(onClick = onClick),
-        shape = RoundedCornerShape(50),
-        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-    ) { Text(label, Modifier.padding(horizontal = 12.dp, vertical = 7.dp)) }
+internal fun FilterChipSimple(label: String, selected: Boolean, exclusive: Boolean = false, onClick: () -> Unit) {
+    Pill(text = label, selected = selected, onClick = onClick, exclusive = exclusive)
 }
 
 @Composable
 internal fun SimpleNameDialog(title: String, onDismiss: () -> Unit, initial: String = "", onSave: (String) -> Unit) {
     var value by remember { mutableStateOf(initial) }
-    AlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = { OutlinedTextField(value, { value = it }, label = { Text(desktopText("Name")) }) }, dismissButton = { TextButton(onClick = onDismiss) { Text(desktopText("Cancel")) } }, confirmButton = { Button(enabled = value.isNotBlank(), onClick = { onSave(value.trim()) }) { Text(desktopText("Save")) } })
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            LifeTextField(
+                value, { value = it },
+                placeholder = desktopText("Name"),
+                modifier = Modifier.fillMaxWidth().focusRequester(focus).onEnter { if (value.isNotBlank()) onSave(value.trim()) },
+            )
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(desktopText("Cancel")) } },
+        confirmButton = { Button(enabled = value.isNotBlank(), onClick = { onSave(value.trim()) }) { Text(desktopText("Save")) } },
+    )
 }
 
-@Composable
-private fun SettingsPage(
-    cloudState: DesktopCloudUiState,
-    cloud: DesktopCloudSyncController,
-    config: DesktopCloudConfig,
-    configStore: DesktopConfigStore,
-    dataStore: DesktopDataStore,
-    openVault: () -> Unit,
-    onUiLanguageChanged: (UiLanguage) -> Unit,
-    forgetLocalPassword: () -> Unit,
-    visibleDestinations: Set<TopLevelDestination>,
-    onVisibleDestinationsChanged: (Set<TopLevelDestination>) -> Unit,
-    appLockEnabled: Boolean,
-    appLockTimeout: AppLockTimeout,
-    onAppLockChanged: (Boolean, AppLockTimeout) -> Unit,
-    verifyPassword: (CharArray) -> Boolean,
-) {
-    val scope = rememberSafeCoroutineScope()
-    var connectDialog by remember { mutableStateOf(false) }
-    var gitHubDialog by remember { mutableStateOf(false) }
-    // Installers carry built-in sign-in clients, so connecting is a single click. Builds without
-    // them ask for the client details instead.
-    val cloudDefaults = DesktopCloudDefaults.builtIn
-    fun connectGoogle() {
-        if (cloudDefaults.hasGoogle) cloud.launch { connect(cloudDefaults.googleClientId, cloudDefaults.googleClientSecret.toCharArray()) }
-        else connectDialog = true
-    }
-    fun connectGitHub() {
-        if (cloudDefaults.hasGitHub) cloud.startGitHubConnect(cloudDefaults.gitHubClientId, "") else gitHubDialog = true
-    }
-    fun reconnectGitHub() {
-        val clientId = config.gitHubClientId.ifBlank { cloudDefaults.gitHubClientId }
-        if (clientId.isNotBlank() && config.gitHubRepository.isNotBlank()) cloud.startGitHubConnect(clientId, config.gitHubRepository)
-        else gitHubDialog = true
-    }
-    var importCandidate by remember { mutableStateOf<File?>(null) }
-    var exportDialog by remember { mutableStateOf(false) }
-    // Second step of an import: what the backup holds, shown before anything is replaced.
-    var importPreview by remember { mutableStateOf<Pair<File, BackupSnapshot>?>(null) }
-    var importPreviewPassword by remember { mutableStateOf<CharArray?>(null) }
-    var importChecking by remember { mutableStateOf(false) }
-    var importPassword by remember { mutableStateOf("") }
-    var importPasswordVisible by remember { mutableStateOf(false) }
-    var backupMessage by remember { mutableStateOf<String?>(null) }
-    var showLicenseDialog by remember { mutableStateOf(false) }
-    var confirmDisableLock by remember { mutableStateOf(false) }
-    if (confirmDisableLock) {
-        DataPasswordDialog(
-            title = "Turn off app lock",
-            message = "Enter your data password to turn off the app lock.",
-            verify = verifyPassword,
-            onVerified = { confirmDisableLock = false; onAppLockChanged(false, appLockTimeout) },
-            onDismiss = { confirmDisableLock = false },
-        )
-    }
-    val language = LocalUiLanguage.current
-    // Settings read best as one comfortable column, not stretched across a wide window.
-    Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), contentAlignment = Alignment.TopCenter) {
-    Column(Modifier.widthIn(max = 920.dp).fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        PageHeader("Settings")
-        Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.Cloud, null); Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { Text(desktopText(when { !cloudState.connected -> "Cloud sync"; cloudState.provider == DesktopCloudProvider.GITHUB -> "GitHub sync"; else -> "Google Drive sync" }), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold); Text(if (cloudState.connected && cloudState.provider == DesktopCloudProvider.GITHUB) desktopText("Connected") + " · " + cloudState.gitHubRepository else desktopText(if (cloudState.connected) "Connected" else "Not connected"), color = MaterialTheme.colorScheme.onSurfaceVariant) } }
-            Text(desktopText("Encrypted snapshots are stored in Life Assistant's private Google Drive app folder or a private GitHub repository. Nothing else in those accounts is read."))
-            Text(desktopText("Changes made on this PC and your other devices are merged automatically. The 10 most recent encrypted versions are kept."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (cloudState.connected) {
-                Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(desktopText("Automatic sync")); Text(desktopText("Syncs a few seconds after each change, when the window is focused, and every 2 minutes while Life Assistant is open."), style = MaterialTheme.typography.bodySmall) }; Switch(cloudState.automaticSync, cloud::setAutomaticSync) }
-                cloudState.lastSyncAt?.let { Text(desktopLastSync(formatTimestamp(it), LocalUiLanguage.current), color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Button(enabled = !cloudState.syncing, onClick = { cloud.launch { synchronize() } }) { Icon(Icons.Default.Refresh, null); Spacer(Modifier.width(8.dp)); Text(desktopText(if (cloudState.syncing) "Syncing…" else "Sync now")) }; TextButton(enabled = !cloudState.syncing, onClick = { if (cloudState.provider == DesktopCloudProvider.GITHUB) reconnectGitHub() else connectGoogle() }) { Text(desktopText("Reconnect")) }; TextButton(enabled = !cloudState.syncing, onClick = { cloud.launch { disconnect() } }) { Text(desktopText("Disconnect / switch account")) } }
-            } else Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Button(enabled = !cloudState.syncing, onClick = ::connectGitHub) { Text(desktopText("Connect GitHub")) }; OutlinedButton(enabled = false, onClick = ::connectGoogle) { Text(desktopText("Google Drive (coming soon)")) } }
-        } }
-        Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { Text(desktopText("Local security"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold); Text(desktopText(DesktopPlatform.text("Local data is password-encrypted. Windows can remember the password using DPAPI for this Windows account.", "Local data is password-encrypted. Life Assistant can remember the password for this Linux user."))); OutlinedButton(onClick = forgetLocalPassword) { Text(desktopText("Forget remembered password")) } } }
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(desktopText("App lock"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(desktopText("Ask for the data password when returning to the app"))
-                        Text(
-                            desktopText(DesktopPlatform.text("Applies even when Windows remembers the password.", "Applies even when the password is remembered.")),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(appLockEnabled, { enabled ->
-                        // Turning the lock off needs the password, so an unattended PC cannot drop it.
-                        if (enabled) onAppLockChanged(true, appLockTimeout) else confirmDisableLock = true
-                    })
-                }
-                if (appLockEnabled) {
-                    Text(desktopText("Lock after leaving the app"))
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(AppLockTimeout.entries, key = { it.name }) { timeout ->
-                            FilterChipSimple(desktopText(timeout.desktopLabel), timeout == appLockTimeout) {
-                                onAppLockChanged(true, timeout)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(desktopText("Modules in menu"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text(
-                    desktopText("Hidden modules keep their data. At least one module stays visible."),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(TopLevelDestination.entries, key = { it.name }) { module ->
-                        val shown = module in visibleDestinations
-                        FilterChipSimple(desktopText(module.toDesktopDestination().label), shown) {
-                            val next = if (shown) visibleDestinations - module else visibleDestinations + module
-                            if (next.isNotEmpty()) onVisibleDestinationsChanged(next)
-                        }
-                    }
-                }
-            }
-        }
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Palette, null)
-                    Spacer(Modifier.width(10.dp))
-                    Text(desktopText("Appearance"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                }
-                Text(desktopText("Theme"))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(ThemeMode.entries, key = { it.name }) { mode ->
-                        FilterChipSimple(desktopText(themeLabel(mode)), dataStore.currentSnapshot()?.settings?.themeMode == mode) {
-                            scope.launch { dataStore.setThemeMode(mode) }
-                        }
-                    }
-                }
-                Text(desktopText("Accent color"))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(AccentColor.entries, key = { it.name }) { accent ->
-                        FilterChipSimple(
-                            accent.name.lowercase().replaceFirstChar(Char::uppercase),
-                            dataStore.currentSnapshot()?.settings?.accentColor == accent,
-                        ) { scope.launch { dataStore.setAccentColor(accent) } }
-                    }
-                }
-                Text(desktopText("UI language"))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(UiLanguage.entries, key = { it.name }) { language ->
-                        FilterChipSimple(if (language == UiLanguage.ENGLISH) "English" else "简体中文", config.uiLanguage == language) {
-                            configStore.setUiLanguage(language)
-                            onUiLanguageChanged(language)
-                        }
-                    }
-                }
-                Text(desktopText("Week starts on"))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(WeekStart.entries, key = { it.name }) { value ->
-                        FilterChipSimple(desktopText(weekStartLabel(value)), dataStore.currentSnapshot()?.settings?.weekStart == value) { scope.launch { dataStore.setWeekStart(value) } }
-                    }
-                }
-                Text(desktopText("Time format"))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(TimeFormatOption.entries, key = { it.name }) { value ->
-                        FilterChipSimple(desktopText(timeFormatLabel(value)), dataStore.currentSnapshot()?.settings?.timeFormat == value) { scope.launch { dataStore.setTimeFormat(value) } }
-                    }
-                }
-                Text(desktopText("Date format"))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(DateFormatOption.entries, key = { it.name }) { value ->
-                        FilterChipSimple(dateFormatLabel(value, language), dataStore.currentSnapshot()?.settings?.dateFormat == value) { scope.launch { dataStore.setDateFormat(value) } }
-                    }
-                }
-            }
-        }
-        dataStore.currentSnapshot()?.settings?.let { settings -> ReminderSettingsCard(settings, configStore) { change -> scope.launch { dataStore.updateSettings(change) } } }
-        Card(Modifier.fillMaxWidth()) {
-            Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Lock, null)
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(desktopText("Vault"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text(desktopText("Encrypted account and password entries"), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                OutlinedButton(onClick = openVault) { Text(desktopText("Open")) }
-            }
-        }
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(desktopText("Encrypted backup"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text(desktopText("The .tlb file includes todos, ledger entries, notes, Vault entries, and attached files. Manual import can migrate an older Android backup password to this PC's current data password."))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { exportDialog = true }) { Text(desktopText("Export backup")) }
-                    OutlinedButton(onClick = {
-                        val chooser = JFileChooser()
-                        importCandidate = chooser.takeIf {
-                            it.showOpenDialog(null) == JFileChooser.APPROVE_OPTION
-                        }?.selectedFile
-                        importPassword = ""
-                    }) { Text(desktopText("Import backup")) }
-                }
-                Text(
-                    desktopText("Before using a cloud version, Life Assistant keeps an encrypted local recovery copy. Import a copy to recover earlier local data. The 5 most recent recovery copies are kept."),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                val recoveryDirectory = dataStore.cloudRecoveryDirectory
-                OutlinedButton(
-                    enabled = recoveryDirectory.isDirectory && Desktop.isDesktopSupported(),
-                    onClick = {
-                        if (recoveryDirectory.isDirectory && Desktop.isDesktopSupported()) {
-                            scope.launch(Dispatchers.IO) {
-                                runCatching { Desktop.getDesktop().open(recoveryDirectory) }
-                            }
-                        }
-                    },
-                ) { Text(desktopText("Open sync recovery folder")) }
-                backupMessage?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
-            }
-        }
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Info, null)
-                    Spacer(Modifier.width(10.dp))
-                    Text(desktopText("About"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                }
-                Text(desktopText(AppIdentity.NAME), style = MaterialTheme.typography.headlineSmall)
-                Text("${desktopText("Version")} ${AppIdentity.VERSION} • ${AppIdentity.AUTHOR}", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(AppIdentity.COPYRIGHT, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(desktopText("License") + ": ${AppIdentity.LICENSE_LABEL}")
-                Text(desktopText("This software is provided without warranty."), style = MaterialTheme.typography.bodySmall)
-                Text(desktopText("The full license and additional permissions are available offline."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { showLicenseDialog = true }) { Text(desktopText("View license")) }
-                    OutlinedButton(
-                        enabled = Desktop.isDesktopSupported(),
-                        onClick = {
-                            if (Desktop.isDesktopSupported()) {
-                                runCatching { Desktop.getDesktop().browse(URI(AppIdentity.SOURCE_URL)) }
-                            }
-                        },
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.OpenInNew, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(desktopText("Source code"))
-                    }
-                }
-            }
-        }
-        Text(desktopAppVersion(language), color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-    }
-    if (connectDialog) GoogleConnectDialog(config.clientId, { connectDialog = false }) { clientId, clientSecret -> connectDialog = false; cloud.launch { connect(clientId, clientSecret) } }
-    if (gitHubDialog) GitHubConnectDialog(config.gitHubClientId, config.gitHubRepository, { gitHubDialog = false }) { clientId, repository -> gitHubDialog = false; cloud.startGitHubConnect(clientId, repository) }
-    cloudState.gitHubCode?.let { code -> GitHubCodeDialog(code.userCode, code.verificationUri, cloud::cancelGitHubConnect) }
-    importCandidate?.let { candidate ->
-        AlertDialog(
-            onDismissRequest = { importCandidate = null; importPassword = "" },
-            title = { Text(desktopText("Import encrypted backup?")) },
-            text = {
-                Column(Modifier.widthIn(max = 520.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(desktopText("Enter the password used when this backup was created. After validation, its contents will be encrypted with this PC's current data password."))
-                    OutlinedTextField(
-                        value = importPassword,
-                        onValueChange = { importPassword = it },
-                        label = { Text(desktopText("Source backup password")) },
-                        singleLine = true,
-                        visualTransformation = if (importPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        trailingIcon = {
-                            IconButton(onClick = { importPasswordVisible = !importPasswordVisible }) {
-                                Icon(if (importPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility, null)
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Text(desktopText("This replaces the local records. Export the current data first if you may need it later."), style = MaterialTheme.typography.bodySmall)
-                }
-            },
-            dismissButton = { TextButton(onClick = { importCandidate = null; importPassword = "" }) { Text(desktopText("Cancel")) } },
-            confirmButton = {
-                Button(enabled = importPassword.length >= 8 && !importChecking, onClick = {
-                    val sourcePassword = importPassword.toCharArray()
-                    importChecking = true
-                    scope.launch {
-                        val preview = dataStore.previewEncrypted(candidate, sourcePassword.copyOf())
-                        importChecking = false
-                        if (preview == null) {
-                            sourcePassword.fill('\u0000')
-                            backupMessage = desktopText("The source password is incorrect or the backup is damaged.", language)
-                        } else {
-                            importPassword = ""
-                            importCandidate = null
-                            importPreviewPassword = sourcePassword
-                            importPreview = candidate to preview
-                        }
-                    }
-                }) { Text(desktopText(if (importChecking) "Checking…" else "Review backup")) }
-            },
-        )
-    }
-    if (exportDialog) {
-        ExportBackupDialog(
-            onDismiss = { exportDialog = false },
-            onExport = { backupPassword ->
-                exportDialog = false
-                val chooser = JFileChooser().apply { selectedFile = File("LifeAssistant-backup.tlb") }
-                val destination = chooser.takeIf { it.showSaveDialog(null) == JFileChooser.APPROVE_OPTION }?.selectedFile
-                if (destination == null) {
-                    backupPassword?.fill('\u0000')
-                } else scope.launch {
-                    if (backupPassword != null) {
-                        val done = dataStore.exportWithPassword(destination, backupPassword)
-                        backupMessage = desktopText(if (done) "Encrypted backup exported." else "Export failed.", language)
-                    } else {
-                        val upload = dataStore.createUploadSnapshot()
-                        try {
-                            withContext(Dispatchers.IO) { upload.file.copyTo(destination, overwrite = true) }
-                            backupMessage = desktopText("Encrypted backup exported.", language)
-                        } finally {
-                            upload.file.delete()
-                        }
-                    }
-                }
-            },
-        )
-    }
-    importPreview?.let { (candidate, preview) ->
-        val current = dataStore.currentSnapshot()
-        fun dismissPreview() {
-            importPreviewPassword?.fill('\u0000')
-            importPreviewPassword = null
-            importPreview = null
-        }
-        AlertDialog(
-            onDismissRequest = ::dismissPreview,
-            title = { Text(desktopText("Replace this PC's data with the backup?")) },
-            text = {
-                Column(Modifier.widthIn(max = 560.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(desktopBackupCreated(formatTimestamp(preview.createdAt), language), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Row { Text("", Modifier.weight(1f)); Text(desktopText("Backup"), Modifier.width(90.dp), fontWeight = FontWeight.SemiBold); Text(desktopText("This PC"), Modifier.width(90.dp), fontWeight = FontWeight.SemiBold) }
-                    listOf<Triple<String, Int, Int?>>(
-                        Triple("Todos", preview.todos.count { it.deletedAt == null }, current?.todos?.count { it.deletedAt == null }),
-                        Triple("Ledger entries", preview.ledgerEntries.count { it.deletedAt == null }, current?.ledgerEntries?.count { it.deletedAt == null }),
-                        Triple("Notes", preview.notes.size, current?.notes?.size),
-                        Triple("Diary", preview.diaryEntries.size, current?.diaryEntries?.size),
-                        Triple("Vault", preview.vaultEntries.size, current?.vaultEntries?.size),
-                        Triple("Attachments", preview.attachments.size, current?.attachments?.size),
-                    ).forEach { (label, backup, local) ->
-                        Row { Text(desktopText(label), Modifier.weight(1f)); Text(backup.toString(), Modifier.width(90.dp)); Text(local?.toString() ?: "-", Modifier.width(90.dp)) }
-                    }
-                    Text(desktopText("Everything on this PC is replaced by the backup. Export the current data first if you may need it later."), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                }
-            },
-            dismissButton = { TextButton(onClick = ::dismissPreview) { Text(desktopText("Cancel")) } },
-            confirmButton = {
-                Button(onClick = {
-                    val sourcePassword = importPreviewPassword ?: return@Button
-                    importPreviewPassword = null
-                    importPreview = null
-                    scope.launch {
-                        try {
-                            val expected = dataStore.localFingerprint()
-                            backupMessage = when (dataStore.importFromEncrypted(candidate, sourcePassword, expected)) {
-                                is DesktopReplaceResult.Applied -> desktopText("Backup imported and encrypted with the current data password.", language)
-                                DesktopReplaceResult.LocalChanged -> desktopText("Local data changed; import was cancelled.", language)
-                                DesktopReplaceResult.Invalid -> desktopText("The source password is incorrect or the backup is damaged.", language)
-                            }
-                        } finally {
-                            sourcePassword.fill('\u0000')
-                        }
-                    }
-                }) { Text(desktopText("Replace")) }
-            },
-        )
-    }
-    if (showLicenseDialog) {
-        val legalText = remember { loadLegalResource(AppIdentity.LICENSE_RESOURCE) }
-        val permissionText = remember { loadLegalResource(AppIdentity.PERMISSION_RESOURCE) }
-        val noticeText = remember { loadLegalResource(AppIdentity.NOTICE_RESOURCE) }
-        AlertDialog(
-            onDismissRequest = { showLicenseDialog = false },
-            title = { Text(desktopText("License")) },
-            text = {
-                Column(
-                    Modifier.widthIn(max = 760.dp).heightIn(max = 540.dp).verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
-                    Text(AppIdentity.LICENSE_LABEL, style = MaterialTheme.typography.titleMedium)
-                    Text(legalText)
-                    Text(permissionText)
-                    Text(noticeText)
-                }
-            },
-            confirmButton = { TextButton(onClick = { showLicenseDialog = false }) { Text(desktopText("Close")) } },
-        )
-    }
-}
-
-private fun loadLegalResource(path: String): String =
-    Thread.currentThread().contextClassLoader.getResourceAsStream(path)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
-        ?: "${path} is not available in this build."
-
-@Composable
-private fun GoogleConnectDialog(defaultClientId: String, onDismiss: () -> Unit, onConnect: (String, CharArray) -> Unit) {
-    var clientId by remember { mutableStateOf(defaultClientId) }; var secret by remember { mutableStateOf("") }; var visible by remember { mutableStateOf(false) }
-    AlertDialog(onDismissRequest = onDismiss, title = { Text(desktopText("Connect Google Drive")) }, text = { Column(Modifier.widthIn(max = 560.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) { Text(desktopText("A Google Cloud Desktop OAuth client from the same project as the Android app is required for this open-source build. Sign-in opens in your system browser.")); OutlinedTextField(clientId, { clientId = it.trim() }, label = { Text(desktopText("Desktop OAuth client ID")) }, modifier = Modifier.fillMaxWidth()); OutlinedTextField(secret, { secret = it }, label = { Text(desktopText("Desktop OAuth client secret")) }, modifier = Modifier.fillMaxWidth(), visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(), trailingIcon = { IconButton({ visible = !visible }) { Icon(if (visible) Icons.Default.VisibilityOff else Icons.Default.Visibility, null) } }); Text(desktopText("Google requires the client secret for Desktop clients. It is protected by Windows DPAPI and is application configuration, not a replacement for PKCE."), style = MaterialTheme.typography.bodySmall) } }, dismissButton = { TextButton(onClick = onDismiss) { Text(desktopText("Cancel")) } }, confirmButton = { Button(enabled = clientId.endsWith(".apps.googleusercontent.com") && secret.isNotBlank(), onClick = { val transferred = secret.toCharArray(); secret = ""; onConnect(clientId, transferred) }) { Text(desktopText("Open Google sign-in")) } })
-}
-
-internal fun chooseAndAttach(scope: kotlinx.coroutines.CoroutineScope, store: DesktopDataStore, ownerType: AttachmentOwnerType, ownerId: Long) {
+internal fun chooseAndAttach(scope: CoroutineScope, store: DesktopDataStore, ownerType: AttachmentOwnerType, ownerId: Long) {
     scope.launch {
         val chooser = JFileChooser()
         val selected = chooser.takeIf { it.showOpenDialog(null) == JFileChooser.APPROVE_OPTION }?.selectedFile
@@ -984,6 +575,7 @@ internal fun chooseAndAttach(scope: kotlinx.coroutines.CoroutineScope, store: De
     }
 }
 
+/** The files of a todo, ledger entry or note: open, save a copy, or remove (after asking). */
 @Composable
 internal fun AttachmentList(
     snapshot: BackupSnapshot,
@@ -992,40 +584,46 @@ internal fun AttachmentList(
     store: DesktopDataStore,
 ) {
     val scope = rememberSafeCoroutineScope()
+    var removing by remember { mutableStateOf<Long?>(null) }
     // Attachments waiting for removal after a delete are not shown.
     val attachments = snapshot.attachments.filter { it.ownerType == ownerType && it.ownerId == ownerId && it.pendingDeleteAt == null }
-    attachments.forEach { attachment ->
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                attachment.originalName,
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary,
-                maxLines = 1,
-            )
-            IconButton(
-                onClick = {
-                    store.attachmentFile(attachment.id)?.let { file ->
-                        scope.launch(Dispatchers.IO) { runCatching { Desktop.getDesktop().open(file) } }
-                    }
-                },
-            ) { Icon(Icons.AutoMirrored.Filled.OpenInNew, desktopText("Open attachment"), Modifier.size(18.dp)) }
-            IconButton(
-                onClick = {
-                    val chooser = JFileChooser().apply { selectedFile = File(attachment.originalName) }
-                    val destination = chooser.takeIf {
-                        it.showSaveDialog(null) == JFileChooser.APPROVE_OPTION
-                    }?.selectedFile
-                    val source = store.attachmentFile(attachment.id)
-                    if (source != null && destination != null) {
-                        scope.launch(Dispatchers.IO) { source.copyTo(destination, overwrite = true) }
-                    }
-                },
-            ) { Icon(Icons.Default.Download, desktopText("Save a copy"), Modifier.size(18.dp)) }
-            IconButton(
-                onClick = { scope.launch { store.removeAttachment(attachment.id) } },
-            ) { Icon(Icons.Default.Delete, desktopText("Remove attachment"), Modifier.size(18.dp)) }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        attachments.forEach { attachment ->
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh).padding(start = Space.md, end = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Rounded.InsertDriveFile, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(attachment.originalName, modifier = Modifier.weight(1f).padding(horizontal = Space.sm), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                IconButton(
+                    onClick = {
+                        store.attachmentFile(attachment.id)?.let { file ->
+                            scope.launch(Dispatchers.IO) { runCatching { Desktop.getDesktop().open(file) } }
+                        }
+                    },
+                ) { Icon(Icons.AutoMirrored.Rounded.OpenInNew, desktopText("Open attachment"), Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                IconButton(
+                    onClick = {
+                        val chooser = JFileChooser().apply { selectedFile = File(attachment.originalName) }
+                        val destination = chooser.takeIf { it.showSaveDialog(null) == JFileChooser.APPROVE_OPTION }?.selectedFile
+                        val source = store.attachmentFile(attachment.id)
+                        if (source != null && destination != null) {
+                            scope.launch(Dispatchers.IO) { source.copyTo(destination, overwrite = true) }
+                        }
+                    },
+                ) { Icon(Icons.Rounded.Download, desktopText("Save a copy"), Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                IconButton(onClick = { removing = attachment.id }) { Icon(Icons.Rounded.DeleteOutline, desktopText("Remove attachment"), Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+            }
         }
+    }
+    removing?.let { id ->
+        AlertDialog(
+            onDismissRequest = { removing = null },
+            title = { Text(desktopText("Remove this file?")) },
+            text = { Text(attachments.firstOrNull { it.id == id }?.originalName.orEmpty()) },
+            dismissButton = { TextButton(onClick = { removing = null }) { Text(desktopText("Cancel")) } },
+            confirmButton = { Button(onClick = { removing = null; scope.launch { store.removeAttachment(id) } }) { Text(desktopText("Remove")) } },
+        )
     }
 }
 
@@ -1056,16 +654,18 @@ internal fun noteFolderPath(folderId: Long, snapshot: BackupSnapshot): String {
 }
 
 private fun DesktopDestination.toTopLevelDestination(): TopLevelDestination = when (this) {
+    DesktopDestination.TODAY -> TopLevelDestination.TODAY
     DesktopDestination.TODO -> TopLevelDestination.TODO
     DesktopDestination.LEDGER -> TopLevelDestination.LEDGER
     DesktopDestination.CALENDAR -> TopLevelDestination.CALENDAR
     DesktopDestination.NOTES -> TopLevelDestination.NOTES
     DesktopDestination.DIARY -> TopLevelDestination.DIARY
     DesktopDestination.CONFESSIONAL -> TopLevelDestination.CONFESSIONAL
-    DesktopDestination.VAULT, DesktopDestination.SETTINGS -> TopLevelDestination.NOTES
+    DesktopDestination.VAULT, DesktopDestination.SETTINGS -> TopLevelDestination.TODAY
 }
 
 private fun TopLevelDestination.toDesktopDestination(): DesktopDestination = when (this) {
+    TopLevelDestination.TODAY -> DesktopDestination.TODAY
     TopLevelDestination.TODO -> DesktopDestination.TODO
     TopLevelDestination.LEDGER -> DesktopDestination.LEDGER
     TopLevelDestination.CALENDAR -> DesktopDestination.CALENDAR
@@ -1091,15 +691,8 @@ private fun desktopErrorMessage(error: Throwable, language: UiLanguage = UiLangu
 }
 
 internal fun formatMoney(cents: Long): String = NumberFormat.getCurrencyInstance(Locale.US).apply { currency = Currency.getInstance("USD") }.format(cents / 100.0)
-private fun compactMoney(cents: Long): String = when {
-    cents >= 100_000_000L -> "$" + "%.1fM".format(Locale.US, cents / 100_000_000.0)
-    cents >= 100_000L -> "$" + "%.1fk".format(Locale.US, cents / 100_000.0)
-    else -> formatMoney(cents)
-}
-private fun formatCalendarNet(cents: Long): String = BigDecimal.valueOf(cents, 2)
-    .stripTrailingZeros()
-    .toPlainString()
-private fun formatTimestamp(timestamp: Long): String = DateTimeFormatter.ofPattern("MMM d, yyyy, h:mm a", Locale.US).format(Instant.ofEpochMilli(timestamp).atZone(ZoneId.systemDefault()))
+
+internal fun formatTimestamp(timestamp: Long): String = DateTimeFormatter.ofPattern("MMM d, yyyy, h:mm a", Locale.US).format(Instant.ofEpochMilli(timestamp).atZone(ZoneId.systemDefault()))
 
 internal fun parseAmountCents(value: String): Long? {
     val decimal = value.toBigDecimalOrNull() ?: return null
@@ -1110,50 +703,4 @@ internal fun parseAmountCents(value: String): Long? {
 }
 
 @Composable
-internal fun <T> kotlinx.coroutines.flow.StateFlow<T>.collectAsDesktopState(): androidx.compose.runtime.State<T> = collectAsState()
-
-private val AppLockTimeout.desktopLabel: String
-    get() = when (this) {
-        AppLockTimeout.IMMEDIATELY -> "Immediately"
-        AppLockTimeout.ONE_MINUTE -> "After 1 minute"
-        AppLockTimeout.FIVE_MINUTES -> "After 5 minutes"
-    }
-
-/** Chooses how an exported backup is locked: with the data password, or with its own password. */
-@Composable
-private fun ExportBackupDialog(onDismiss: () -> Unit, onExport: (CharArray?) -> Unit) {
-    var separate by remember { mutableStateOf(false) }
-    var password by remember { mutableStateOf("") }
-    var confirmation by remember { mutableStateOf("") }
-    val valid = !separate || (password.length >= 8 && password == confirmation)
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(desktopText("Export backup")) },
-        text = {
-            Column(Modifier.widthIn(max = 520.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(!separate, { separate = false })
-                    Text(desktopText("Lock with my data password"))
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(separate, { separate = true })
-                    Text(desktopText("Lock with a separate backup password"))
-                }
-                if (separate) {
-                    OutlinedTextField(password, { password = it }, label = { Text(desktopText("Backup password")) }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(confirmation, { confirmation = it }, label = { Text(desktopText("Confirm password")) }, singleLine = true, visualTransformation = PasswordVisualTransformation(), isError = confirmation.isNotEmpty() && confirmation != password, modifier = Modifier.fillMaxWidth())
-                    Text(desktopText("At least 8 characters. Nobody can recover it for you."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(desktopText("Cancel")) } },
-        confirmButton = {
-            Button(enabled = valid, onClick = {
-                val chosen = if (separate) password.toCharArray() else null
-                password = ""
-                confirmation = ""
-                onExport(chosen)
-            }) { Text(desktopText("Choose where to save")) }
-        },
-    )
-}
+internal fun <T> StateFlow<T>.collectAsDesktopState(): androidx.compose.runtime.State<T> = collectAsState()

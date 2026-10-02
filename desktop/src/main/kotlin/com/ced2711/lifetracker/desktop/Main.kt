@@ -25,21 +25,33 @@ import androidx.compose.ui.window.application
 import com.ced2711.lifetracker.domain.model.AppIdentity
 
 fun main(args: Array<String>) {
-    // Packaged-build check without a window; see DesktopSelfTest.
-    if (args.firstOrNull() == "--self-test") {
-        kotlin.system.exitProcess(if (DesktopSelfTest.run(java.io.File(args.getOrElse(1) { "self-test.txt" }))) 0 else 1)
+    when (args.firstOrNull()) {
+        // Packaged-build check without a window; see DesktopSelfTest.
+        "--self-test" -> kotlin.system.exitProcess(if (DesktopSelfTest.run(java.io.File(args.getOrElse(1) { "self-test.txt" }))) 0 else 1)
+        // AI assistants start this as their MCP server; see DesktopMcpBridge.
+        "--mcp" -> {
+            DesktopMcpBridge.main()
+            kotlin.system.exitProcess(0)
+        }
     }
-    runApp()
+    val background = "--background" in args
+    // Already running (perhaps in the tray): bring that window forward instead of a second copy.
+    if (DesktopAgentServer.request(DesktopPlatform.appDirectory(), "/status") != null) {
+        if (!background) DesktopAgentServer.request(DesktopPlatform.appDirectory(), "/show", "{}")
+        kotlin.system.exitProcess(0)
+    }
+    runApp(startHidden = background)
 }
 
-private fun runApp() = application {
+private fun runApp(startHidden: Boolean) = application {
     val windowIcon = remember { LifeTrackerWindowIcon() }
     val configStore = remember { DesktopConfigStore() }
     val shortcuts = remember { DesktopShortcuts() }
-    var windowVisible by remember { mutableStateOf(true) }
     // The tray icon shows reminder notifications and, when chosen, keeps the app running.
     val trayState = rememberTrayState()
     val traySupported = remember { runCatching { java.awt.SystemTray.isSupported() }.getOrDefault(false) }
+    // Started by an AI assistant: wait in the tray. Without a tray the window has to show.
+    var windowVisible by remember { mutableStateOf(!(startHidden && traySupported)) }
     val notifier = remember { DesktopNotifier { title, message -> trayState.sendNotification(Notification(title, message, Notification.Type.Info)) } }
     val language = remember { configStore.read().uiLanguage }
     if (traySupported) {
@@ -87,7 +99,16 @@ private fun runApp() = application {
     ) {
         window.minimumSize = java.awt.Dimension(640, 480)
         CompositionLocalProvider(LocalDesktopShortcuts provides shortcuts, LocalDesktopNotifier provides notifier.takeIf { traySupported }) {
-            LifeTrackerDesktopApp()
+            LifeTrackerDesktopApp(
+                onShowWindow = {
+                    java.awt.EventQueue.invokeLater {
+                        windowVisible = true
+                        if (windowState.isMinimized) windowState.isMinimized = false
+                        window.toFront()
+                        window.requestFocus()
+                    }
+                },
+            )
         }
     }
 }

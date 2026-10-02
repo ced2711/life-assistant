@@ -65,7 +65,8 @@ data class SafePaneLayout(
 internal fun usesWideFeatureLayout(
     measuredWidth: Dp,
     safePaneLayout: SafePaneLayout?,
-    wideThreshold: Dp = 840.dp,
+    // Two phone-width panes fit from here: an unfolded foldable and a tablet held upright.
+    wideThreshold: Dp = 700.dp,
 ): Boolean {
     val featurePaneWidth = minOf(measuredWidth, safePaneLayout?.primaryPane?.width ?: measuredWidth)
     return featurePaneWidth >= wideThreshold
