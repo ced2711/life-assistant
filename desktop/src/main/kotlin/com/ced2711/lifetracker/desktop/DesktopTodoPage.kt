@@ -1,13 +1,15 @@
 package com.ced2711.lifetracker.desktop
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -17,45 +19,45 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.FilterAlt
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Repeat
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AttachFile
+import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.FilterList
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.Repeat
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.VerticalDivider
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -65,14 +67,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ced2711.lifetracker.data.backup.BackupSnapshot
+import com.ced2711.lifetracker.data.local.CategoryEntity
 import com.ced2711.lifetracker.data.local.TodoEntity
 import com.ced2711.lifetracker.domain.date.SmartDateParser
 import com.ced2711.lifetracker.domain.format.UserFormatting
@@ -85,11 +89,18 @@ import com.ced2711.lifetracker.domain.model.TodoDraft
 import com.ced2711.lifetracker.domain.model.TodoPriority
 import com.ced2711.lifetracker.domain.model.UiLanguage
 import com.ced2711.lifetracker.domain.model.parseTags
+import com.ced2711.lifetracker.ui.design.CheckCircle
+import com.ced2711.lifetracker.ui.design.LifeTextField
+import com.ced2711.lifetracker.ui.design.Pill
+import com.ced2711.lifetracker.ui.design.SectionLabel
+import com.ced2711.lifetracker.ui.design.Segmented
+import com.ced2711.lifetracker.ui.design.Space
+import com.ced2711.lifetracker.ui.design.priorityColor
 import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
 import com.ced2711.lifetracker.ui.localization.uiLocale
+import com.ced2711.lifetracker.ui.theme.LifeTheme
 import java.time.LocalDate
 import java.time.LocalTime
-import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 import kotlinx.coroutines.launch
@@ -174,9 +185,10 @@ internal fun TodoPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
     var showFilterRow by remember { mutableStateOf(false) }
     var selectedId by remember { mutableStateOf<Long?>(null) }
     var editor by remember { mutableStateOf<TodoEditorTarget?>(null) }
+    var expanded by remember { mutableStateOf(emptySet<Long>()) }
     var newCategory by remember { mutableStateOf(false) }
-    var renamingCategory by remember { mutableStateOf<com.ced2711.lifetracker.data.local.CategoryEntity?>(null) }
-    var deletingCategory by remember { mutableStateOf<com.ced2711.lifetracker.data.local.CategoryEntity?>(null) }
+    var renamingCategory by remember { mutableStateOf<CategoryEntity?>(null) }
+    var deletingCategory by remember { mutableStateOf<CategoryEntity?>(null) }
     var renamingTag by remember { mutableStateOf<String?>(null) }
     var deletingTag by remember { mutableStateOf<String?>(null) }
     var completeWithSubtasks by remember { mutableStateOf<TodoEntity?>(null) }
@@ -203,7 +215,15 @@ internal fun TodoPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
             query.isBlank() || todo.title.contains(query, true) || todo.description.contains(query, true) ||
                 parseTags(todo.tagsCsv).any { it.contains(query.trim().removePrefix("#"), true) }
         }
-    val active = matching.filter { it.completedAt == null && filters.view.matches(it, today) }.sortedWith(todoComparator(filters.sortBy))
+    // A repeating todo shows its occurrences of the coming week and otherwise only the next one;
+    // the calendar shows them all.
+    val nextOfSeries = live.filter { it.completedAt == null && it.seriesId != null }
+        .groupBy { it.seriesId }
+        .mapValues { (_, occurrences) -> occurrences.minOf { it.deadlineEpochDay ?: Long.MAX_VALUE } }
+    val active = matching
+        .filter { it.completedAt == null && filters.view.matches(it, today) }
+        .filter { todo -> todo.seriesId == null || (todo.deadlineEpochDay ?: Long.MAX_VALUE).let { it <= today + 7 || it == nextOfSeries[todo.seriesId] } }
+        .sortedWith(todoComparator(filters.sortBy))
     val completed = matching.filter { it.completedAt != null }.sortedByDescending { it.completedAt }
     val visible = active + if (filters.showCompleted) completed else emptyList()
     val subtasksByTodo = snapshot.subtasks.groupBy { it.todoId }
@@ -261,13 +281,13 @@ internal fun TodoPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
         selectedId = visible[next].id
     }
 
-    Scaffold(snackbarHost = { SnackbarHost(snackbar) }) { padding ->
+    Scaffold(snackbarHost = { SnackbarHost(snackbar) }, containerColor = MaterialTheme.colorScheme.background) { padding ->
         BoxWithConstraints(Modifier.fillMaxSize().padding(padding)) {
             val editorTarget = editor
-            val editorWidth = 460.dp
+            val editorWidth = 440.dp
             val listMinimum = 520.dp
             // The filter column shows whenever list, filters and an open editor still fit.
-            val filterColumn = maxWidth - (if (editorTarget != null) editorWidth else 0.dp) >= listMinimum + 240.dp
+            val filterColumn = maxWidth - (if (editorTarget != null) editorWidth else 0.dp) >= listMinimum + 232.dp
             val editorBeside = maxWidth >= listMinimum + editorWidth
             if (!editorBeside && editorTarget != null) {
                 TodoEditor(
@@ -292,39 +312,60 @@ internal fun TodoPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
                         onDeleteCategory = { deletingCategory = it },
                         onRenameTag = { renamingTag = it },
                         onDeleteTag = { deletingTag = it },
-                        modifier = Modifier.width(240.dp).fillMaxHeight(),
+                        modifier = Modifier.width(232.dp),
                     )
-                    VerticalDivider()
+                    ColumnDivider()
                 }
                 Column(Modifier.weight(1f).fillMaxHeight()) {
-                    PageHeader(if (filters.view == TodoView.ALL) "Todo" else filters.view.label, desktopActiveTasks(active.size, language))
+                    PageHeader(
+                        if (filters.view == TodoView.ALL) "Todo" else filters.view.label,
+                        desktopActiveTasks(active.size, language),
+                    ) {
+                        ChoiceMenu(
+                            label = desktopText("Sort"),
+                            options = DesktopTodoSort.entries,
+                            selected = filters.sortBy,
+                            optionLabel = { desktopText(desktopSortLabel(it), language) },
+                            onSelect = { filters.sortBy = it },
+                        )
+                        if (!filterColumn) {
+                            IconButton(onClick = { showFilterRow = !showFilterRow }) { Icon(Icons.Rounded.FilterList, desktopText("Filters")) }
+                        }
+                        Button(onClick = { editor = TodoEditorTarget.New() }) {
+                            Icon(Icons.Rounded.Add, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(desktopText("New todo"))
+                        }
+                    }
                     Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        Modifier.fillMaxWidth().padding(horizontal = PagePadding),
+                        horizontalArrangement = Arrangement.spacedBy(Space.md),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        OutlinedTextField(
-                            quickAdd,
-                            { quickAdd = it },
-                            placeholder = { Text(desktopText("Add a todo and press Enter")) },
-                            leadingIcon = { Icon(Icons.Default.Add, null) },
-                            singleLine = true,
-                            modifier = Modifier.weight(1.4f).focusRequester(quickAddFocus).onEnter(::addQuick),
+                        LifeTextField(
+                            value = quickAdd,
+                            onValueChange = { quickAdd = it },
+                            placeholder = desktopText("Add a todo and press Enter"),
+                            leadingIcon = Icons.Rounded.Add,
+                            modifier = Modifier.weight(1f).focusRequester(quickAddFocus).onEnter(::addQuick),
                         )
-                        OutlinedTextField(
-                            query,
-                            { query = it },
-                            placeholder = { Text(desktopText("Search (Ctrl+F)")) },
-                            leadingIcon = { Icon(Icons.Default.Search, null) },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f).focusRequester(searchFocus),
+                        LifeTextField(
+                            value = query,
+                            onValueChange = { query = it },
+                            placeholder = desktopText("Search (Ctrl+F)"),
+                            leadingIcon = Icons.Rounded.Search,
+                            trailing = if (query.isNotEmpty()) {
+                                { IconButton(onClick = { query = "" }, modifier = Modifier.size(24.dp)) { Icon(Icons.Rounded.Close, desktopText("Clear"), Modifier.size(16.dp)) } }
+                            } else {
+                                null
+                            },
+                            modifier = Modifier.width(240.dp).focusRequester(searchFocus),
                         )
-                        if (!filterColumn) IconButton(onClick = { showFilterRow = !showFilterRow }) { Icon(Icons.Default.FilterAlt, desktopText("Filters")) }
                     }
                     if (!filterColumn && showFilterRow) TodoFilterRow(snapshot, live, filters) { newCategory = true }
                     LazyColumn(
                         state = listState,
-                        modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 24.dp)
+                        modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = PagePadding - Space.md)
                             .focusRequester(listFocus)
                             .listKeys(
                                 onUp = { moveSelection(-1) },
@@ -334,21 +375,27 @@ internal fun TodoPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
                                 onDelete = { visible.firstOrNull { it.id == selectedId }?.let(::requestDelete) },
                             )
                             .focusable(),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
+                        item { Spacer(Modifier.height(Space.md)) }
                         if (active.isEmpty()) {
-                            item { Text(desktopText("Nothing to do here. Add a todo above or press Ctrl+N."), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 24.dp)) }
+                            item {
+                                com.ced2711.lifetracker.ui.design.EmptyState(
+                                    title = desktopText(if (query.isBlank()) "Nothing to do here" else "No todos match"),
+                                    icon = Icons.Rounded.Search.takeIf { query.isNotBlank() } ?: Icons.Rounded.Add,
+                                    body = desktopText(if (query.isBlank()) "Add a todo above, or press Ctrl+N for one with all details." else "Try other words, or clear the filters."),
+                                )
+                            }
                         }
                         val grouped = filters.sortBy == DesktopTodoSort.DEADLINE
                         active.forEachIndexed { index, todo ->
                             val group = deadlineGroup(todo, today)
                             if (grouped && (index == 0 || deadlineGroup(active[index - 1], today) != group)) {
                                 item(key = "group-$group") {
-                                    Text(
+                                    SectionLabel(
                                         desktopText(group),
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = if (group == "Overdue") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.padding(top = if (index == 0) 4.dp else 14.dp, bottom = 2.dp),
+                                        count = active.count { deadlineGroup(it, today) == group },
+                                        color = if (group == "Overdue") LifeTheme.colors.danger else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(start = Space.md, top = if (index == 0) 0.dp else Space.md),
                                     )
                                 }
                             }
@@ -358,6 +405,8 @@ internal fun TodoPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
                                     snapshot = snapshot,
                                     store = store,
                                     selected = todo.id == selectedId || editor == TodoEditorTarget.Existing(todo.id),
+                                    expanded = todo.id in expanded,
+                                    onExpand = { expanded = if (todo.id in expanded) expanded - todo.id else expanded + todo.id },
                                     onClick = {
                                         selectedId = todo.id
                                         editor = TodoEditorTarget.Existing(todo.id)
@@ -370,28 +419,37 @@ internal fun TodoPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
                                 )
                             }
                         }
-                        item {
-                            TextButton(onClick = { filters.showCompleted = !filters.showCompleted }) {
-                                Icon(if (filters.showCompleted) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null)
-                                Text(desktopCompletedCount(completed.size, language))
+                        if (completed.isNotEmpty()) {
+                            item(key = "completed-header") {
+                                Row(
+                                    Modifier.padding(start = Space.xs, top = Space.lg).clip(RoundedCornerShape(8.dp))
+                                        .clickable(role = Role.Button) { filters.showCompleted = !filters.showCompleted }
+                                        .padding(horizontal = Space.sm, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(if (filters.showCompleted) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(desktopCompletedCount(completed.size, language), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp))
+                                }
                             }
                         }
-                        if (filters.showCompleted) items(completed, key = { it.id }) { todo ->
+                        if (filters.showCompleted) items(completed, key = { "done-${it.id}" }) { todo ->
                             TodoRow(
                                 todo = todo,
                                 snapshot = snapshot,
                                 store = store,
                                 selected = todo.id == selectedId,
+                                expanded = false,
+                                onExpand = {},
                                 onClick = { selectedId = todo.id; editor = TodoEditorTarget.Existing(todo.id) },
                                 onToggle = { toggle(todo) },
                                 onDelete = { requestDelete(todo) },
                             )
                         }
-                        item { Spacer(Modifier.padding(24.dp)) }
+                        item { Spacer(Modifier.height(48.dp)) }
                     }
                 }
                 if (editorTarget != null) {
-                    VerticalDivider()
+                    ColumnDivider()
                     TodoEditor(
                         snapshot = snapshot,
                         store = store,
@@ -479,14 +537,40 @@ internal fun TodoPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
         )
     }
     if (newCategory) {
-        SimpleNameDialog(desktopText("New category"), { newCategory = false }) { name ->
-            scope.launch { store.addCategory(name, filters.singleCategory) }
+        NewCategoryDialog(snapshot, defaultParent = filters.singleCategory, onDismiss = { newCategory = false }) { name, parent ->
+            scope.launch { store.addCategory(name, parent) }
             newCategory = false
         }
     }
 }
 
-/** Left column of the todo page: quick views, categories as a tree, priority, tags and sort. */
+/** New category with an explicit parent choice (no longer taken silently from the filter). */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun NewCategoryDialog(snapshot: BackupSnapshot, defaultParent: Long?, onDismiss: () -> Unit, onSave: (String, Long?) -> Unit) {
+    var name by remember { mutableStateOf("") }
+    var parent by remember { mutableStateOf(defaultParent) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(desktopText("New category")) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+                LifeTextField(name, { name = it }, placeholder = desktopText("Name"), modifier = Modifier.fillMaxWidth().onEnter { if (name.isNotBlank()) onSave(name.trim(), parent) })
+                FieldLabel("Inside")
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Pill(desktopText("Top level"), parent == null, { parent = null }, exclusive = true)
+                    snapshot.categories.sortedBy { categoryPath(it.id, snapshot).lowercase() }.forEach { category ->
+                        Pill(categoryPath(category.id, snapshot), parent == category.id, { parent = category.id }, exclusive = true)
+                    }
+                }
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(desktopText("Cancel")) } },
+        confirmButton = { Button(enabled = name.isNotBlank(), onClick = { onSave(name.trim(), parent) }) { Text(desktopText("Add")) } },
+    )
+}
+
+/** Left column of the todo page: quick views, categories as a tree, priority and tags. */
 @Composable
 private fun TodoFilterColumn(
     snapshot: BackupSnapshot,
@@ -494,40 +578,37 @@ private fun TodoFilterColumn(
     filters: TodoFilters,
     today: Long,
     onNewCategory: () -> Unit,
-    onRenameCategory: (com.ced2711.lifetracker.data.local.CategoryEntity) -> Unit,
-    onDeleteCategory: (com.ced2711.lifetracker.data.local.CategoryEntity) -> Unit,
+    onRenameCategory: (CategoryEntity) -> Unit,
+    onDeleteCategory: (CategoryEntity) -> Unit,
     onRenameTag: (String) -> Unit,
     onDeleteTag: (String) -> Unit,
     modifier: Modifier,
 ) {
     val open = live.filter { it.completedAt == null }
-    Column(
-        modifier.background(MaterialTheme.colorScheme.surfaceContainerLowest).verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
+    FilterColumn(modifier) {
         TodoView.entries.forEach { view ->
-            FilterListEntry(
+            FilterEntry(
                 label = desktopText(view.label),
                 count = open.count { view.matches(it, today) },
                 selected = filters.view == view,
                 emphasize = view == TodoView.OVERDUE,
             ) { filters.view = view }
         }
-        FilterSectionTitle("Categories") {
-            IconButton(onClick = onNewCategory, modifier = Modifier.size(28.dp)) { Icon(Icons.Default.Add, desktopText("New category"), Modifier.size(18.dp)) }
+        FilterHeader("Categories") {
+            if (!filters.allCategories) ClearFilter { filters.selectAllCategories() }
+            IconButton(onClick = onNewCategory, modifier = Modifier.size(28.dp)) { Icon(Icons.Rounded.Add, desktopText("New category"), Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
-        FilterListEntry(desktopText("All categories"), null, filters.allCategories) { filters.selectAllCategories() }
         val children = snapshot.categories.groupBy { it.parentId }
-        fun walk(parent: Long?, depth: Int, entries: MutableList<Pair<com.ced2711.lifetracker.data.local.CategoryEntity, Int>>) {
+        fun walk(parent: Long?, depth: Int, entries: MutableList<Pair<CategoryEntity, Int>>) {
             children[parent].orEmpty().sortedWith(compareBy({ it.sortOrder }, { it.name.lowercase() })).forEach { category ->
                 entries += category to depth
                 walk(category.id, depth + 1, entries)
             }
         }
-        val tree = mutableListOf<Pair<com.ced2711.lifetracker.data.local.CategoryEntity, Int>>().also { walk(null, 0, it) }
+        val tree = mutableListOf<Pair<CategoryEntity, Int>>().also { walk(null, 0, it) }
         tree.forEach { (category, depth) ->
             val ids = descendantCategoryIds(snapshot.categories, setOf(category.id))
-            FilterListEntry(
+            FilterEntry(
                 label = category.name,
                 count = open.count { it.categoryId in ids },
                 selected = !filters.allCategories && category.id in filters.selectedCategories,
@@ -536,108 +617,59 @@ private fun TodoFilterColumn(
                 onDelete = { onDeleteCategory(category) },
             ) { filters.toggleCategory(category.id) }
         }
-        FilterListEntry(desktopText("Uncategorized"), open.count { it.categoryId == null }, !filters.allCategories && filters.includeUncategorized) { filters.toggleUncategorized() }
+        FilterEntry(desktopText("Uncategorized"), open.count { it.categoryId == null }, !filters.allCategories && filters.includeUncategorized) { filters.toggleUncategorized() }
 
-        FilterSectionTitle("Priority")
-        FilterListEntry(desktopText("Any priority"), null, filters.priority == null) { filters.priority = null }
+        FilterHeader("Priority") { if (filters.priority != null) ClearFilter { filters.priority = null } }
         listOf(TodoPriority.URGENT, TodoPriority.HIGH, TodoPriority.MEDIUM, TodoPriority.LOW).forEach { priority ->
-            FilterListEntry(desktopText(priorityLabel(priority)), open.count { it.priority == priority }, filters.priority == priority, dot = priorityColor(priority)) {
+            FilterEntry(desktopText(priorityLabel(priority)), open.count { it.priority == priority }, filters.priority == priority, dot = priorityColor(priority)) {
                 filters.priority = if (filters.priority == priority) null else priority
             }
         }
 
         val tags = live.flatMap { parseTags(it.tagsCsv) }.distinctBy { it.lowercase() }.sortedBy { it.lowercase() }
         if (tags.isNotEmpty()) {
-            FilterSectionTitle("Tags")
+            FilterHeader("Tags") { if (filters.tag != null) ClearFilter { filters.tag = null } }
             tags.forEach { tag ->
-                FilterListEntry("#$tag", open.count { todo -> parseTags(todo.tagsCsv).any { it.equals(tag, true) } }, filters.tag == tag, onRename = { onRenameTag(tag) }, onDelete = { onDeleteTag(tag) }) {
+                FilterEntry("#$tag", open.count { todo -> parseTags(todo.tagsCsv).any { it.equals(tag, true) } }, filters.tag == tag, onRename = { onRenameTag(tag) }, onDelete = { onDeleteTag(tag) }) {
                     filters.tag = if (filters.tag == tag) null else tag
                 }
             }
         }
-
-        FilterSectionTitle("Sort")
-        DesktopTodoSort.entries.forEach { sort ->
-            FilterListEntry(desktopText(desktopSortLabel(sort)), null, filters.sortBy == sort) { filters.sortBy = sort }
-        }
     }
 }
 
+/** "Clear" next to a filter heading, shown only while that filter is on. */
 @Composable
-private fun FilterSectionTitle(title: String, action: (@Composable () -> Unit)? = null) {
-    Row(Modifier.fillMaxWidth().padding(start = 10.dp, top = 18.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(desktopText(title), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-        action?.invoke()
-    }
+private fun ClearFilter(onClick: () -> Unit) {
+    Text(
+        desktopText("Clear"),
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(role = Role.Button, onClick = onClick).padding(horizontal = 6.dp, vertical = 3.dp),
+    )
 }
 
-@Composable
-private fun FilterListEntry(
-    label: String,
-    count: Int?,
-    selected: Boolean,
-    indent: Int = 0,
-    emphasize: Boolean = false,
-    dot: Color? = null,
-    onRename: (() -> Unit)? = null,
-    onDelete: (() -> Unit)? = null,
-    onClick: () -> Unit,
-) {
-    val interaction = remember { MutableInteractionSource() }
-    val hovered by interaction.collectIsHoveredAsState()
-    Surface(
-        shape = RoundedCornerShape(10.dp),
-        color = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
-        modifier = Modifier.fillMaxWidth().hoverable(interaction).clickable(onClick = onClick),
-    ) {
-        Row(Modifier.padding(start = 10.dp + (indent * 14).dp, end = 10.dp, top = 7.dp, bottom = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (dot != null) {
-                Surface(shape = RoundedCornerShape(50), color = dot) { Spacer(Modifier.size(8.dp)) }
-                Spacer(Modifier.width(8.dp))
-            }
-            Text(
-                label,
-                modifier = Modifier.weight(1f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-            )
-            if (hovered && onRename != null) {
-                IconButton(onClick = onRename, modifier = Modifier.size(24.dp)) { Icon(Icons.Default.Edit, desktopText("Rename"), Modifier.size(15.dp)) }
-                IconButton(onClick = { onDelete?.invoke() }, modifier = Modifier.size(24.dp)) { Icon(Icons.Default.Delete, desktopText("Delete"), Modifier.size(15.dp)) }
-            } else if (count != null && count > 0) {
-                Text(count.toString(), style = MaterialTheme.typography.labelMedium, color = if (emphasize) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    }
-}
-
-/** The same filters as chips, for windows too narrow for the filter column. */
+/** The same filters as pills, for windows too narrow for the filter column. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun TodoFilterRow(snapshot: BackupSnapshot, live: List<TodoEntity>, filters: TodoFilters, onNewCategory: () -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = PagePadding, vertical = Space.sm), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            TodoView.entries.forEach { view -> FilterChipSimple(desktopText(view.label), filters.view == view) { filters.view = view } }
+            TodoView.entries.forEach { view -> FilterChipSimple(desktopText(view.label), filters.view == view, exclusive = true) { filters.view = view } }
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(desktopText("Sort"), style = MaterialTheme.typography.labelLarge, modifier = Modifier.align(Alignment.CenterVertically))
-            DesktopTodoSort.entries.forEach { item -> FilterChipSimple(desktopText(desktopSortLabel(item)), filters.sortBy == item) { filters.sortBy = item } }
-            Spacer(Modifier.width(12.dp))
-            Text(desktopText("Priority"), style = MaterialTheme.typography.labelLarge, modifier = Modifier.align(Alignment.CenterVertically))
-            FilterChipSimple(desktopText("Any"), filters.priority == null) { filters.priority = null }
+            FilterChipSimple(desktopText("Any priority"), filters.priority == null, exclusive = true) { filters.priority = null }
             listOf(TodoPriority.URGENT, TodoPriority.HIGH, TodoPriority.MEDIUM, TodoPriority.LOW).forEach { item ->
-                FilterChipSimple(desktopText(priorityLabel(item)), filters.priority == item) { filters.priority = if (filters.priority == item) null else item }
+                FilterChipSimple(desktopText(priorityLabel(item)), filters.priority == item, exclusive = true) { filters.priority = if (filters.priority == item) null else item }
             }
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            FilterChipSimple(desktopText("All"), filters.allCategories) { filters.selectAllCategories() }
+            FilterChipSimple(desktopText("All categories"), filters.allCategories) { filters.selectAllCategories() }
             FilterChipSimple(desktopText("Uncategorized"), !filters.allCategories && filters.includeUncategorized) { filters.toggleUncategorized() }
             snapshot.categories.forEach { category ->
                 FilterChipSimple(categoryPath(category.id, snapshot), !filters.allCategories && category.id in filters.selectedCategories) { filters.toggleCategory(category.id) }
             }
-            TextButton(onClick = onNewCategory) { Icon(Icons.Default.Add, null); Text(desktopText("Category")) }
+            TextButton(onClick = onNewCategory) { Icon(Icons.Rounded.Add, null, Modifier.size(18.dp)); Text(desktopText("Category")) }
         }
         val tags = live.flatMap { parseTags(it.tagsCsv) }.distinctBy { it.lowercase() }.sortedBy { it.lowercase() }
         if (tags.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -662,22 +694,18 @@ internal fun priorityLabel(priority: TodoPriority): String = when (priority) {
     TodoPriority.URGENT -> "Urgent"
 }
 
-@Composable
-private fun priorityColor(priority: TodoPriority): Color = when (priority) {
-    TodoPriority.URGENT -> MaterialTheme.colorScheme.error
-    TodoPriority.HIGH -> Color(0xFFFFB673)
-    TodoPriority.MEDIUM -> MaterialTheme.colorScheme.primary
-    TodoPriority.LOW -> MaterialTheme.colorScheme.onSurfaceVariant
-    TodoPriority.NONE -> Color.Transparent
-}
-
-@OptIn(ExperimentalLayoutApi::class)
+/**
+ * One todo: round check mark in its priority colour, title, and one line of details (when, open
+ * subtasks, category, tags, files). Subtasks unfold under it; delete and reordering show on hover.
+ */
 @Composable
 private fun TodoRow(
     todo: TodoEntity,
     snapshot: BackupSnapshot,
     store: DesktopDataStore,
     selected: Boolean,
+    expanded: Boolean,
+    onExpand: () -> Unit,
     onClick: () -> Unit,
     onToggle: () -> Unit,
     onDelete: () -> Unit,
@@ -689,60 +717,94 @@ private fun TodoRow(
     val subtasks = snapshot.subtasks.filter { it.todoId == todo.id }.sortedBy { it.sortOrder }
     val done = todo.completedAt != null
     val attachments = snapshot.attachments.count { it.ownerType == AttachmentOwnerType.TODO && it.ownerId == todo.id && it.pendingDeleteAt == null }
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
+    val background by animateColorAsState(
+        when {
+            selected -> LifeTheme.colors.accentSoft
+            hovered -> MaterialTheme.colorScheme.surfaceContainer
+            else -> Color.Transparent
+        },
+        tween(120),
+        label = "todo-row",
+    )
+    val now = LocalDate.now().toEpochDay()
+    val overdue = !done && todo.deadlineEpochDay != null && (todo.deadlineEpochDay < now ||
+        (todo.deadlineEpochDay == now && (todo.deadlineMinute ?: 1_440) < LocalTime.now().toSecondOfDay() / 60))
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(background).hoverable(interaction).clickable(onClick = onClick)
+            .padding(start = 4.dp, end = 8.dp, top = 2.dp, bottom = 2.dp),
     ) {
-        Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(done, { onToggle() })
-                Column(Modifier.weight(1f).padding(horizontal = 4.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        if (todo.priority != TodoPriority.NONE) {
-                            Surface(shape = RoundedCornerShape(50), color = priorityColor(todo.priority)) { Spacer(Modifier.size(8.dp)) }
+        Row(Modifier.heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {
+            CheckCircle(
+                checked = done,
+                onCheckedChange = { onToggle() },
+                color = priorityColor(todo.priority) ?: MaterialTheme.colorScheme.primary,
+                contentDescription = todo.title,
+            )
+            Column(Modifier.weight(1f).padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    todo.title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    textDecoration = if (done) TextDecoration.LineThrough else null,
+                    color = if (done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                )
+                val details = buildList {
+                    todo.deadlineEpochDay?.let { add(formatDeadline(it, todo.deadlineMinute, snapshot, language) to (if (overdue) LifeTheme.colors.danger else null)) }
+                    todo.categoryId?.let { add(categoryPath(it, snapshot) to null) }
+                    parseTags(todo.tagsCsv).forEach { add("#$it" to MaterialTheme.colorScheme.primary) }
+                }
+                if (details.isNotEmpty() || subtasks.isNotEmpty() || attachments > 0 || todo.seriesId != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        details.forEach { (text, color) ->
+                            Text(text, style = MaterialTheme.typography.bodySmall, color = color ?: MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                         }
-                        Text(
-                            todo.title,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            textDecoration = if (done) TextDecoration.LineThrough else null,
-                        )
-                        if (todo.seriesId != null) Icon(Icons.Default.Repeat, desktopText("Repeats"), Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        todo.deadlineEpochDay?.let { day ->
-                            val overdue = !done && (day < LocalDate.now().toEpochDay() ||
-                                (day == LocalDate.now().toEpochDay() && (todo.deadlineMinute ?: 1_440) < LocalTime.now().toSecondOfDay() / 60))
-                            Text(
-                                formatDeadline(day, todo.deadlineMinute, snapshot, language),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (overdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                        if (todo.seriesId != null) Icon(Icons.Rounded.Repeat, desktopText("Repeats"), Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (attachments > 0) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Rounded.AttachFile, desktopText("Attachments"), Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(attachments.toString(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
-                        if (subtasks.isNotEmpty()) Text("☑ ${subtasks.count { it.isCompleted }}/${subtasks.size}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        todo.categoryId?.let { Text(categoryPath(it, snapshot), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                        parseTags(todo.tagsCsv).forEach { Text("#$it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
-                        if (attachments > 0) Text("📎 $attachments", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                if (onMoveUp != null) IconButton(onClick = onMoveUp) { Icon(Icons.Default.KeyboardArrowUp, desktopText("Move up")) }
-                if (onMoveDown != null) IconButton(onClick = onMoveDown) { Icon(Icons.Default.KeyboardArrowDown, desktopText("Move down")) }
-                IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, desktopText("Delete")) }
             }
             if (subtasks.isNotEmpty() && !done) {
-                Column(Modifier.padding(start = 40.dp)) {
-                    subtasks.forEach { subtask ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(subtask.isCompleted, { checked -> scope.launch { store.setSubtaskCompleted(subtask.id, checked) } }, Modifier.size(32.dp))
-                            Text(
-                                subtask.description,
-                                style = MaterialTheme.typography.bodyMedium,
-                                textDecoration = if (subtask.isCompleted) TextDecoration.LineThrough else null,
-                                color = if (subtask.isCompleted) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
+                Row(
+                    Modifier.clip(RoundedCornerShape(8.dp)).clickable(role = Role.Button, onClick = onExpand).padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("${subtasks.count { it.isCompleted }}/${subtasks.size}", style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Icon(if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, desktopText(if (expanded) "Hide subtasks" else "Show subtasks"), Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            if (hovered || selected) {
+                if (onMoveUp != null) IconButton(onClick = onMoveUp, modifier = Modifier.size(32.dp)) { Icon(Icons.Rounded.KeyboardArrowUp, desktopText("Move up"), Modifier.size(18.dp)) }
+                if (onMoveDown != null) IconButton(onClick = onMoveDown, modifier = Modifier.size(32.dp)) { Icon(Icons.Rounded.KeyboardArrowDown, desktopText("Move down"), Modifier.size(18.dp)) }
+                IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) { Icon(Icons.Rounded.DeleteOutline, desktopText("Delete"), Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+            } else {
+                Spacer(Modifier.width(32.dp))
+            }
+        }
+        if (expanded && subtasks.isNotEmpty() && !done) {
+            Column(Modifier.padding(start = 40.dp, bottom = 6.dp)) {
+                subtasks.forEach { subtask ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CheckCircle(
+                            checked = subtask.isCompleted,
+                            onCheckedChange = { checked -> scope.launch { store.setSubtaskCompleted(subtask.id, checked) } },
+                            size = 16.dp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            contentDescription = subtask.description,
+                        )
+                        Text(
+                            subtask.description,
+                            style = MaterialTheme.typography.bodyMedium,
+                            textDecoration = if (subtask.isCompleted) TextDecoration.LineThrough else null,
+                            color = if (subtask.isCompleted) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                        )
                     }
                 }
             }
@@ -763,6 +825,10 @@ internal fun formatDeadline(day: Long, minute: Int?, snapshot: BackupSnapshot, l
     val time = minute?.let { " " + UserFormatting.formatMinuteOfDay(it, snapshot.settings.timeFormat, systemUses24Hour = false, locale = locale) }.orEmpty()
     return dayText + time
 }
+
+/** Reads a date field: the user's date format, ISO, or words such as tomorrow and fri. */
+internal fun parseUserDate(text: String, snapshot: BackupSnapshot, language: UiLanguage): LocalDate? =
+    SmartDateParser.parse(text, LocalDate.now(), snapshot.settings.dateFormat, uiLocale(language))
 
 /** Parses "9:30", "21:30", "9pm", "9:30 pm" into minutes after midnight. */
 internal fun parseTimeOfDay(text: String): Int? {
@@ -795,6 +861,29 @@ internal fun SeriesScopeDialog(title: String, onDismiss: () -> Unit, onChoose: (
     )
 }
 
+/** A calendar button for a date field; picks a day and hands it back. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun DatePickerButton(initial: LocalDate?, onPicked: (LocalDate) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    IconButton(onClick = { open = true }, modifier = Modifier.size(28.dp)) {
+        Icon(Icons.Rounded.CalendarMonth, desktopText("Pick a date"), Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    if (open) {
+        val state = rememberDatePickerState(initialSelectedDateMillis = (initial ?: LocalDate.now()).toEpochDay() * 86_400_000L)
+        DatePickerDialog(
+            onDismissRequest = { open = false },
+            dismissButton = { TextButton(onClick = { open = false }) { Text(desktopText("Cancel")) } },
+            confirmButton = {
+                Button(onClick = {
+                    state.selectedDateMillis?.let { onPicked(LocalDate.ofEpochDay(Math.floorDiv(it, 86_400_000L))) }
+                    open = false
+                }) { Text(desktopText("OK")) }
+            },
+        ) { DatePicker(state = state, showModeToggle = false) }
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun TodoEditor(
@@ -816,14 +905,11 @@ private fun TodoEditor(
     val series = todo?.seriesId?.let { id -> snapshot.todoSeries.firstOrNull { it.id == id } }
     // Re-create the editor state when another todo is opened.
     val key = (todo?.id ?: -1L)
+    fun format(day: Long) = UserFormatting.formatDate(LocalDate.ofEpochDay(day), snapshot.settings.dateFormat, locale)
     var description by remember(key) { mutableStateOf(todo?.description.orEmpty()) }
     var title by remember(key) { mutableStateOf(todo?.title?.takeIf { todo.description.isNotBlank() && it != com.ced2711.lifetracker.domain.model.deriveTodoTitle(todo.description) }.orEmpty()) }
-    var dateText by remember(key) {
-        mutableStateOf((todo?.deadlineEpochDay ?: (target as? TodoEditorTarget.New)?.epochDay)?.let { UserFormatting.formatDate(LocalDate.ofEpochDay(it), snapshot.settings.dateFormat, locale) }.orEmpty())
-    }
-    var timeText by remember(key) {
-        mutableStateOf(todo?.deadlineMinute?.let { "%d:%02d".format(it / 60, it % 60) }.orEmpty())
-    }
+    var dateText by remember(key) { mutableStateOf((todo?.deadlineEpochDay ?: (target as? TodoEditorTarget.New)?.epochDay)?.let(::format).orEmpty()) }
+    var timeText by remember(key) { mutableStateOf(todo?.deadlineMinute?.let { "%d:%02d".format(it / 60, it % 60) }.orEmpty()) }
     var priority by remember(key) { mutableStateOf(todo?.priority ?: TodoPriority.NONE) }
     var categoryId by remember(key) { mutableStateOf(todo?.categoryId) }
     var tags by remember(key) { mutableStateOf(todo?.tagsCsv?.replace(",", ", ").orEmpty()) }
@@ -838,15 +924,17 @@ private fun TodoEditor(
     var newSubtask by remember(key) { mutableStateOf("") }
     var repeatUnit by remember(key) { mutableStateOf(series?.recurrenceUnit) }
     var repeatInterval by remember(key) { mutableStateOf((series?.intervalCount ?: 1).toString()) }
-    var repeatEnd by remember(key) { mutableStateOf(series?.endEpochDay?.let { UserFormatting.formatDate(LocalDate.ofEpochDay(it), snapshot.settings.dateFormat, locale) }.orEmpty()) }
+    var repeatEnd by remember(key) { mutableStateOf(series?.endEpochDay?.let(::format).orEmpty()) }
+    var customReminder by remember(key) { mutableStateOf<String?>(null) }
+    var customUnit by remember(key) { mutableStateOf(60L) }
     var askScope by remember(key) { mutableStateOf<TodoDraft?>(null) }
     var error by remember(key) { mutableStateOf<String?>(null) }
     val descriptionFocus = remember { FocusRequester() }
     LaunchedEffect(key) { runCatching { descriptionFocus.requestFocus() } }
 
-    val day = dateText.takeIf(String::isNotBlank)?.let { SmartDateParser.parse(it, LocalDate.now())?.toEpochDay() }
+    val day = dateText.takeIf(String::isNotBlank)?.let { parseUserDate(it, snapshot, language)?.toEpochDay() }
     val minute = parseTimeOfDay(timeText)
-    val endDay = repeatEnd.takeIf(String::isNotBlank)?.let { SmartDateParser.parse(it, LocalDate.now())?.toEpochDay() }
+    val endDay = repeatEnd.takeIf(String::isNotBlank)?.let { parseUserDate(it, snapshot, language)?.toEpochDay() }
     val interval = repeatInterval.toIntOrNull()
     val dateInvalid = dateText.isNotBlank() && day == null
     val timeInvalid = timeText.isNotBlank() && (minute == null || day == null)
@@ -884,121 +972,181 @@ private fun TodoEditor(
         if (todo?.seriesId != null) askScope = draft else commit(draft, SeriesEditScope.ONLY_THIS_OCCURRENCE)
     }
 
-    Column(modifier.background(MaterialTheme.colorScheme.surface).editorKeys(onSave = ::save, onCancel = onClose)) {
-        Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(desktopText(if (todo == null) "New todo" else "Edit todo"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            IconButton(onClick = onClose) { Icon(Icons.Default.Close, desktopText("Close (Esc)")) }
-        }
-        Column(
-            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            OutlinedTextField(description, { description = it }, label = { Text(desktopText("Description")) }, modifier = Modifier.fillMaxWidth().focusRequester(descriptionFocus), minLines = 3)
-            OutlinedTextField(title, { title = it }, label = { Text(desktopText("Title (optional)")) }, singleLine = true, modifier = Modifier.fillMaxWidth())
-
-            Text(desktopText("Due"), style = MaterialTheme.typography.labelLarge)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    dateText, { dateText = it },
-                    label = { Text(desktopText("Date")) },
-                    placeholder = { Text(desktopText("e.g. tomorrow, fri, 10/3")) },
-                    isError = dateInvalid, singleLine = true, modifier = Modifier.weight(1.4f),
-                    supportingText = { day?.let { Text(formatDeadline(it, null, snapshot, language)) } },
-                )
-                OutlinedTextField(
-                    timeText, { timeText = it },
-                    label = { Text(desktopText("Time")) },
-                    placeholder = { Text("9:30") },
-                    isError = timeInvalid, singleLine = true, modifier = Modifier.weight(1f),
-                )
-            }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                val today = LocalDate.now()
-                listOf("Today" to today, "Tomorrow" to today.plusDays(1), "Next week" to today.plusWeeks(1)).forEach { (label, date) ->
-                    FilterChipSimple(desktopText(label), day == date.toEpochDay()) {
-                        dateText = UserFormatting.formatDate(date, snapshot.settings.dateFormat, locale)
-                    }
-                }
-                FilterChipSimple(desktopText("No date"), dateText.isBlank()) { dateText = ""; timeText = ""; repeatUnit = null }
-            }
-
-            if (day != null) {
-                Text(desktopText("Reminders"), style = MaterialTheme.typography.labelLarge)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    ReminderOffsetPreset.entries.forEach { preset ->
-                        val on = preset.minutesBeforeDue in reminders
-                        FilterChipSimple(desktopText(reminderLabel(preset)), on) {
-                            if (on) reminders.remove(preset.minutesBeforeDue) else reminders.add(preset.minutesBeforeDue)
-                        }
-                    }
-                    reminders.filter { offset -> ReminderOffsetPreset.entries.none { it.minutesBeforeDue == offset } }.forEach { custom ->
-                        FilterChipSimple(desktopReminderMinutes(custom, language), true) { reminders.remove(custom) }
-                    }
-                }
-
-                Text(desktopText("Repeat"), style = MaterialTheme.typography.labelLarge)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FilterChipSimple(desktopText("Never"), repeatUnit == null) { repeatUnit = null }
-                    RecurrenceUnit.entries.forEach { unit ->
-                        FilterChipSimple(desktopText(recurrenceLabel(unit)), repeatUnit == unit) { repeatUnit = unit }
-                    }
-                }
-                if (repeatUnit != null) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(repeatInterval, { repeatInterval = it.filter(Char::isDigit).take(5) }, label = { Text(desktopText("Every")) }, singleLine = true, modifier = Modifier.weight(1f), isError = interval == null || interval < 1)
-                    OutlinedTextField(repeatEnd, { repeatEnd = it }, label = { Text(desktopText("Until (optional)")) }, singleLine = true, modifier = Modifier.weight(2f), isError = repeatEnd.isNotBlank() && (endDay == null || endDay < day))
-                }
-            }
-
-            Text(desktopText("Priority"), style = MaterialTheme.typography.labelLarge)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                TodoPriority.entries.forEach { item -> FilterChipSimple(desktopText(priorityLabel(item)), item == priority) { priority = item } }
-            }
-
-            Text(desktopText("Category"), style = MaterialTheme.typography.labelLarge)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                FilterChipSimple(desktopText("None"), categoryId == null) { categoryId = null }
-                snapshot.categories.forEach { category -> FilterChipSimple(categoryPath(category.id, snapshot), categoryId == category.id) { categoryId = category.id } }
-            }
-            OutlinedTextField(tags, { tags = it }, label = { Text(desktopText("Tags, comma separated (optional)")) }, singleLine = true, modifier = Modifier.fillMaxWidth())
-
-            Text(desktopText("Subtasks"), style = MaterialTheme.typography.labelLarge)
-            subtasks.forEachIndexed { index, text ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(text, { subtasks[index] = it }, singleLine = true, modifier = Modifier.weight(1f))
-                    IconButton(enabled = index > 0, onClick = { subtasks.add(index - 1, subtasks.removeAt(index)) }) { Icon(Icons.Default.KeyboardArrowUp, desktopText("Move up")) }
-                    IconButton(enabled = index < subtasks.lastIndex, onClick = { subtasks.add(index + 1, subtasks.removeAt(index)) }) { Icon(Icons.Default.KeyboardArrowDown, desktopText("Move down")) }
-                    IconButton(onClick = { subtasks.removeAt(index) }) { Icon(Icons.Default.Close, desktopText("Remove")) }
-                }
-            }
-            OutlinedTextField(
-                newSubtask, { newSubtask = it },
-                placeholder = { Text(desktopText("Add a subtask and press Enter")) },
-                leadingIcon = { Icon(Icons.Default.Add, null) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth().onEnter {
-                    if (newSubtask.isNotBlank()) {
-                        subtasks.add(newSubtask.trim())
-                        newSubtask = ""
-                    }
-                },
-            )
-
+    EditorPane(
+        title = desktopText(if (todo == null) "New todo" else "Edit todo"),
+        onClose = onClose,
+        modifier = modifier.editorKeys(onSave = ::save, onCancel = onClose),
+        headerActions = {
             if (todo != null) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(desktopText("Attachments"), style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
-                    IconButton({ chooseAndAttach(scope, store, AttachmentOwnerType.TODO, todo.id) }) { Icon(Icons.Default.AttachFile, desktopText("Attach")) }
+                TextButton(onClick = { scope.launch { store.setTodoCompleted(todo.id, todo.completedAt == null) } }) {
+                    Text(desktopText(if (todo.completedAt == null) "Mark as done" else "Mark as not done"))
                 }
-                AttachmentList(snapshot, AttachmentOwnerType.TODO, todo.id, store)
             }
-            error?.let { Text(desktopText(it), color = MaterialTheme.colorScheme.error) }
-        }
-        HorizontalDivider()
-        Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (todo != null) TextButton(onClick = { onDelete(todo) }) { Text(desktopText("Delete"), color = MaterialTheme.colorScheme.error) }
+        },
+        footer = {
+            if (todo != null) TextButton(onClick = { onDelete(todo) }) { Text(desktopText("Delete"), color = LifeTheme.colors.danger) }
             Spacer(Modifier.weight(1f))
             OutlinedButton(onClick = onClose) { Text(desktopText("Cancel")) }
             Button(enabled = canSave, onClick = ::save) { Text(desktopText("Save (Ctrl+S)")) }
+        },
+    ) {
+        LifeTextField(
+            description,
+            { description = it },
+            placeholder = desktopText("What needs to be done?"),
+            minLines = 3,
+            modifier = Modifier.fillMaxWidth().focusRequester(descriptionFocus),
+        )
+        LifeTextField(title, { title = it }, placeholder = desktopText("Title (optional)"), modifier = Modifier.fillMaxWidth())
+
+        FieldLabel("Due")
+        Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+            LifeTextField(
+                dateText,
+                { dateText = it },
+                placeholder = desktopText("Date, e.g. tomorrow or fri"),
+                isError = dateInvalid,
+                trailing = { DatePickerButton(day?.let(LocalDate::ofEpochDay)) { dateText = format(it.toEpochDay()) } },
+                modifier = Modifier.weight(1.5f),
+            )
+            LifeTextField(timeText, { timeText = it }, placeholder = desktopText("Time, e.g. 9:30"), isError = timeInvalid, modifier = Modifier.weight(1f))
         }
+        day?.let {
+            Text(formatDeadline(it, minute, snapshot, language), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            val today = LocalDate.now()
+            listOf("Today" to today, "Tomorrow" to today.plusDays(1), "Next week" to today.plusWeeks(1)).forEach { (label, date) ->
+                Pill(desktopText(label), day == date.toEpochDay(), { dateText = format(date.toEpochDay()) }, exclusive = true)
+            }
+            Pill(desktopText("No date"), dateText.isBlank(), { dateText = ""; timeText = ""; repeatUnit = null }, exclusive = true)
+        }
+
+        if (day != null) {
+            FieldLabel("Reminders")
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                ReminderOffsetPreset.entries.forEach { preset ->
+                    val on = preset.minutesBeforeDue in reminders
+                    Pill(desktopText(reminderLabel(preset)), on, { if (on) reminders.remove(preset.minutesBeforeDue) else reminders.add(preset.minutesBeforeDue) })
+                }
+                reminders.filter { offset -> ReminderOffsetPreset.entries.none { it.minutesBeforeDue == offset } }.forEach { custom ->
+                    Pill(desktopReminderMinutes(custom, language), true, { reminders.remove(custom) }, leading = { Icon(Icons.Rounded.Close, null, Modifier.size(14.dp)) })
+                }
+                if (customReminder == null) {
+                    Pill(desktopText("Custom…"), false, { customReminder = "" }, leading = { Icon(Icons.Rounded.Add, null, Modifier.size(14.dp)) })
+                }
+            }
+            customReminder?.let { value ->
+                val amount = value.toLongOrNull()
+                val minutes = amount?.let { it * customUnit }
+                val valid = minutes != null && minutes in 1..527_040 && minutes !in reminders
+                Row(horizontalArrangement = Arrangement.spacedBy(Space.sm), verticalAlignment = Alignment.CenterVertically) {
+                    LifeTextField(value, { customReminder = it.filter(Char::isDigit).take(4) }, placeholder = "2", modifier = Modifier.width(72.dp))
+                    Segmented(listOf(60L, 1_440L, 10_080L), customUnit, { customUnit = it }, { desktopText(when (it) { 60L -> "Hours"; 1_440L -> "Days"; else -> "Weeks" }) })
+                    Text(desktopText("before"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = { customReminder = null }) { Text(desktopText("Cancel")) }
+                    Button(enabled = valid, onClick = { minutes?.let(reminders::add); customReminder = null }) { Text(desktopText("Add")) }
+                }
+            }
+
+            FieldLabel("Repeat")
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Pill(desktopText("Never"), repeatUnit == null, { repeatUnit = null }, exclusive = true)
+                RecurrenceUnit.entries.forEach { unit -> Pill(desktopText(recurrenceLabel(unit)), repeatUnit == unit, { repeatUnit = unit }, exclusive = true) }
+            }
+            if (repeatUnit != null) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Space.sm), verticalAlignment = Alignment.CenterVertically) {
+                    Text(desktopText("Every"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    LifeTextField(repeatInterval, { repeatInterval = it.filter(Char::isDigit).take(5) }, isError = interval == null || interval < 1, modifier = Modifier.width(72.dp))
+                    LifeTextField(
+                        repeatEnd,
+                        { repeatEnd = it },
+                        placeholder = desktopText("Until (optional)"),
+                        isError = repeatEnd.isNotBlank() && (endDay == null || endDay < day),
+                        trailing = { DatePickerButton(endDay?.let(LocalDate::ofEpochDay)) { repeatEnd = format(it.toEpochDay()) } },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+
+        FieldLabel("Priority")
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            TodoPriority.entries.forEach { item ->
+                Pill(
+                    desktopText(priorityLabel(item)),
+                    item == priority,
+                    { priority = item },
+                    exclusive = true,
+                    leading = priorityColor(item)?.let { color -> { com.ced2711.lifetracker.ui.design.Dot(color) } },
+                )
+            }
+        }
+
+        FieldLabel("Category")
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Pill(desktopText("None"), categoryId == null, { categoryId = null }, exclusive = true)
+            snapshot.categories.sortedBy { categoryPath(it.id, snapshot).lowercase() }.forEach { category ->
+                Pill(categoryPath(category.id, snapshot), categoryId == category.id, { categoryId = category.id }, exclusive = true)
+            }
+        }
+
+        FieldLabel("Tags")
+        LifeTextField(tags, { tags = it }, placeholder = desktopText("Comma separated, e.g. home, errands"), modifier = Modifier.fillMaxWidth())
+        // Existing tags that match what is being typed, to keep tags consistent.
+        val typing = tags.substringAfterLast(',').trim().removePrefix("#")
+        val chosen = parseTags(tags).map { it.lowercase() }.toSet()
+        val suggestions = snapshot.todos.flatMap { parseTags(it.tagsCsv) }.distinctBy { it.lowercase() }
+            .filter { it.lowercase() !in chosen && (typing.isEmpty() || it.startsWith(typing, ignoreCase = true)) }
+            .sortedBy { it.lowercase() }.take(8)
+        if (suggestions.isNotEmpty()) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                suggestions.forEach { suggestion ->
+                    Pill("#$suggestion", false, {
+                        val kept = tags.split(',').dropLast(1).map(String::trim).filter(String::isNotEmpty)
+                        tags = (kept + suggestion).joinToString(", ") + ", "
+                    })
+                }
+            }
+        }
+
+        FieldLabel("Subtasks")
+        subtasks.forEachIndexed { index, text ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                LifeTextField(text, { subtasks[index] = it }, modifier = Modifier.weight(1f))
+                IconButton(enabled = index > 0, onClick = { subtasks.add(index - 1, subtasks.removeAt(index)) }) { Icon(Icons.Rounded.KeyboardArrowUp, desktopText("Move up")) }
+                IconButton(enabled = index < subtasks.lastIndex, onClick = { subtasks.add(index + 1, subtasks.removeAt(index)) }) { Icon(Icons.Rounded.KeyboardArrowDown, desktopText("Move down")) }
+                IconButton(onClick = { subtasks.removeAt(index) }) { Icon(Icons.Rounded.Close, desktopText("Remove")) }
+            }
+        }
+        LifeTextField(
+            newSubtask,
+            { newSubtask = it },
+            placeholder = desktopText("Add a subtask and press Enter"),
+            leadingIcon = Icons.Rounded.Add,
+            modifier = Modifier.fillMaxWidth().onEnter {
+                if (newSubtask.isNotBlank()) {
+                    subtasks.add(newSubtask.trim())
+                    newSubtask = ""
+                }
+            },
+        )
+
+        if (todo != null) {
+            FieldLabel("Attachments") {
+                TextButton(onClick = { chooseAndAttach(scope, store, AttachmentOwnerType.TODO, todo.id) }) {
+                    Icon(Icons.Rounded.AttachFile, null, Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(desktopText("Attach"))
+                }
+            }
+            AttachmentList(snapshot, AttachmentOwnerType.TODO, todo.id, store)
+        } else {
+            Text(desktopText("Files can be attached after the first save."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        error?.let { Text(desktopText(it), color = LifeTheme.colors.danger) }
+        Spacer(Modifier.height(Space.lg))
     }
 
     askScope?.let { draft ->
@@ -1021,9 +1169,9 @@ internal fun TodoEditorWindow(snapshot: BackupSnapshot, store: DesktopDataStore,
     androidx.compose.ui.window.DialogWindow(
         onCloseRequest = onClose,
         title = desktopText(if (todoId == null) "New todo" else "Edit todo"),
-        state = androidx.compose.ui.window.rememberDialogState(size = androidx.compose.ui.unit.DpSize(560.dp, 760.dp)),
+        state = androidx.compose.ui.window.rememberDialogState(size = androidx.compose.ui.unit.DpSize(560.dp, 780.dp)),
     ) {
-        MaterialTheme(colorScheme = MaterialTheme.colorScheme, typography = MaterialTheme.typography) {
+        MaterialTheme(colorScheme = MaterialTheme.colorScheme, typography = MaterialTheme.typography, shapes = MaterialTheme.shapes) {
             TodoEditor(
                 snapshot = snapshot,
                 store = store,

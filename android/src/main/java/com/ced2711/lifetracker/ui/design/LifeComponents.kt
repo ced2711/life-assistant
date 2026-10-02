@@ -353,7 +353,7 @@ fun <T> Segmented(
         options.forEach { option ->
             val isSelected = option == selected
             val background by animateColorAsState(
-                if (isSelected) MaterialTheme.colorScheme.surfaceContainerLowest else Color.Transparent,
+                if (isSelected) MaterialTheme.colorScheme.surfaceBright else Color.Transparent,
                 tween(150),
                 label = "segment",
             )

@@ -1,53 +1,61 @@
 package com.ced2711.lifetracker.desktop
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Repeat
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AttachFile
+import androidx.compose.material.icons.rounded.ChevronLeft
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.ReceiptLong
+import androidx.compose.material.icons.rounded.Repeat
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -56,29 +64,43 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ced2711.lifetracker.data.backup.BackupSnapshot
 import com.ced2711.lifetracker.data.local.LedgerEntryEntity
 import com.ced2711.lifetracker.data.local.LedgerSeriesEntity
-import com.ced2711.lifetracker.domain.date.SmartDateParser
 import com.ced2711.lifetracker.domain.format.UserFormatting
 import com.ced2711.lifetracker.domain.model.AttachmentOwnerType
 import com.ced2711.lifetracker.domain.model.LedgerDraft
 import com.ced2711.lifetracker.domain.model.LedgerType
+import com.ced2711.lifetracker.domain.model.MoneyTotals
 import com.ced2711.lifetracker.domain.model.RecurrenceRule
 import com.ced2711.lifetracker.domain.model.RecurrenceUnit
 import com.ced2711.lifetracker.domain.model.SeriesEditScope
 import com.ced2711.lifetracker.domain.model.UiLanguage
 import com.ced2711.lifetracker.domain.model.parseTags
+import com.ced2711.lifetracker.ui.design.EmptyState
+import com.ced2711.lifetracker.ui.design.LifeTextField
+import com.ced2711.lifetracker.ui.design.MoneyText
+import com.ced2711.lifetracker.ui.design.Panel
+import com.ced2711.lifetracker.ui.design.Pill
+import com.ced2711.lifetracker.ui.design.Segmented
+import com.ced2711.lifetracker.ui.design.Space
+import com.ced2711.lifetracker.ui.design.Stat
+import com.ced2711.lifetracker.ui.design.Tag
 import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
 import com.ced2711.lifetracker.ui.localization.uiLocale
+import com.ced2711.lifetracker.ui.theme.LifeTheme
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
@@ -89,34 +111,35 @@ import java.time.temporal.TemporalAdjusters
 import java.util.Locale
 import kotlinx.coroutines.launch
 
-internal val IncomeColor = Color(0xFF65D28A)
-internal val ExpenseColor = Color(0xFFFF756B)
-
 /** The span of time the ledger page summarises. */
-private enum class LedgerPeriod(val label: String) { WEEK("Week"), MONTH("Month"), YEAR("Year"), ALL("All") }
+private enum class LedgerPeriod(val label: String) { WEEK("Week"), MONTH("Month"), YEAR("Year"), ALL("All"), CUSTOM("Custom") }
+
+private enum class LedgerTab(val label: String) { ENTRIES("Entries"), STATISTICS("Statistics"), RECURRING("Recurring") }
 
 private data class PeriodRange(val start: Long, val end: Long)
 
-private fun LedgerPeriod.range(anchor: LocalDate, firstDayOfWeek: DayOfWeek, entries: List<LedgerEntryEntity>): PeriodRange = when (this) {
+private fun LedgerPeriod.range(anchor: LocalDate, firstDayOfWeek: DayOfWeek, entries: List<LedgerEntryEntity>, custom: PeriodRange?): PeriodRange = when (this) {
     LedgerPeriod.WEEK -> anchor.with(TemporalAdjusters.previousOrSame(firstDayOfWeek)).let { PeriodRange(it.toEpochDay(), it.plusDays(6).toEpochDay()) }
     LedgerPeriod.MONTH -> YearMonth.from(anchor).let { PeriodRange(it.atDay(1).toEpochDay(), it.atEndOfMonth().toEpochDay()) }
     LedgerPeriod.YEAR -> PeriodRange(anchor.withDayOfYear(1).toEpochDay(), anchor.withDayOfYear(anchor.lengthOfYear()).toEpochDay())
     LedgerPeriod.ALL -> PeriodRange(entries.minOfOrNull { it.epochDay } ?: anchor.toEpochDay(), maxOf(entries.maxOfOrNull { it.epochDay } ?: anchor.toEpochDay(), anchor.toEpochDay()))
+    LedgerPeriod.CUSTOM -> custom ?: YearMonth.from(anchor).let { PeriodRange(it.atDay(1).toEpochDay(), it.atEndOfMonth().toEpochDay()) }
 }
 
 private fun LedgerPeriod.shift(anchor: LocalDate, steps: Long): LocalDate = when (this) {
     LedgerPeriod.WEEK -> anchor.plusWeeks(steps)
     LedgerPeriod.MONTH -> anchor.plusMonths(steps)
     LedgerPeriod.YEAR -> anchor.plusYears(steps)
-    LedgerPeriod.ALL -> anchor
+    LedgerPeriod.ALL, LedgerPeriod.CUSTOM -> anchor
 }
 
 private fun periodTitle(period: LedgerPeriod, range: PeriodRange, snapshot: BackupSnapshot, language: UiLanguage): String {
     val locale = uiLocale(language)
     val start = LocalDate.ofEpochDay(range.start)
+    fun span() = UserFormatting.formatDate(start, snapshot.settings.dateFormat, locale) + " – " +
+        UserFormatting.formatDate(LocalDate.ofEpochDay(range.end), snapshot.settings.dateFormat, locale)
     return when (period) {
-        LedgerPeriod.WEEK -> UserFormatting.formatDate(start, snapshot.settings.dateFormat, locale) + " – " +
-            UserFormatting.formatDate(LocalDate.ofEpochDay(range.end), snapshot.settings.dateFormat, locale)
+        LedgerPeriod.WEEK, LedgerPeriod.CUSTOM -> span()
         LedgerPeriod.MONTH -> monthTitle(YearMonth.from(start), language)
         LedgerPeriod.YEAR -> start.year.toString()
         LedgerPeriod.ALL -> desktopText("All time", language)
@@ -134,7 +157,13 @@ private sealed interface LedgerEditing {
     data class Schedule(val seriesId: Long) : LedgerEditing
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+internal fun signedMoney(cents: Long): String = (if (cents < 0) "−" else "+") + formatMoney(kotlin.math.abs(cents))
+
+/**
+ * Money in and out. Entries: a period you can step through, its totals, quick add, search and
+ * the entries by day, with the editor (or a small chart) beside them. Statistics: the period's
+ * trend, ratio and where the money went. Recurring: the schedules.
+ */
 @Composable
 internal fun LedgerPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
     val scope = rememberSafeCoroutineScope()
@@ -143,28 +172,39 @@ internal fun LedgerPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
     val snackbar = remember { SnackbarHostState() }
     var period by remember { mutableStateOf(LedgerPeriod.MONTH) }
     var anchor by remember { mutableStateOf(LocalDate.now()) }
-    var schedulesTab by remember { mutableStateOf(false) }
+    var customStart by remember { mutableStateOf("") }
+    var customEnd by remember { mutableStateOf("") }
+    var tab by remember { mutableStateOf(LedgerTab.ENTRIES) }
     var query by remember { mutableStateOf("") }
     var editing by remember { mutableStateOf<LedgerEditing?>(null) }
     var deleteScopeFor by remember { mutableStateOf<LedgerEntryEntity?>(null) }
     var quickAmount by remember { mutableStateOf("") }
     var quickWhat by remember { mutableStateOf("") }
-    var quickIncome by remember { mutableStateOf(false) }
+    var quickType by remember { mutableStateOf(LedgerType.EXPENSE) }
     val quickFocus = remember { FocusRequester() }
     val searchFocus = remember { FocusRequester() }
-    RegisterPageShortcuts(onNew = { editing = LedgerEditing.New(LocalDate.now().toEpochDay()) }, onFind = { runCatching { searchFocus.requestFocus() } })
+    RegisterPageShortcuts(
+        onNew = { editing = LedgerEditing.New(LocalDate.now().toEpochDay()) },
+        onFind = {
+            tab = LedgerTab.ENTRIES
+            runCatching { searchFocus.requestFocus() }
+        },
+    )
 
     val live = snapshot.ledgerEntries.filter { it.deletedAt == null }
     val firstDay = UserFormatting.firstDayOfWeek(snapshot.settings.weekStart, locale)
-    val range = period.range(anchor, firstDay, live)
+    val customRange = run {
+        val start = parseUserDate(customStart, snapshot, language)?.toEpochDay()
+        val end = parseUserDate(customEnd, snapshot, language)?.toEpochDay()
+        if (start != null && end != null && end >= start) PeriodRange(start, end) else null
+    }
+    val range = period.range(anchor, firstDay, live, customRange)
     val inPeriod = live.filter { it.epochDay in range.start..range.end }
     val shown = inPeriod.filter { entry ->
         query.isBlank() || entry.merchant.contains(query, true) || entry.note.contains(query, true) ||
             parseTags(entry.tagsCsv).any { it.contains(query.trim().removePrefix("#"), true) }
     }.sortedWith(compareByDescending<LedgerEntryEntity> { it.epochDay }.thenByDescending { it.minuteOfDay }.thenByDescending { it.id })
-    val income = inPeriod.filter { it.type == LedgerType.INCOME }.sumOf { it.amountCents }
-    val expense = inPeriod.filter { it.type == LedgerType.EXPENSE }.sumOf { it.amountCents }
-    val days = (minOf(range.end, LocalDate.now().toEpochDay()) - range.start + 1).coerceAtLeast(1)
+    val totals = MoneyTotals.of(inPeriod)
 
     fun deleteEntry(entry: LedgerEntryEntity, deleteScope: SeriesEditScope) {
         scope.launch {
@@ -183,13 +223,7 @@ internal fun LedgerPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
         val now = LocalTime.now()
         scope.launch {
             store.saveLedger(
-                LedgerDraft(
-                    type = if (quickIncome) LedgerType.INCOME else LedgerType.EXPENSE,
-                    amountCents = cents,
-                    epochDay = LocalDate.now().toEpochDay(),
-                    minuteOfDay = now.hour * 60 + now.minute,
-                    merchant = what,
-                ),
+                LedgerDraft(type = quickType, amountCents = cents, epochDay = LocalDate.now().toEpochDay(), minuteOfDay = now.hour * 60 + now.minute, merchant = what),
                 SeriesEditScope.ONLY_THIS_OCCURRENCE,
             )
         }
@@ -198,7 +232,7 @@ internal fun LedgerPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
         runCatching { quickFocus.requestFocus() }
     }
 
-    Scaffold(snackbarHost = { SnackbarHost(snackbar) }) { padding ->
+    Scaffold(snackbarHost = { SnackbarHost(snackbar) }, containerColor = MaterialTheme.colorScheme.background) { padding ->
         BoxWithConstraints(Modifier.fillMaxSize().padding(padding)) {
             val sidePanel = maxWidth >= 1_000.dp
             val current = editing
@@ -206,91 +240,105 @@ internal fun LedgerPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
                 LedgerEditor(snapshot, store, current, onClose = { editing = null }, onDelete = ::requestDelete, modifier = Modifier.fillMaxSize())
                 return@BoxWithConstraints
             }
-            Column(Modifier.fillMaxSize()) {
-                Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 16.dp, top = 18.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(desktopText("Ledger"), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.width(20.dp))
-                    FilterChipSimple(desktopText("Entries"), !schedulesTab) { schedulesTab = false }
-                    Spacer(Modifier.width(6.dp))
-                    FilterChipSimple(desktopText("Recurring"), schedulesTab) { schedulesTab = true }
-                    Spacer(Modifier.weight(1f))
-                    Button(onClick = { editing = LedgerEditing.New(LocalDate.now().toEpochDay()) }) { Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text(desktopText("New entry")) }
-                }
-                if (schedulesTab) {
-                    Row(Modifier.fillMaxSize()) {
-                        LedgerSchedules(snapshot, store, onEdit = { editing = LedgerEditing.Schedule(it) }, modifier = Modifier.weight(1f).fillMaxHeight())
-                        if (current != null) {
-                            VerticalDivider()
-                            LedgerEditor(snapshot, store, current, onClose = { editing = null }, onDelete = ::requestDelete, modifier = Modifier.width(440.dp).fillMaxHeight())
+            Row(Modifier.fillMaxSize()) {
+                Column(Modifier.weight(1f).fillMaxHeight()) {
+                    PageHeader("Ledger") {
+                        Segmented(LedgerTab.entries, tab, { tab = it }, { desktopText(it.label) })
+                        Spacer(Modifier.width(Space.sm))
+                        Button(onClick = { editing = LedgerEditing.New(LocalDate.now().toEpochDay()) }) {
+                            Icon(Icons.Rounded.Add, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(desktopText("New entry"))
                         }
                     }
-                    return@Column
-                }
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (period != LedgerPeriod.ALL) IconButton(onClick = { anchor = period.shift(anchor, -1) }) { Icon(Icons.Default.ChevronLeft, desktopText("Previous")) }
-                    Text(periodTitle(period, range, snapshot, language), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                    if (period != LedgerPeriod.ALL) IconButton(onClick = { anchor = period.shift(anchor, 1) }) { Icon(Icons.Default.ChevronRight, desktopText("Next")) }
-                    TextButton(onClick = { anchor = LocalDate.now() }) { Text(desktopText("Today")) }
-                    Spacer(Modifier.weight(1f))
-                    LedgerPeriod.entries.forEach { item ->
-                        FilterChipSimple(desktopText(item.label), period == item) { period = item }
-                        Spacer(Modifier.width(6.dp))
+                    if (tab == LedgerTab.RECURRING) {
+                        LedgerSchedules(snapshot, store, onEdit = { editing = LedgerEditing.Schedule(it) }, modifier = Modifier.weight(1f).fillMaxWidth())
+                        return@Column
                     }
-                }
-                FlowRow(Modifier.fillMaxWidth().padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    StatCard(desktopText("Income"), formatMoney(income), IncomeColor)
-                    StatCard(desktopText("Expense"), formatMoney(expense), ExpenseColor)
-                    StatCard(desktopText("Net"), (if (income >= expense) "+" else "−") + formatMoney(kotlin.math.abs(income - expense)), if (income >= expense) IncomeColor else ExpenseColor)
-                    StatCard(desktopText("Average daily spending"), formatMoney(expense / days), MaterialTheme.colorScheme.onSurface)
-                    inPeriod.filter { it.type == LedgerType.EXPENSE }.maxByOrNull { it.amountCents }?.let { largest ->
-                        StatCard(desktopText("Largest expense"), formatMoney(largest.amountCents), MaterialTheme.colorScheme.onSurface, entryLabel(largest))
-                    }
-                }
-                Row(Modifier.weight(1f).fillMaxWidth().padding(top = 12.dp)) {
-                    Column(Modifier.weight(1f).fillMaxHeight()) {
-                        Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            FilterChipSimple(desktopText(if (quickIncome) "Income" else "Expense"), true) { quickIncome = !quickIncome }
-                            OutlinedTextField(
-                                quickAmount, { if (isValidDesktopAmountInput(it)) quickAmount = it },
-                                placeholder = { Text(desktopText("Amount")) }, singleLine = true,
-                                modifier = Modifier.width(140.dp).focusRequester(quickFocus).onEnter(::addQuick),
+                    PeriodBar(
+                        period = period,
+                        title = periodTitle(period, range, snapshot, language),
+                        onPeriod = { period = it },
+                        onShift = { anchor = period.shift(anchor, it) },
+                        onToday = { anchor = LocalDate.now() },
+                        showToday = period != LedgerPeriod.ALL && period != LedgerPeriod.CUSTOM && LocalDate.now().toEpochDay() !in range.start..range.end,
+                    )
+                    if (period == LedgerPeriod.CUSTOM) {
+                        Row(Modifier.padding(horizontal = PagePadding).padding(bottom = Space.md), horizontalArrangement = Arrangement.spacedBy(Space.sm), verticalAlignment = Alignment.CenterVertically) {
+                            LifeTextField(
+                                customStart, { customStart = it }, placeholder = desktopText("From"),
+                                isError = customStart.isNotBlank() && parseUserDate(customStart, snapshot, language) == null,
+                                trailing = { DatePickerButton(parseUserDate(customStart, snapshot, language)) { customStart = UserFormatting.formatDate(it, snapshot.settings.dateFormat, locale) } },
+                                modifier = Modifier.width(200.dp),
                             )
-                            OutlinedTextField(
-                                quickWhat, { quickWhat = it },
-                                placeholder = { Text(desktopText("Where or what, then Enter")) }, singleLine = true,
-                                modifier = Modifier.weight(1f).onEnter(::addQuick),
-                            )
-                            OutlinedTextField(
-                                query, { query = it },
-                                placeholder = { Text(desktopText("Search (Ctrl+F)")) },
-                                leadingIcon = { Icon(Icons.Default.Search, null) },
-                                singleLine = true, modifier = Modifier.width(220.dp).focusRequester(searchFocus),
+                            Text("–", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            LifeTextField(
+                                customEnd, { customEnd = it }, placeholder = desktopText("To"),
+                                isError = customEnd.isNotBlank() && customRange == null,
+                                trailing = { DatePickerButton(parseUserDate(customEnd, snapshot, language)) { customEnd = UserFormatting.formatDate(it, snapshot.settings.dateFormat, locale) } },
+                                modifier = Modifier.width(200.dp),
                             )
                         }
-                        LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            if (shown.isEmpty()) item { Text(desktopText("No entries in this period."), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 20.dp)) }
-                            shown.groupBy { it.epochDay }.forEach { (day, rows) ->
-                                item(key = "day-$day") {
-                                    val net = rows.sumOf { if (it.type == LedgerType.INCOME) it.amountCents else -it.amountCents }
-                                    Row(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        Text(formatDeadline(day, null, snapshot, language), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
-                                        Text((if (net >= 0) "+" else "−") + formatMoney(kotlin.math.abs(net)), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                }
-                                items(rows, key = { it.id }) { entry ->
-                                    LedgerRow(entry, snapshot, selected = editing == LedgerEditing.Entry(entry.id)) { editing = LedgerEditing.Entry(entry.id) }
+                    }
+                    TotalsPanel(totals, inPeriod, range, Modifier.padding(horizontal = PagePadding))
+                    if (tab == LedgerTab.STATISTICS) {
+                        LedgerStatistics(snapshot, range, inPeriod, totals, Modifier.weight(1f).fillMaxWidth())
+                        return@Column
+                    }
+                    Row(
+                        Modifier.fillMaxWidth().padding(start = PagePadding, end = PagePadding, top = Space.lg),
+                        horizontalArrangement = Arrangement.spacedBy(Space.sm),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Segmented(listOf(LedgerType.EXPENSE, LedgerType.INCOME), quickType, { quickType = it }, { desktopText(if (it == LedgerType.EXPENSE) "Expense" else "Income") })
+                        LifeTextField(
+                            quickAmount, { if (isValidDesktopAmountInput(it)) quickAmount = it },
+                            placeholder = "0.00", prefix = "$",
+                            modifier = Modifier.width(120.dp).focusRequester(quickFocus).onEnter(::addQuick),
+                        )
+                        LifeTextField(
+                            quickWhat, { quickWhat = it },
+                            placeholder = desktopText("Where or what, then Enter"),
+                            modifier = Modifier.weight(1f).onEnter(::addQuick),
+                        )
+                        LifeTextField(
+                            query, { query = it },
+                            placeholder = desktopText("Search (Ctrl+F)"),
+                            leadingIcon = Icons.Rounded.Search,
+                            trailing = if (query.isNotEmpty()) {
+                                { IconButton(onClick = { query = "" }, modifier = Modifier.size(24.dp)) { Icon(Icons.Rounded.Close, desktopText("Clear"), Modifier.size(16.dp)) } }
+                            } else {
+                                null
+                            },
+                            modifier = Modifier.width(220.dp).focusRequester(searchFocus),
+                        )
+                    }
+                    LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal = PagePadding - Space.md)) {
+                        if (shown.isEmpty()) item {
+                            EmptyState(
+                                title = desktopText(if (query.isBlank()) "No entries in this period" else "No entries match"),
+                                icon = Icons.Rounded.ReceiptLong,
+                                body = desktopText(if (query.isBlank()) "Type an amount above and press Enter, or press Ctrl+N for an entry with all details." else "Try other words, or pick a longer period."),
+                            )
+                        }
+                        shown.groupBy { it.epochDay }.forEach { (day, rows) ->
+                            item(key = "day-$day") {
+                                val net = rows.sumOf { if (it.type == LedgerType.INCOME) it.amountCents else -it.amountCents }
+                                Row(Modifier.fillMaxWidth().padding(start = Space.md, end = Space.md, top = Space.lg, bottom = Space.xs), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(formatDeadline(day, null, snapshot, language), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                                    Text(signedMoney(net), style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"), color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
+                            items(rows, key = { it.id }) { entry ->
+                                LedgerRow(entry, snapshot, selected = editing == LedgerEditing.Entry(entry.id), onDelete = { requestDelete(entry) }) { editing = LedgerEditing.Entry(entry.id) }
+                            }
                         }
+                        item { Spacer(Modifier.height(48.dp)) }
                     }
-                    if (sidePanel) {
-                        VerticalDivider()
-                        if (current != null) {
-                            LedgerEditor(snapshot, store, current, onClose = { editing = null }, onDelete = ::requestDelete, modifier = Modifier.width(440.dp).fillMaxHeight())
-                        } else {
-                            LedgerInsights(snapshot, period, range, inPeriod, Modifier.width(440.dp).fillMaxHeight())
-                        }
-                    }
+                }
+                if (current != null) {
+                    ColumnDivider()
+                    LedgerEditor(snapshot, store, current, onClose = { editing = null }, onDelete = ::requestDelete, modifier = Modifier.width(440.dp).fillMaxHeight())
                 }
             }
         }
@@ -303,87 +351,184 @@ internal fun LedgerPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
     }
 }
 
+@Composable
+private fun PeriodBar(period: LedgerPeriod, title: String, onPeriod: (LedgerPeriod) -> Unit, onShift: (Long) -> Unit, onToday: () -> Unit, showToday: Boolean) {
+    Row(Modifier.fillMaxWidth().padding(start = PagePadding - 12.dp, end = PagePadding, bottom = Space.md), verticalAlignment = Alignment.CenterVertically) {
+        val steps = period != LedgerPeriod.ALL && period != LedgerPeriod.CUSTOM
+        if (steps) IconButton(onClick = { onShift(-1) }) { Icon(Icons.Rounded.ChevronLeft, desktopText("Previous")) } else Spacer(Modifier.width(12.dp))
+        Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.widthIn(min = 150.dp))
+        if (steps) IconButton(onClick = { onShift(1) }) { Icon(Icons.Rounded.ChevronRight, desktopText("Next")) }
+        if (showToday) TextButton(onClick = onToday) { Text(desktopText("Today")) }
+        Spacer(Modifier.weight(1f))
+        Segmented(LedgerPeriod.entries, period, onPeriod, { desktopText(it.label) })
+    }
+}
+
+/** The period in three numbers, with the average and the largest expense as quiet extras. */
+@Composable
+private fun TotalsPanel(totals: MoneyTotals, entries: List<LedgerEntryEntity>, range: PeriodRange, modifier: Modifier = Modifier) {
+    val days = (minOf(range.end, LocalDate.now().toEpochDay()) - range.start + 1).coerceAtLeast(1)
+    val largest = entries.filter { it.type == LedgerType.EXPENSE }.maxByOrNull { it.amountCents }
+    Panel(modifier.fillMaxWidth(), padding = PaddingValues(horizontal = Space.xxl, vertical = Space.xl)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Space.xxl), verticalAlignment = Alignment.Top) {
+            Stat(desktopText("Income"), formatMoney(totals.incomeCents), Modifier.weight(1f), valueColor = LifeTheme.colors.income)
+            Stat(desktopText("Expense"), formatMoney(totals.expenseCents), Modifier.weight(1f), valueColor = LifeTheme.colors.expense)
+            Stat(desktopText("Net"), signedMoney(totals.netCents), Modifier.weight(1f), valueColor = if (totals.netCents < 0) LifeTheme.colors.expense else LifeTheme.colors.income)
+            Stat(desktopText("Average daily spending"), formatMoney(totals.expenseCents / days), Modifier.weight(1f), valueStyle = MaterialTheme.typography.titleLarge)
+            Stat(
+                desktopText("Largest expense"),
+                largest?.let { formatMoney(it.amountCents) } ?: "—",
+                Modifier.weight(1f),
+                caption = largest?.let { desktopText(entryLabel(it)) },
+                valueStyle = MaterialTheme.typography.titleLarge,
+            )
+        }
+    }
+}
+
 private fun entryLabel(entry: LedgerEntryEntity): String =
     entry.merchant.ifBlank { entry.note.ifBlank { if (entry.type == LedgerType.INCOME) "Income" else "Expense" } }
 
 @Composable
-private fun StatCard(title: String, value: String, color: Color, detail: String? = null) {
-    Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.width(210.dp)) {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-            Text(title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = color, maxLines = 1)
-            if (detail != null) Text(desktopText(detail), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-    }
-}
-
-@Composable
-private fun LedgerRow(entry: LedgerEntryEntity, snapshot: BackupSnapshot, selected: Boolean, onClick: () -> Unit) {
+private fun LedgerRow(entry: LedgerEntryEntity, snapshot: BackupSnapshot, selected: Boolean, onDelete: () -> Unit, onClick: () -> Unit) {
     val language = LocalUiLanguage.current
     val attachments = snapshot.attachments.count { it.ownerType == AttachmentOwnerType.LEDGER && it.ownerId == entry.id && it.pendingDeleteAt == null }
-    Surface(
-        shape = RoundedCornerShape(10.dp),
-        color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
+    val background by animateColorAsState(
+        when {
+            selected -> LifeTheme.colors.accentSoft
+            hovered -> MaterialTheme.colorScheme.surfaceContainer
+            else -> Color.Transparent
+        },
+        tween(120),
+        label = "ledger-row",
+    )
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(background).hoverable(interaction).clickable(onClick = onClick)
+            .heightIn(min = 48.dp).padding(horizontal = Space.md, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                UserFormatting.formatMinuteOfDay(entry.minuteOfDay, snapshot.settings.timeFormat, false, uiLocale(language)),
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(72.dp),
-            )
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(desktopText(entryLabel(entry)), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    if (entry.seriesId != null) Icon(Icons.Default.Repeat, desktopText("Repeats"), Modifier.padding(start = 6.dp).size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    if (attachments > 0) Icon(Icons.Default.AttachFile, null, Modifier.padding(start = 4.dp).size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                val detail = listOf(entry.note.takeIf { entry.merchant.isNotBlank() }.orEmpty(), parseTags(entry.tagsCsv).joinToString(" ") { "#$it" }).filter(String::isNotBlank).joinToString("  ")
-                if (detail.isNotBlank()) Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(
+            UserFormatting.formatMinuteOfDay(entry.minuteOfDay, snapshot.settings.timeFormat, false, uiLocale(language)),
+            style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(76.dp),
+        )
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(desktopText(entryLabel(entry)), style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (entry.seriesId != null) Icon(Icons.Rounded.Repeat, desktopText("Repeats"), Modifier.padding(start = 6.dp).size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (attachments > 0) Icon(Icons.Rounded.AttachFile, desktopText("Attachments"), Modifier.padding(start = 4.dp).size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Text(
-                (if (entry.type == LedgerType.INCOME) "+" else "−") + formatMoney(entry.amountCents),
-                color = if (entry.type == LedgerType.INCOME) IncomeColor else ExpenseColor,
-                fontWeight = FontWeight.Bold,
-            )
+            val detail = listOf(entry.note.takeIf { entry.merchant.isNotBlank() }.orEmpty(), parseTags(entry.tagsCsv).joinToString(" ") { "#$it" }).filter(String::isNotBlank).joinToString("  ")
+            if (detail.isNotBlank()) Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
+        if (hovered || selected) {
+            IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) { Icon(Icons.Rounded.DeleteOutline, desktopText("Delete"), Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+        MoneyText(entry.amountCents, entry.type, formatMoney(entry.amountCents), modifier = Modifier.padding(start = Space.sm))
     }
 }
 
-/** Right column when nothing is open: the period's daily (or monthly) net and where money went. */
-@Composable
-private fun LedgerInsights(snapshot: BackupSnapshot, period: LedgerPeriod, range: PeriodRange, entries: List<LedgerEntryEntity>, modifier: Modifier) {
-    val language = LocalUiLanguage.current
-    Column(modifier.verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(desktopText(if (period == LedgerPeriod.WEEK || period == LedgerPeriod.MONTH) "Daily net" else "Monthly net"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        val buckets: List<Pair<String, Long>> = if (period == LedgerPeriod.WEEK || period == LedgerPeriod.MONTH) {
+private data class TrendBucket(val label: String, val income: Long, val expense: Long)
+
+/** Per day for up to 46 days, per month for up to about two years, otherwise per year. */
+private fun trendBuckets(range: PeriodRange, entries: List<LedgerEntryEntity>, language: UiLanguage): List<TrendBucket> {
+    val days = range.end - range.start + 1
+    fun totals(rows: List<LedgerEntryEntity>) = MoneyTotals.of(rows)
+    return when {
+        days <= 46 -> {
+            val byDay = entries.groupBy { it.epochDay }
             (range.start..range.end).map { day ->
                 val date = LocalDate.ofEpochDay(day)
-                val label = if (period == LedgerPeriod.WEEK) date.dayOfWeek.getDisplayName(TextStyle.SHORT, uiLocale(language)) else date.dayOfMonth.toString()
-                label to entries.filter { it.epochDay == day }.sumOf { if (it.type == LedgerType.INCOME) it.amountCents else -it.amountCents }
-            }
-        } else {
-            entries.groupBy { YearMonth.from(LocalDate.ofEpochDay(it.epochDay)) }.toSortedMap().map { (month, rows) ->
-                (if (period == LedgerPeriod.YEAR) month.monthValue.toString() else "${month.year % 100}/${month.monthValue}") to
-                    rows.sumOf { if (it.type == LedgerType.INCOME) it.amountCents else -it.amountCents }
+                val label = if (days <= 7) date.dayOfWeek.getDisplayName(TextStyle.SHORT, uiLocale(language)) else date.dayOfMonth.toString()
+                totals(byDay[day].orEmpty()).let { TrendBucket(label, it.incomeCents, it.expenseCents) }
             }
         }
-        NetBars(buckets, Modifier.fillMaxWidth().height(180.dp))
+        days <= 800 -> {
+            val byMonth = entries.groupBy { YearMonth.from(LocalDate.ofEpochDay(it.epochDay)) }
+            var month = YearMonth.from(LocalDate.ofEpochDay(range.start))
+            val last = YearMonth.from(LocalDate.ofEpochDay(range.end))
+            buildList {
+                while (month <= last) {
+                    val label = if (days <= 366) month.monthValue.toString() else "${month.year % 100}/${month.monthValue}"
+                    totals(byMonth[month].orEmpty()).let { add(TrendBucket(label, it.incomeCents, it.expenseCents)) }
+                    month = month.plusMonths(1)
+                }
+            }
+        }
+        else -> entries.groupBy { LocalDate.ofEpochDay(it.epochDay).year }.toSortedMap().map { (year, rows) ->
+            totals(rows).let { TrendBucket(year.toString(), it.incomeCents, it.expenseCents) }
+        }
+    }
+}
 
-        val expenses = entries.filter { it.type == LedgerType.EXPENSE }
-        val total = expenses.sumOf { it.amountCents }
-        if (total > 0) {
-            Text(desktopText("Spending by tag"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp))
-            val byTag = expenses.flatMap { entry -> parseTags(entry.tagsCsv).ifEmpty { listOf("") }.map { it to entry.amountCents } }
-                .groupBy({ it.first.lowercase() }, { it.second }).mapValues { it.value.sum() }
-                .entries.sortedByDescending { it.value }.take(8)
-            byTag.forEach { (tag, cents) ->
-                Column {
-                    Row {
-                        Text(if (tag.isEmpty()) desktopText("Untagged") else "#$tag", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                        Text(formatMoney(cents), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+/** The period as a picture: income and expense over time, their ratio, and spending by tag. */
+@Composable
+private fun LedgerStatistics(snapshot: BackupSnapshot, range: PeriodRange, entries: List<LedgerEntryEntity>, totals: MoneyTotals, modifier: Modifier) {
+    val language = LocalUiLanguage.current
+    val buckets = remember(range, entries, language) { trendBuckets(range, entries, language) }
+    var selected by remember(range) { mutableStateOf<Int?>(null) }
+    Column(
+        modifier.verticalScroll(rememberScrollState()).padding(start = PagePadding, end = PagePadding, top = Space.lg, bottom = 48.dp),
+        verticalArrangement = Arrangement.spacedBy(Space.lg),
+    ) {
+        Panel(padding = PaddingValues(Space.xl)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(desktopText("Trend"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                LegendDot(LifeTheme.colors.income, desktopText("Income"))
+                Spacer(Modifier.width(Space.md))
+                LegendDot(LifeTheme.colors.expense, desktopText("Expense"))
+            }
+            val picked = selected?.let(buckets::getOrNull)
+            Text(
+                picked?.let { "${it.label} · ${desktopText("Income")} ${formatMoney(it.income)} · ${desktopText("Expense")} ${formatMoney(it.expense)}" }
+                    ?: desktopText("Click a bar for its numbers"),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp, bottom = Space.md),
+            )
+            TrendBars(buckets, selected, { selected = if (selected == it) null else it }, Modifier.fillMaxWidth().height(220.dp))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(Space.lg)) {
+            Panel(Modifier.weight(1f), padding = PaddingValues(Space.xl)) {
+                Text(desktopText("Income and expense"), style = MaterialTheme.typography.titleSmall)
+                val sum = totals.incomeCents + totals.expenseCents
+                if (sum == 0L) {
+                    Text(desktopText("No activity in this period"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Space.md))
+                } else {
+                    val share = totals.incomeCents.toFloat() / sum
+                    Row(Modifier.fillMaxWidth().padding(top = Space.md).height(10.dp).clip(CircleShape)) {
+                        if (share > 0f) Box(Modifier.weight(share.coerceAtLeast(0.01f)).fillMaxHeight().background(LifeTheme.colors.income))
+                        if (share < 1f) Box(Modifier.weight((1f - share).coerceAtLeast(0.01f)).fillMaxHeight().background(LifeTheme.colors.expense))
                     }
-                    Box(Modifier.fillMaxWidth().height(6.dp).background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(3.dp))) {
-                        Box(Modifier.fillMaxWidth((cents.toFloat() / total).coerceIn(0.02f, 1f)).height(6.dp).background(ExpenseColor, RoundedCornerShape(3.dp)))
+                    Row(Modifier.fillMaxWidth().padding(top = Space.sm)) {
+                        Text("${(share * 100).toInt()}% " + desktopText("Income"), style = MaterialTheme.typography.bodySmall, color = LifeTheme.colors.income, modifier = Modifier.weight(1f))
+                        Text("${100 - (share * 100).toInt()}% " + desktopText("Expense"), style = MaterialTheme.typography.bodySmall, color = LifeTheme.colors.expense)
+                    }
+                }
+            }
+            Panel(Modifier.weight(1f), padding = PaddingValues(Space.xl)) {
+                Text(desktopText("Spending by tag"), style = MaterialTheme.typography.titleSmall)
+                val expenses = entries.filter { it.type == LedgerType.EXPENSE }
+                val total = expenses.sumOf { it.amountCents }
+                if (total == 0L) {
+                    Text(desktopText("No expenses in this period"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Space.md))
+                } else {
+                    val byTag = expenses.flatMap { entry -> parseTags(entry.tagsCsv).ifEmpty { listOf("") }.map { it to entry.amountCents } }
+                        .groupBy({ it.first.lowercase() }, { it.second }).mapValues { it.value.sum() }
+                        .entries.sortedByDescending { it.value }.take(8)
+                    byTag.forEach { (tag, cents) ->
+                        Column(Modifier.padding(top = Space.md)) {
+                            Row {
+                                Text(if (tag.isEmpty()) desktopText("Untagged") else "#$tag", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                                Text(formatMoney(cents), style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Box(Modifier.fillMaxWidth().padding(top = 4.dp).height(6.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHighest)) {
+                                Box(Modifier.fillMaxWidth((cents.toFloat() / total).coerceIn(0.02f, 1f)).height(6.dp).clip(CircleShape).background(LifeTheme.colors.expense))
+                            }
+                        }
                     }
                 }
             }
@@ -392,39 +537,58 @@ private fun LedgerInsights(snapshot: BackupSnapshot, period: LedgerPeriod, range
 }
 
 @Composable
-private fun NetBars(buckets: List<Pair<String, Long>>, modifier: Modifier) {
-    if (buckets.isEmpty() || buckets.all { it.second == 0L }) {
-        Box(modifier, contentAlignment = Alignment.Center) { Text(desktopText("No ledger data yet"), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+private fun LegendDot(color: Color, label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        com.ced2711.lifetracker.ui.design.Dot(color)
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 6.dp))
+    }
+}
+
+/** Income and expense side by side per bucket; click a bucket to select it. */
+@Composable
+private fun TrendBars(buckets: List<TrendBucket>, selected: Int?, onSelect: (Int) -> Unit, modifier: Modifier) {
+    if (buckets.isEmpty() || buckets.all { it.income == 0L && it.expense == 0L }) {
+        Box(modifier, contentAlignment = Alignment.Center) { Text(desktopText("No activity in this period"), color = MaterialTheme.colorScheme.onSurfaceVariant) }
         return
     }
-    val maximum = buckets.maxOf { kotlin.math.abs(it.second) }.coerceAtLeast(1L)
-    val axis = MaterialTheme.colorScheme.outlineVariant
+    val maximum = buckets.maxOf { maxOf(it.income, it.expense) }.coerceAtLeast(1L)
+    val income = LifeTheme.colors.income
+    val expense = LifeTheme.colors.expense
+    val grid = LifeTheme.colors.divider
+    val highlight = MaterialTheme.colorScheme.surfaceContainerHighest
+    val summary = buckets.joinToString { "${it.label}: +${formatMoney(it.income)} −${formatMoney(it.expense)}" }
     Column(modifier) {
-        Canvas(Modifier.fillMaxWidth().weight(1f)) {
+        Canvas(
+            Modifier.fillMaxWidth().weight(1f).semantics { contentDescription = summary }
+                .pointerInput(buckets.size) { detectTapGestures { offset -> onSelect((offset.x / (size.width.toFloat() / buckets.size)).toInt().coerceIn(0, buckets.lastIndex)) } },
+        ) {
             val slot = size.width / buckets.size
-            val center = size.height / 2f
-            drawLine(axis, Offset(0f, center), Offset(size.width, center))
-            buckets.forEachIndexed { index, (_, value) ->
-                if (value == 0L) return@forEachIndexed
-                val height = (kotlin.math.abs(value).toFloat() / maximum) * (center - 4f)
-                drawRect(
-                    if (value > 0) IncomeColor else ExpenseColor,
-                    topLeft = Offset(index * slot + slot * 0.18f, if (value > 0) center - height else center),
-                    size = Size(slot * 0.64f, height.coerceAtLeast(2f)),
-                )
+            listOf(0f, 0.5f, 1f).forEach { level -> drawLine(grid, Offset(0f, size.height * level), Offset(size.width, size.height * level)) }
+            buckets.forEachIndexed { index, bucket ->
+                if (index == selected) drawRoundRect(highlight, Offset(index * slot, 0f), Size(slot, size.height), CornerRadius(6f))
+                val bar = (slot * 0.3f).coerceAtMost(18f)
+                val gap = (slot * 0.06f).coerceAtMost(3f)
+                val left = index * slot + (slot - (bar * 2 + gap)) / 2f
+                fun draw(value: Long, x: Float, color: Color) {
+                    if (value <= 0L) return
+                    val height = (value.toFloat() / maximum * (size.height - 4f)).coerceAtLeast(2f)
+                    drawRoundRect(color, Offset(x, size.height - height), Size(bar, height), CornerRadius(bar / 3f))
+                }
+                draw(bucket.income, left, income)
+                draw(bucket.expense, left + bar + gap, expense)
             }
         }
         // Label only every few bars so a month stays readable.
-        val every = (buckets.size / 10).coerceAtLeast(1)
-        Row(Modifier.fillMaxWidth()) {
+        val every = ((buckets.size + 11) / 12).coerceAtLeast(1)
+        Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
             buckets.chunked(every).forEach { group ->
-                Text(group.first().first, modifier = Modifier.weight(group.size.toFloat()), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                Text(group.first().label, modifier = Modifier.weight(group.size.toFloat()), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
             }
         }
     }
 }
 
-/** Recurring schedules: what repeats, how often, and Stop / Remove / Change. */
+/** Recurring schedules: what repeats, how often, and Change / Stop / Remove. */
 @Composable
 private fun LedgerSchedules(snapshot: BackupSnapshot, store: DesktopDataStore, onEdit: (Long) -> Unit, modifier: Modifier) {
     val scope = rememberSafeCoroutineScope()
@@ -432,30 +596,39 @@ private fun LedgerSchedules(snapshot: BackupSnapshot, store: DesktopDataStore, o
     var confirmStop by remember { mutableStateOf<LedgerSeriesEntity?>(null) }
     var confirmRemove by remember { mutableStateOf<LedgerSeriesEntity?>(null) }
     val series = snapshot.ledgerSeries.sortedWith(compareByDescending<LedgerSeriesEntity> { it.active }.thenBy { it.startEpochDay })
-    LazyColumn(modifier.padding(horizontal = 24.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (series.isEmpty()) item { Text(desktopText("No recurring entries. Choose Repeat when adding an entry."), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 20.dp)) }
+    LazyColumn(modifier.padding(horizontal = PagePadding), verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+        item {
+            Text(
+                desktopText("Entries are added on schedule. Stopping a schedule keeps the entries it already created."),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = Space.sm),
+            )
+        }
+        if (series.isEmpty()) item {
+            EmptyState(title = desktopText("No recurring entries"), icon = Icons.Rounded.Repeat, body = desktopText("Choose Repeat when adding an entry, for rent, salary or subscriptions."))
+        }
         items(series, key = { it.id }) { item ->
-            Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
-                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(desktopText(item.merchant.ifBlank { item.note.ifBlank { if (item.type == LedgerType.INCOME) "Income" else "Expense" } }), fontWeight = FontWeight.SemiBold)
+            Panel(Modifier.fillMaxWidth(), padding = PaddingValues(horizontal = Space.xl, vertical = Space.lg)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                            Text(desktopText(item.merchant.ifBlank { item.note.ifBlank { if (item.type == LedgerType.INCOME) "Income" else "Expense" } }), style = MaterialTheme.typography.titleMedium)
+                            if (!item.active) Tag(desktopText("Stopped"), MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                         Text(scheduleText(item, snapshot, language), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        if (!item.active) Text(desktopText("Stopped"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
                     }
-                    Text(
-                        (if (item.type == LedgerType.INCOME) "+" else "−") + formatMoney(item.amountCents),
-                        color = if (item.type == LedgerType.INCOME) IncomeColor else ExpenseColor, fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    )
+                    MoneyText(item.amountCents, item.type, formatMoney(item.amountCents), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = Space.lg))
                     if (item.active) {
                         TextButton(onClick = { onEdit(item.id) }) { Text(desktopText("Change")) }
                         TextButton(onClick = { confirmStop = item }) { Text(desktopText("Stop")) }
                     } else {
-                        TextButton(onClick = { confirmRemove = item }) { Text(desktopText("Remove"), color = MaterialTheme.colorScheme.error) }
+                        TextButton(onClick = { confirmRemove = item }) { Text(desktopText("Remove"), color = LifeTheme.colors.danger) }
                     }
                 }
             }
         }
+        item { Spacer(Modifier.height(48.dp)) }
     }
     confirmStop?.let { item ->
         AlertDialog(
@@ -506,6 +679,7 @@ private fun LedgerEditor(
     val scheduleOnly = (editing as? LedgerEditing.Schedule)?.let { e -> snapshot.ledgerSeries.firstOrNull { it.id == e.seriesId } }
     val series = scheduleOnly ?: entry?.seriesId?.let { id -> snapshot.ledgerSeries.firstOrNull { it.id == id } }
     val today = LocalDate.now()
+    fun format(day: Long) = UserFormatting.formatDate(LocalDate.ofEpochDay(day), snapshot.settings.dateFormat, locale)
     val startDay = when (editing) {
         is LedgerEditing.New -> editing.epochDay
         is LedgerEditing.Entry -> entry!!.epochDay
@@ -514,7 +688,7 @@ private fun LedgerEditor(
     }
     var type by remember(editing) { mutableStateOf(entry?.type ?: series?.type ?: LedgerType.EXPENSE) }
     var amount by remember(editing) { mutableStateOf((entry?.amountCents ?: series?.amountCents)?.let { "%.2f".format(Locale.US, it / 100.0) }.orEmpty()) }
-    var dateText by remember(editing) { mutableStateOf(UserFormatting.formatDate(LocalDate.ofEpochDay(startDay), snapshot.settings.dateFormat, locale)) }
+    var dateText by remember(editing) { mutableStateOf(format(startDay)) }
     var timeText by remember(editing) {
         val minute = entry?.minuteOfDay ?: LocalTime.now().let { it.hour * 60 + it.minute }
         mutableStateOf("%d:%02d".format(minute / 60, minute % 60))
@@ -524,17 +698,17 @@ private fun LedgerEditor(
     var tags by remember(editing) { mutableStateOf((entry?.tagsCsv ?: series?.tagsCsv.orEmpty()).replace(",", ", ")) }
     var repeatUnit by remember(editing) { mutableStateOf(series?.recurrenceUnit) }
     var repeatInterval by remember(editing) { mutableStateOf((series?.intervalCount ?: 1).toString()) }
-    var repeatEnd by remember(editing) { mutableStateOf(series?.endEpochDay?.let { UserFormatting.formatDate(LocalDate.ofEpochDay(it), snapshot.settings.dateFormat, locale) }.orEmpty()) }
+    var repeatEnd by remember(editing) { mutableStateOf(series?.endEpochDay?.let(::format).orEmpty()) }
     var askScope by remember(editing) { mutableStateOf<LedgerDraft?>(null) }
     var error by remember(editing) { mutableStateOf<String?>(null) }
     val amountFocus = remember { FocusRequester() }
     LaunchedEffect(editing) { runCatching { amountFocus.requestFocus() } }
 
     val cents = parseAmountCents(amount)
-    val day = SmartDateParser.parse(dateText, today)?.toEpochDay()
+    val day = parseUserDate(dateText, snapshot, language)?.toEpochDay()
     val minute = parseTimeOfDay(timeText)
     val interval = repeatInterval.toIntOrNull()
-    val endDay = repeatEnd.takeIf(String::isNotBlank)?.let { SmartDateParser.parse(it, today)?.toEpochDay() }
+    val endDay = repeatEnd.takeIf(String::isNotBlank)?.let { parseUserDate(it, snapshot, language)?.toEpochDay() }
     val repeatInvalid = repeatUnit != null && (interval == null || interval !in 1..10_000 || (repeatEnd.isNotBlank() && (endDay == null || day == null || endDay < day)))
     val scheduleStartInvalid = scheduleOnly != null && (day == null || day <= today.toEpochDay())
     val canSave = cents != null && day != null && minute != null && !repeatInvalid && !scheduleStartInvalid && (scheduleOnly == null || repeatUnit != null)
@@ -566,59 +740,97 @@ private fun LedgerEditor(
         if (entry?.seriesId != null) askScope = value else commit(value, SeriesEditScope.ONLY_THIS_OCCURRENCE)
     }
 
-    Column(modifier.background(MaterialTheme.colorScheme.surface).editorKeys(onSave = ::save, onCancel = onClose)) {
-        Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                desktopText(when { scheduleOnly != null -> "Change schedule"; entry == null -> "New entry"; else -> "Edit entry" }),
-                style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f),
-            )
-            IconButton(onClick = onClose) { Icon(Icons.Default.Close, desktopText("Close (Esc)")) }
-        }
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (scheduleOnly != null) Text(desktopText("Entries already created stay as they are. The changed schedule starts on the date below."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                FilterChipSimple(desktopText("Expense"), type == LedgerType.EXPENSE) { type = LedgerType.EXPENSE }
-                FilterChipSimple(desktopText("Income"), type == LedgerType.INCOME) { type = LedgerType.INCOME }
-            }
-            OutlinedTextField(
-                amount, { if (isValidDesktopAmountInput(it)) amount = it },
-                label = { Text(desktopText("Amount")) }, singleLine = true,
-                textStyle = MaterialTheme.typography.headlineSmall.copy(color = if (type == LedgerType.INCOME) IncomeColor else ExpenseColor),
-                modifier = Modifier.fillMaxWidth().focusRequester(amountFocus),
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(dateText, { dateText = it }, label = { Text(desktopText(if (scheduleOnly != null) "Starts" else "Date")) }, isError = day == null || scheduleStartInvalid, singleLine = true, modifier = Modifier.weight(1.4f),
-                    supportingText = { day?.let { Text(formatDeadline(it, null, snapshot, language)) } })
-                if (scheduleOnly == null) OutlinedTextField(timeText, { timeText = it }, label = { Text(desktopText("Time")) }, isError = minute == null, singleLine = true, modifier = Modifier.weight(1f))
-            }
-            OutlinedTextField(merchant, { merchant = it }, label = { Text(desktopText("Merchant / payer")) }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(note, { note = it }, label = { Text(desktopText("Note")) }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(tags, { tags = it }, label = { Text(desktopText("Tags, comma separated (optional)")) }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            Text(desktopText("Repeat"), style = MaterialTheme.typography.labelLarge)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (scheduleOnly == null) FilterChipSimple(desktopText("Never"), repeatUnit == null) { repeatUnit = null }
-                RecurrenceUnit.entries.forEach { unit -> FilterChipSimple(desktopText(recurrenceLabel(unit)), repeatUnit == unit) { repeatUnit = unit } }
-            }
-            if (repeatUnit != null) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(repeatInterval, { repeatInterval = it.filter(Char::isDigit).take(5) }, label = { Text(desktopText("Every")) }, singleLine = true, modifier = Modifier.weight(1f), isError = interval == null || interval < 1)
-                OutlinedTextField(repeatEnd, { repeatEnd = it }, label = { Text(desktopText("Until (optional)")) }, singleLine = true, modifier = Modifier.weight(2f), isError = repeatEnd.isNotBlank() && (endDay == null || (day != null && endDay < day)))
-            }
-            if (entry != null) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(desktopText("Attachments"), style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
-                    IconButton({ chooseAndAttach(scope, store, AttachmentOwnerType.LEDGER, entry.id) }) { Icon(Icons.Default.AttachFile, desktopText("Attach")) }
-                }
-                AttachmentList(snapshot, AttachmentOwnerType.LEDGER, entry.id, store)
-            }
-            error?.let { Text(desktopText(it), color = MaterialTheme.colorScheme.error) }
-        }
-        HorizontalDivider()
-        Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (entry != null) TextButton(onClick = { onDelete(entry) }) { Text(desktopText("Delete"), color = MaterialTheme.colorScheme.error) }
+    EditorPane(
+        title = desktopText(when { scheduleOnly != null -> "Change schedule"; entry == null -> "New entry"; else -> "Edit entry" }),
+        onClose = onClose,
+        modifier = modifier.editorKeys(onSave = ::save, onCancel = onClose),
+        footer = {
+            if (entry != null) TextButton(onClick = { onDelete(entry) }) { Text(desktopText("Delete"), color = LifeTheme.colors.danger) }
             Spacer(Modifier.weight(1f))
             OutlinedButton(onClick = onClose) { Text(desktopText("Cancel")) }
             Button(enabled = canSave, onClick = ::save) { Text(desktopText("Save (Ctrl+S)")) }
+        },
+    ) {
+        if (scheduleOnly != null) {
+            Text(desktopText("Entries already created stay as they are. The changed schedule starts on the date below."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        Segmented(
+            listOf(LedgerType.EXPENSE, LedgerType.INCOME), type, { type = it },
+            { desktopText(if (it == LedgerType.EXPENSE) "Expense" else "Income") },
+            fill = true, modifier = Modifier.fillMaxWidth(),
+        )
+        LifeTextField(
+            amount, { if (isValidDesktopAmountInput(it)) amount = it },
+            placeholder = "0.00", prefix = "$",
+            textStyle = MaterialTheme.typography.headlineMedium.copy(fontFeatureSettings = "tnum"),
+            isError = amount.isNotBlank() && cents == null,
+            modifier = Modifier.fillMaxWidth().focusRequester(amountFocus),
+        )
+        FieldLabel(if (scheduleOnly != null) "Starts" else "When")
+        Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+            LifeTextField(
+                dateText, { dateText = it },
+                placeholder = desktopText("Date"),
+                isError = day == null || scheduleStartInvalid,
+                trailing = { DatePickerButton(day?.let(LocalDate::ofEpochDay)) { dateText = format(it.toEpochDay()) } },
+                modifier = Modifier.weight(1.5f),
+            )
+            if (scheduleOnly == null) LifeTextField(timeText, { timeText = it }, placeholder = desktopText("Time, e.g. 9:30"), isError = minute == null, modifier = Modifier.weight(1f))
+        }
+        day?.let { Text(formatDeadline(it, minute.takeIf { scheduleOnly == null }, snapshot, language), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
+        FieldLabel("Merchant / payer")
+        LifeTextField(merchant, { merchant = it }, placeholder = desktopText("Where or who"), modifier = Modifier.fillMaxWidth())
+        FieldLabel("Note")
+        LifeTextField(note, { note = it }, placeholder = desktopText("Optional"), minLines = 2, modifier = Modifier.fillMaxWidth())
+        FieldLabel("Tags")
+        LifeTextField(tags, { tags = it }, placeholder = desktopText("Comma separated, e.g. food, travel"), modifier = Modifier.fillMaxWidth())
+        val typing = tags.substringAfterLast(',').trim().removePrefix("#")
+        val chosen = parseTags(tags).map { it.lowercase() }.toSet()
+        val suggestions = snapshot.ledgerEntries.flatMap { parseTags(it.tagsCsv) }.distinctBy { it.lowercase() }
+            .filter { it.lowercase() !in chosen && (typing.isEmpty() || it.startsWith(typing, ignoreCase = true)) }
+            .sortedBy { it.lowercase() }.take(8)
+        if (suggestions.isNotEmpty()) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                suggestions.forEach { suggestion ->
+                    Pill("#$suggestion", false, {
+                        val kept = tags.split(',').dropLast(1).map(String::trim).filter(String::isNotEmpty)
+                        tags = (kept + suggestion).joinToString(", ") + ", "
+                    })
+                }
+            }
+        }
+        FieldLabel("Repeat")
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (scheduleOnly == null) Pill(desktopText("Never"), repeatUnit == null, { repeatUnit = null }, exclusive = true)
+            RecurrenceUnit.entries.forEach { unit -> Pill(desktopText(recurrenceLabel(unit)), repeatUnit == unit, { repeatUnit = unit }, exclusive = true) }
+        }
+        if (repeatUnit != null) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.sm), verticalAlignment = Alignment.CenterVertically) {
+                Text(desktopText("Every"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                LifeTextField(repeatInterval, { repeatInterval = it.filter(Char::isDigit).take(5) }, isError = interval == null || interval < 1, modifier = Modifier.width(72.dp))
+                LifeTextField(
+                    repeatEnd, { repeatEnd = it },
+                    placeholder = desktopText("Until (optional)"),
+                    isError = repeatEnd.isNotBlank() && (endDay == null || (day != null && endDay < day)),
+                    trailing = { DatePickerButton(endDay?.let(LocalDate::ofEpochDay)) { repeatEnd = format(it.toEpochDay()) } },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+        if (entry != null) {
+            FieldLabel("Attachments") {
+                TextButton(onClick = { chooseAndAttach(scope, store, AttachmentOwnerType.LEDGER, entry.id) }) {
+                    Icon(Icons.Rounded.AttachFile, null, Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(desktopText("Attach"))
+                }
+            }
+            AttachmentList(snapshot, AttachmentOwnerType.LEDGER, entry.id, store)
+        } else if (scheduleOnly == null) {
+            Text(desktopText("Files can be attached after the first save."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        error?.let { Text(desktopText(it), color = LifeTheme.colors.danger) }
+        Spacer(Modifier.height(Space.lg))
     }
     askScope?.let { value ->
         SeriesScopeDialog("Edit repeating entry", { askScope = null }) { chosen ->
@@ -636,7 +848,7 @@ internal fun LedgerEditorWindow(snapshot: BackupSnapshot, store: DesktopDataStor
     androidx.compose.ui.window.DialogWindow(
         onCloseRequest = onClose,
         title = desktopText(if (entryId == null) "New entry" else "Edit entry"),
-        state = androidx.compose.ui.window.rememberDialogState(size = androidx.compose.ui.unit.DpSize(520.dp, 720.dp)),
+        state = androidx.compose.ui.window.rememberDialogState(size = androidx.compose.ui.unit.DpSize(520.dp, 760.dp)),
     ) {
         LedgerEditor(
             snapshot, store,

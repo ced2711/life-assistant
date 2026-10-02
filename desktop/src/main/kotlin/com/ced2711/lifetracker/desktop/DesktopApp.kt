@@ -602,21 +602,19 @@ private fun DesktopHome(
 }
 
 @Composable
-internal fun PageHeader(title: String, subtitle: String? = null) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 18.dp)) {
-        Text(desktopText(title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        if (subtitle != null) Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
+internal fun PageHeader(title: String, subtitle: String? = null, actions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {}) {
+    com.ced2711.lifetracker.ui.design.PageTitle(
+        title = desktopText(title),
+        subtitle = subtitle,
+        actions = actions,
+        modifier = Modifier.padding(start = PagePadding, end = PagePadding, top = 28.dp, bottom = 16.dp),
+    )
 }
 
+/** A choice pill (see Pill in the shared design); a check box or radio button for screen readers. */
 @Composable
-internal fun FilterChipSimple(
-label: String, selected: Boolean, onClick: () -> Unit) {
-    Surface(
-        modifier = Modifier.clip(RoundedCornerShape(50)).clickable(onClick = onClick),
-        shape = RoundedCornerShape(50),
-        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-    ) { Text(label, Modifier.padding(horizontal = 12.dp, vertical = 7.dp)) }
+internal fun FilterChipSimple(label: String, selected: Boolean, exclusive: Boolean = false, onClick: () -> Unit) {
+    com.ced2711.lifetracker.ui.design.Pill(text = label, selected = selected, onClick = onClick, exclusive = exclusive)
 }
 
 @Composable

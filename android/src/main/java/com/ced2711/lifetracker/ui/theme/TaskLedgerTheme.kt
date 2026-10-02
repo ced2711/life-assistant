@@ -153,7 +153,7 @@ private fun lifeColorScheme(accent: Color, dark: Boolean): ColorScheme {
             outline = Neutral.darkOutline,
             outlineVariant = Neutral.darkOutlineVariant,
             scrim = Color.Black,
-            surfaceBright = Neutral.darkHighest,
+            surfaceBright = Color(0xFF36383E),
             surfaceDim = Neutral.darkLowest,
             surfaceContainerLowest = Neutral.darkLowest,
             surfaceContainerLow = Neutral.darkLow,
