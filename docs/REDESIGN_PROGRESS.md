@@ -54,3 +54,14 @@ Branch `feat/2.0-redesign`. Nothing is published until the user has tried the bu
   dualScreen, foldBook, foldTabletop, largeFont.
 - Version is 2.0.0 (versionCode 18). Release notes: `docs/releases/RELEASE_2.0.0.md`.
 - Left: instrumented tests on the emulator, release builds, the user's own test, then publishing.
+
+## Status 2026-10-02 (builds ready)
+
+- Instrumented tests on the emulator: 132 of 133 pass; `RebrandUpgradeSnapshotInstrumentedTest` needs a device
+  that already holds user data and does not apply to a clean emulator.
+- Fixed while testing on the emulator: daily backup failed when the Vault had entries; an open editor was lost
+  when the screen was rotated or folded after switching pages; quick add lost the keyboard after each todo.
+- `build/release-2.0.0/` holds the signed APK and the Windows installer; the packaged self-test passes, including
+  the bridge for AI assistants.
+- Left: the user's own test, then push, pull request, tag v2.0.0 and the release (the Linux packages are built by
+  GitHub Actions).
