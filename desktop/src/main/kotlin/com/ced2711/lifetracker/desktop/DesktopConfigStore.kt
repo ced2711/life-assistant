@@ -153,6 +153,18 @@ class DesktopConfigStore(
         save(properties)
     }
 
+    /**
+     * Whether the user picked the data password. A new PC starts with a random password that it
+     * keeps itself, so nothing is asked before the app opens; the user picks one only when a
+     * feature needs it (cloud sync, Vault, Confessional, app lock). Earlier versions always asked,
+     * so a missing value means chosen.
+     */
+    @Synchronized
+    fun passwordChosen(): Boolean = load().getProperty(KEY_PASSWORD_CHOSEN)?.toBooleanStrictOrNull() ?: true
+
+    @Synchronized
+    fun setPasswordChosen(chosen: Boolean) = load().let { it.setProperty(KEY_PASSWORD_CHOSEN, chosen.toString()); save(it) }
+
     /** Whether the sidebar is folded to icons (off by default). */
     @Synchronized
     fun sidebarCollapsed(): Boolean = load().getProperty(KEY_SIDEBAR_COLLAPSED)?.toBooleanStrictOrNull() ?: false
@@ -253,6 +265,7 @@ class DesktopConfigStore(
         const val KEY_WINDOW_MAXIMIZED = "window.maximized"
         const val KEY_DESKTOP_REMINDERS = "reminders.desktop"
         const val KEY_SIDEBAR_COLLAPSED = "ui.sidebarCollapsed"
+        const val KEY_PASSWORD_CHOSEN = "security.passwordChosen"
         const val KEY_KEEP_IN_TRAY = "window.keepInTray"
         const val KEY_REMINDERS_CHECKED_AT = "reminders.checkedAt"
     }

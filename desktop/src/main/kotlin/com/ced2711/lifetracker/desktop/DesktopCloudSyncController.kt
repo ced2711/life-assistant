@@ -20,6 +20,7 @@ import com.ced2711.lifetracker.cloudsync.prunableCloudRevisions
 import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -52,7 +53,20 @@ data class DesktopCloudUiState(
     val lastSyncFailed: Boolean = false,
     /** GitHub no longer accepts this PC's sign-in; only reconnecting helps. */
     val needsSignIn: Boolean = false,
+    /** Connecting waits for the sync password; see [DesktopCloudSyncController.submitSyncPassword]. */
+    val passwordPrompt: DesktopPasswordPrompt? = null,
 )
+
+enum class DesktopPasswordPromptKind {
+    /** This PC is the first device in the cloud: pick the password all devices will use. */
+    CHOOSE,
+    /** The cloud holds data from other devices: type the password they use. */
+    MATCH,
+    /** As [MATCH], after a password that did not open the cloud data. */
+    MATCH_RETRY,
+}
+
+data class DesktopPasswordPrompt(val kind: DesktopPasswordPromptKind)
 
 class DesktopCloudSyncController(
     private val dataStore: DesktopDataStore,
@@ -194,7 +208,9 @@ class DesktopCloudSyncController(
             _state.update { it.copy(gitHubCode = null) }
             val resolved = try {
                 authorization.resolveRepository(token.accessToken, repository).also { resolved ->
-                    GitHubBackupStore({ token.accessToken }, resolved).listRevisions()
+                    if (!matchCloudPassword(GitHubBackupStore({ token.accessToken }, resolved))) {
+                        throw CancellationException("password not given")
+                    }
                 }
             } catch (error: Throwable) {
                 // This sign-in will not be kept; retire it so it does not count against the account.
@@ -221,6 +237,68 @@ class DesktopCloudSyncController(
             throw cancelled
         } catch (error: Throwable) {
             _state.value = readState().copy(message = error.safeMessage())
+        }
+    }
+
+    private var passwordAnswer: CompletableDeferred<CharArray?>? = null
+
+    /** Answers [DesktopCloudUiState.passwordPrompt]; the array is consumed. */
+    fun submitSyncPassword(password: CharArray) {
+        passwordAnswer?.complete(password) ?: password.fill(' ')
+    }
+
+    fun cancelSyncPassword() {
+        passwordAnswer?.complete(null)
+    }
+
+    /**
+     * Every device encrypts its cloud copies with the same password. Before this PC syncs for the
+     * first time its data must use that password: nothing is asked when it already does, the user
+     * types the other devices' password when the cloud holds data this PC cannot open, and picks
+     * one when this PC is the first device and still runs on its own random password. False when
+     * the user cancelled.
+     */
+    private suspend fun matchCloudPassword(store: CloudBackupStore): Boolean {
+        val revisions = store.listRevisions(100)
+        val head = latestCloudRevision(revisions)
+        val headFile = head?.let { File(dataStore.appDirectory, "cloud-check-${UUID.randomUUID()}.tlb.part") }
+        try {
+            if (head != null && headFile != null) {
+                store.downloadRevision(head, headFile)
+                if (dataStore.verifyEncrypted(headFile)) return true
+            } else if (configStore.passwordChosen()) {
+                return true
+            }
+            var kind = if (head == null) DesktopPasswordPromptKind.CHOOSE else DesktopPasswordPromptKind.MATCH
+            while (true) {
+                val answer = CompletableDeferred<CharArray?>()
+                passwordAnswer = answer
+                _state.update { it.copy(passwordPrompt = DesktopPasswordPrompt(kind)) }
+                val password = try {
+                    answer.await()
+                } finally {
+                    passwordAnswer = null
+                    _state.update { it.copy(passwordPrompt = null) }
+                } ?: return false
+                val fits = headFile == null || dataStore.previewEncrypted(headFile, password.copyOf()) != null
+                if (!fits) {
+                    password.fill(' ')
+                    kind = DesktopPasswordPromptKind.MATCH_RETRY
+                    continue
+                }
+                val chosen = DesktopLocalKey.choose(
+                    password,
+                    dataStore,
+                    requireNotNull(credentials) { "Secure credential storage is unavailable." },
+                    configStore,
+                )
+                check(chosen) { "Could not change the data password." }
+                // The last agreed copy was written with the old password.
+                configStore.clearSyncState()
+                return true
+            }
+        } finally {
+            headFile?.delete()
         }
     }
 

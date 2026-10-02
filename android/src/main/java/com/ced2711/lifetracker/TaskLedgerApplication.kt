@@ -108,6 +108,15 @@ class AppContainer(application: Application) {
         settingsRepository = settingsRepository,
         vaultRepository = vaultRepository,
     )
+    val dailyBackups = com.ced2711.lifetracker.data.backup.DailyBackups(
+        directory = java.io.File(application.filesDir, com.ced2711.lifetracker.data.backup.DailyBackups.DIRECTORY),
+        repository = backupRepository,
+        keyStore = CloudSyncSecretStore(
+            context = application,
+            preferencesName = "life_assistant_daily_backup_key",
+            keyAlias = "life_assistant_daily_backup_key_v1",
+        ),
+    )
     val cloudSyncPreferences = CloudSyncPreferences(application)
     val cloudSyncSecretStore = CloudSyncSecretStore(application)
     val gitHubTokenStore = CloudSyncSecretStore(

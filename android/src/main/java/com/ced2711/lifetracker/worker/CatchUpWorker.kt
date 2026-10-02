@@ -28,6 +28,11 @@ class CatchUpWorker(
                 false,
             )
             val isCalendarMaterialization = todoMaterializeThrough != NO_TODO_MATERIALIZATION
+            if (!isCalendarMaterialization && afterCursor == null) {
+                // Runs when the app starts and after midnight: keep yesterday's data before today's
+                // repeating items are created. A failed copy must not stop reminders.
+                runCatching { application.container.dailyBackups.backUpIfDue(java.time.LocalDate.now()) }
+            }
             val catchUp = if (isCalendarMaterialization) {
                 application.container.repository.materializeTodoOccurrencesThrough(
                     todoMaterializeThrough,

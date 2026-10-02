@@ -232,15 +232,14 @@ fun LifeTrackerDesktopApp() {
     DisposableEffect(Unit) {
         onDispose { dataStore.close() }
     }
+    // Nothing is asked at start: the remembered password, or a new PC's own random one, opens the data.
+    var starting by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) {
-        val saved = credentials.load(DesktopCredentialStore.LOCAL_PASSWORD)
-        if (saved != null) {
-            if (dataStore.open(saved.copyOf())) {
-                appLocked = appLockEnabled
-                cloud.start(scope)
-            }
-            saved.fill('\u0000')
+        if (DesktopLocalKey.openWithoutAsking(dataStore, credentials, config)) {
+            appLocked = appLockEnabled
+            cloud.start(scope)
         }
+        starting = false
     }
 
     val accent = (storeState as? DesktopStoreState.Open)?.snapshot?.settings?.accentColor ?: AccentColor.TEAL
@@ -250,7 +249,7 @@ fun LifeTrackerDesktopApp() {
             TaskLedgerTheme(theme, accent) {
             Surface(Modifier.fillMaxSize()) {
                 when (val current = storeState) {
-                DesktopStoreState.Locked -> UnlockScreen(
+                DesktopStoreState.Locked -> if (starting) Box(Modifier.fillMaxSize()) else UnlockScreen(
                     error = null,
                     existingData = dataStore.encryptedFile.isFile,
                     onUnlock = { password, rememberOnPc ->
@@ -456,6 +455,8 @@ private fun DesktopHome(
     // Due recurring items appear and expired deletions are cleared, also across midnight.
     LaunchedEffect(dataStore) {
         while (true) {
+            // The first run of a day keeps yesterday's data, before anything changes today.
+            runCatching { dataStore.backUpDaily(java.time.LocalDate.now()) }
             runCatching { dataStore.runMaintenance() }
             kotlinx.coroutines.delay(60_000)
         }

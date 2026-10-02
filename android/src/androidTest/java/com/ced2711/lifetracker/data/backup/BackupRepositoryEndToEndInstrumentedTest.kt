@@ -145,6 +145,30 @@ class BackupRepositoryEndToEndInstrumentedTest {
     }
 
     @Test
+    fun dailyCopyLeavesVaultOutAndRestoringItKeepsTheCurrentVault() = runBlocking {
+        val source = seedSourceState()
+        val destination = ByteArrayOutputStream()
+        // No Vault session: daily copies are made in the background while Vault is locked.
+        val exported = repository.export(destination, BACKUP_PASSWORD.toCharArray(), includeVault = false)
+        assertEquals(0, exported.preview.vaultCount)
+        assertEquals(1, exported.preview.todoCount)
+
+        seedDifferentLiveState()
+        val currentVault = vaultRepository.loadEntries(vaultSession)
+
+        val prepared = repository.prepareRestore(ByteArrayInputStream(destination.toByteArray()), BACKUP_PASSWORD.toCharArray())
+        val result = repository.restore(prepared, vaultSession = null, keepVault = true)
+
+        assertTrue(result.warnings.isEmpty())
+        assertEquals(source.todos, database.backupDao().backupTodos())
+        assertEquals(source.ledgerEntries, database.backupDao().backupLedgerEntries())
+        assertEquals(source.settings, settingsRepository.snapshot())
+        assertEquals(currentVault, vaultRepository.loadEntries(vaultSession))
+        assertRestoredAttachment(source.attachment)
+        assertNull(database.backupDao().restoreCommitToken())
+    }
+
+    @Test
     fun wrongPasswordAndTamperedContainerLeaveEveryPersistentLayerUnchanged() = runBlocking {
         seedSourceState()
         val backupBytes = exportBackup()

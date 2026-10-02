@@ -169,10 +169,13 @@ class BackupRepository(
         destination: OutputStream,
         password: CharArray,
         vaultSession: VaultSession? = null,
+        // Daily on-device copies leave Vault out: it never needs unlocking for them, and
+        // restoring one keeps the Vault as it is (see [restore] keepVault).
+        includeVault: Boolean = true,
     ): BackupExportResult = operationMutex.withLock { withContext(ioDispatcher) {
         try {
             validateBackupPassword(password)
-            val plan = createExportPlan(vaultSession)
+            val plan = createExportPlan(vaultSession, includeVault)
             val currentSnapshot = plan.snapshot
             val countingDestination = CountingOutputStream(destination)
             BackupCrypto.encrypt(currentSnapshot, password, countingDestination, plan)
@@ -263,6 +266,9 @@ class BackupRepository(
         prepared: PreparedBackupRestore,
         vaultSession: VaultSession? = null,
         expectedLocalSyncFingerprint: String? = null,
+        // Restores everything except Vault, which stays exactly as it is; for daily copies,
+        // which never contain Vault entries.
+        keepVault: Boolean = false,
     ): BackupRestoreResult = operationMutex.withLock { withContext(ioDispatcher) {
         if (
             expectedLocalSyncFingerprint != null &&
@@ -286,10 +292,13 @@ class BackupRepository(
             val stateBeforeVerification = backupDao.backupState()
             val targetVaultRows = stateBeforeVerification.vaultEntries
             val targetHasVault = targetVaultRows.isNotEmpty()
-            if ((targetHasVault || snapshot.vaultEntries.isNotEmpty()) && vaultSession == null) {
+            if (keepVault && snapshot.vaultEntries.isNotEmpty()) {
+                throw InvalidBackupException("This backup contains Vault entries and cannot keep the current Vault.")
+            }
+            if (!keepVault && (targetHasVault || snapshot.vaultEntries.isNotEmpty()) && vaultSession == null) {
                 throw VaultAuthenticationRequiredException()
             }
-            if (targetHasVault) {
+            if (!keepVault && targetHasVault) {
                 // Authenticate the actual current ciphertext version before staging or any write.
                 vaultRepository.verifySession(targetVaultRows, requireNotNull(vaultSession))
             }
@@ -359,6 +368,7 @@ class BackupRepository(
                     currentStage.attachments,
                     restoreToken,
                     expectedDatabaseFingerprint = fullDatabaseFingerprint(oldState),
+                    keepVault = keepVault,
                 )
                 roomCommitted = true
                 prepared.completeCommit()
@@ -381,7 +391,12 @@ class BackupRepository(
                 BackupRestoreResult(
                     preview = prepared.preview,
                     warnings = warnings,
-                    appliedSyncFingerprint = appliedSyncFingerprint,
+                    // The kept Vault is not in the snapshot, so read what is really there now.
+                    appliedSyncFingerprint = if (keepVault) {
+                        cloudSyncFingerprint(backupDao.backupState(), settingsRepository.snapshot())
+                    } else {
+                        appliedSyncFingerprint
+                    },
                 )
             }
         } catch (failure: Throwable) {
@@ -486,11 +501,11 @@ class BackupRepository(
             BackupRecoveryResult(committed, warnings)
         }
 
-    private suspend fun createExportPlan(vaultSession: VaultSession?): BackupExportPlan {
+    private suspend fun createExportPlan(vaultSession: VaultSession?, includeVault: Boolean = true): BackupExportPlan {
         val captured = retryStableCapture(MAX_SNAPSHOT_ATTEMPTS) {
             val settingsBefore = settingsRepository.snapshot()
             val stateBefore = backupDao.backupState()
-            val vaultEntries = if (stateBefore.vaultEntries.isEmpty()) {
+            val vaultEntries = if (!includeVault || stateBefore.vaultEntries.isEmpty()) {
                 emptyList()
             } else {
                 vaultRepository.loadEntries(

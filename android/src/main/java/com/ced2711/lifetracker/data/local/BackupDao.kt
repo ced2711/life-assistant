@@ -99,13 +99,18 @@ interface BackupDao {
         stagedAttachments: StagedAttachments,
         restoreToken: String,
         expectedDatabaseFingerprint: String? = null,
+        // Leaves the Vault table untouched (restoring a daily copy, which has no Vault entries).
+        keepVault: Boolean = false,
     ) {
         requireCanonicalRestoreToken(restoreToken)
         snapshot.validate()
         val attachmentRows = stagedAttachments.entities(snapshot)
         val expectedVault = snapshot.vaultEntries.associateBy { it.id }
+        if (keepVault && (encryptedVault.isNotEmpty() || expectedVault.isNotEmpty())) {
+            throw InvalidBackupException("Prepared vault entries do not match the restore snapshot.")
+        }
         if (
-            encryptedVault.map { it.id }.toSet() != expectedVault.keys ||
+            !keepVault && encryptedVault.map { it.id }.toSet() != expectedVault.keys ||
             encryptedVault.any { row ->
                 expectedVault[row.id]?.let { it.createdAt != row.createdAt || it.updatedAt != row.updatedAt } != false
             }
@@ -133,7 +138,7 @@ interface BackupDao {
         deleteAllNotes()
         deleteAllNoteFolders()
         deleteAllDiaryEntries()
-        deleteAllVaultEntries()
+        if (!keepVault) deleteAllVaultEntries()
 
         insertCategories(topologicallySortedCategories(snapshot.categories))
         insertTodoSeries(snapshot.todoSeries)
@@ -149,7 +154,7 @@ interface BackupDao {
         insertNotes(snapshot.notes)
         insertDiaryEntries(snapshot.diaryEntries)
         insertAttachments(attachmentRows)
-        insertVaultEntries(encryptedVault)
+        if (!keepVault) insertVaultEntries(encryptedVault)
         writeRestoreCommit(RestoreCommitEntity(restoreToken = restoreToken))
     }
 
