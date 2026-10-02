@@ -46,17 +46,33 @@ class CloudSyncSecretStore(
         }
     }
 
+    /**
+     * The saved secret, or null when none is saved or it cannot be read right now. A failed read
+     * never deletes anything: the Keystore sometimes refuses work for a moment (for example
+     * right after the phone restarts at night), and deleting then would silently disconnect sync.
+     * Only [clear] removes the secret.
+     */
     @Synchronized
     fun load(): CharArray? {
         val encodedIv = preferences.getString(KEY_IV, null) ?: return null
         val encodedCiphertext = preferences.getString(KEY_CIPHERTEXT, null) ?: return null
+        repeat(READ_ATTEMPTS) { attempt ->
+            decrypt(encodedIv, encodedCiphertext)?.let { return it }
+            if (attempt < READ_ATTEMPTS - 1) Thread.sleep(RETRY_DELAY_MILLIS * (attempt + 1))
+        }
+        return null
+    }
+
+    private fun decrypt(encodedIv: String, encodedCiphertext: String): CharArray? {
         var iv = ByteArray(0)
         var ciphertext = ByteArray(0)
         return try {
+            // A missing key cannot decrypt anything; never create a new one while reading.
+            val key = keyStore.getKey(keyAlias, null) as? SecretKey ?: return null
             iv = encodedIv.decodeBase64()
             ciphertext = encodedCiphertext.decodeBase64()
             val cipher = Cipher.getInstance(TRANSFORMATION).apply {
-                init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(TAG_BITS, iv))
+                init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(TAG_BITS, iv))
             }
             val plaintext = cipher.doFinal(ciphertext)
             try {
@@ -65,7 +81,6 @@ class CloudSyncSecretStore(
                 plaintext.fill(0)
             }
         } catch (_: Exception) {
-            clear()
             null
         } finally {
             iv.fill(0)
@@ -109,5 +124,7 @@ class CloudSyncSecretStore(
         const val ANDROID_KEYSTORE = "AndroidKeyStore"
         const val TRANSFORMATION = "AES/GCM/NoPadding"
         const val TAG_BITS = 128
+        const val READ_ATTEMPTS = 3
+        const val RETRY_DELAY_MILLIS = 250L
     }
 }

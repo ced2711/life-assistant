@@ -171,3 +171,14 @@ open class CloudAuthorizationException(message: String, cause: Throwable? = null
 
 class CloudTransportException(message: String, cause: Throwable? = null) :
     Exception(message, cause)
+
+/**
+ * GitHub no longer accepts the saved sign-in (HTTP 401): it was revoked, or GitHub retired it
+ * because the same account signed in too many times. Only signing in again helps; the sync
+ * settings and password stay as they are.
+ */
+class GitHubSignInExpiredException : CloudAuthorizationException(MESSAGE) {
+    companion object {
+        const val MESSAGE = "GitHub sign-in expired or was revoked. Reconnect GitHub."
+    }
+}

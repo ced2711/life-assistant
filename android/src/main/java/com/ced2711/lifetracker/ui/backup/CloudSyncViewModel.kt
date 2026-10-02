@@ -13,6 +13,7 @@ import com.ced2711.lifetracker.cloudsync.CloudRevision
 import com.ced2711.lifetracker.cloudsync.ConflictResolution
 import com.ced2711.lifetracker.cloudsync.GitHubBackupStore
 import com.ced2711.lifetracker.cloudsync.GitHubDeviceAuthorization
+import com.ced2711.lifetracker.cloudsync.GitHubSignInExpiredException
 import com.ced2711.lifetracker.data.cloud.CloudProvider
 import com.ced2711.lifetracker.data.cloud.AndroidCloudSyncEngine
 import com.ced2711.lifetracker.data.cloud.AndroidCloudSyncResult
@@ -28,11 +29,13 @@ import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 enum class CloudSyncTask {
     NONE,
@@ -209,10 +212,20 @@ class CloudSyncViewModel internal constructor(
                 _uiState.update { it.copy(gitHubPrompt = GitHubCodePrompt(code.userCode, code.verificationUri)) }
                 val token = authorization.awaitToken(code)
                 _uiState.update { it.copy(gitHubPrompt = null) }
-                val resolved = authorization.resolveRepository(token.accessToken, repository)
-                // Prove write access to the branch history before anything is saved.
-                GitHubBackupStore({ token.accessToken }, resolved).listRevisions()
+                val resolved = try {
+                    authorization.resolveRepository(token.accessToken, repository).also { resolved ->
+                        // Prove write access to the branch history before anything is saved.
+                        GitHubBackupStore({ token.accessToken }, resolved).listRevisions()
+                    }
+                } catch (error: Throwable) {
+                    // This sign-in will not be kept; retire it so it does not count against the account.
+                    withContext(NonCancellable) { authorization.revokeToken(token.accessToken) }
+                    throw error
+                }
+                val replaced = gitHubTokenStore.load()?.let { old -> try { old.concatToString() } finally { old.fill('\u0000') } }
                 gitHubTokenStore.save(token.accessToken.toCharArray())
+                preferences.setAttention(null)
+                if (replaced != null && replaced != token.accessToken) authorization.revokeToken(replaced)
                 if (reconnecting) {
                     preferences.setProvider(CloudProvider.GITHUB, clientId.trim(), resolved.fullName)
                     _uiState.value = readState().copy(task = CloudSyncTask.NONE, message = "GitHub reconnected.")
@@ -372,6 +385,13 @@ class CloudSyncViewModel internal constructor(
     fun disconnect() {
         if (_uiState.value.busy) return
         viewModelScope.launch { runCatching { authorization.disconnect() } }
+        gitHubTokenStore.load()?.let { saved ->
+            val token = try { saved.concatToString() } finally { saved.fill('\u0000') }
+            val clientId = preferences.read().gitHubClientId.ifBlank { defaultGitHubClientId }
+            runCatching { GitHubDeviceAuthorization(clientId) }.getOrNull()?.let { github ->
+                viewModelScope.launch(NonCancellable) { github.revokeToken(token) }
+            }
+        }
         clearPendingPassword()
         pendingResolution = null
         pendingExpectedRemoteRevisionId = null
@@ -465,9 +485,11 @@ class CloudSyncViewModel internal constructor(
                 is AndroidCloudSyncResult.Conflict -> CloudSyncAttention.CONFLICT
                 is AndroidCloudSyncResult.NeedsVaultUnlock -> CloudSyncAttention.VAULT_UNLOCK
                 AndroidCloudSyncResult.NeedsGoogleConsent -> CloudSyncAttention.GOOGLE_CONSENT
+                AndroidCloudSyncResult.NeedsGitHubSignIn -> CloudSyncAttention.GITHUB_SIGN_IN
                 is AndroidCloudSyncResult.Failed -> CloudSyncAttention.FAILED
                 else -> null
             },
+            (result as? AndroidCloudSyncResult.Failed)?.message,
         )
         when (result) {
             AndroidCloudSyncResult.Disabled ->
@@ -501,6 +523,8 @@ class CloudSyncViewModel internal constructor(
             }
             AndroidCloudSyncResult.NeedsGoogleConsent ->
                 _uiState.value = readState().copy(message = "Reconnect Google Drive to continue.")
+            AndroidCloudSyncResult.NeedsGitHubSignIn ->
+                _uiState.value = readState().copy(message = GitHubSignInExpiredException.MESSAGE)
             is AndroidCloudSyncResult.Failed ->
                 _uiState.value = readState().copy(message = result.message)
         }

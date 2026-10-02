@@ -7,6 +7,7 @@ import com.ced2711.lifetracker.cloudsync.ConflictResolution
 import com.ced2711.lifetracker.cloudsync.CloudAuthorizationException
 import com.ced2711.lifetracker.cloudsync.GitHubBackupStore
 import com.ced2711.lifetracker.cloudsync.GitHubRepository
+import com.ced2711.lifetracker.cloudsync.GitHubSignInExpiredException
 import com.ced2711.lifetracker.cloudsync.GoogleDriveBackupStore
 import com.ced2711.lifetracker.cloudsync.NewCloudRevision
 import com.ced2711.lifetracker.cloudsync.SyncDecision
@@ -52,6 +53,8 @@ sealed interface AndroidCloudSyncResult {
     data class Conflict(val remote: CloudRevision) : AndroidCloudSyncResult
     data class NeedsVaultUnlock(val remote: CloudRevision? = null) : AndroidCloudSyncResult
     data object NeedsGoogleConsent : AndroidCloudSyncResult
+    /** GitHub no longer accepts this device's sign-in; reconnecting fixes it, nothing else does. */
+    data object NeedsGitHubSignIn : AndroidCloudSyncResult
     data class Failed(val message: String) : AndroidCloudSyncResult
 }
 
@@ -105,7 +108,7 @@ class AndroidCloudSyncEngine(
             return@withContext AndroidCloudSyncResult.Failed(error.message ?: "The GitHub repository name is invalid.")
         }
         val password = secretStore.load()
-            ?: return@withContext AndroidCloudSyncResult.Failed("The saved sync password is unavailable.")
+            ?: return@withContext AndroidCloudSyncResult.Failed("The saved sync password could not be read. Sync will try again.")
         try {
             val revisions = try {
                 store.listRevisions(limit = 100)
@@ -177,6 +180,8 @@ class AndroidCloudSyncEngine(
             throw cancelled
         } catch (_: CloudConsentRequiredException) {
             AndroidCloudSyncResult.NeedsGoogleConsent
+        } catch (_: GitHubSignInExpiredException) {
+            AndroidCloudSyncResult.NeedsGitHubSignIn
         } catch (error: Throwable) {
             AndroidCloudSyncResult.Failed(error.safeCloudMessage())
         } finally {
@@ -208,7 +213,13 @@ class AndroidCloudSyncEngine(
         CloudProvider.GOOGLE_DRIVE -> driveStore
         CloudProvider.GITHUB -> GitHubBackupStore(
             tokenProvider = {
-                val token = gitHubTokenStore?.load() ?: throw CloudAuthorizationException("GitHub is not connected. Reconnect GitHub.")
+                val tokens = gitHubTokenStore
+                val token = tokens?.load() ?: if (tokens?.hasSecret() == true) {
+                    // Saved but unreadable for the moment: try again later rather than ask to sign in.
+                    throw IOException("The saved GitHub sign-in could not be read. Sync will try again.")
+                } else {
+                    throw GitHubSignInExpiredException()
+                }
                 try { token.concatToString() } finally { token.fill('\u0000') }
             },
             repository = GitHubRepository.parse(settings.gitHubRepository),

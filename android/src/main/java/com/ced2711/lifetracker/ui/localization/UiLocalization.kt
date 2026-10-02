@@ -877,4 +877,11 @@ private val zhHans = mapOf(
     "Google requires the Desktop OAuth client secret. Enter it from the Google Cloud Console and try again." to
         "Google 要求提供 Desktop OAuth 客户端密钥，请从 Google Cloud Console 复制后重试。",
     "The GitHub backup no longer exists." to "这个 GitHub 备份已不存在。",
+    "GitHub sign-in expired. Tap to reconnect; your data and settings stay as they are." to
+        "GitHub 登录已失效。点此重新连接，数据和设置都会保留。",
+    "GitHub sign-in expired. Reconnect; your data and settings stay as they are." to
+        "GitHub 登录已失效。重新连接即可，数据和设置都会保留。",
+    "Cloud sync needs attention" to "云同步需要处理",
+    "The saved sync password could not be read. Sync will try again." to "暂时读不到已保存的同步密码，稍后会自动重试。",
+    "The saved GitHub sign-in could not be read. Sync will try again." to "暂时读不到已保存的 GitHub 登录，稍后会自动重试。",
 )

@@ -105,7 +105,36 @@ class GitHubDeviceAuthorizationTest {
         assertFalse(fake.createdBody != null)
     }
 
+    @Test
+    fun revokingSendsTheOldTokenWithoutAuthentication() = runBlocking {
+        authorization("Ov23liExample12345").revokeToken("gho_old")
+        val body = Json.parseToJsonElement(fake.revokedBody ?: error("nothing revoked")).jsonObject
+        assertEquals("gho_old", body["credentials"]!!.let { it as kotlinx.serialization.json.JsonArray }.single().jsonPrimitive.content)
+        assertEquals(null, fake.revokeAuthorization)
+    }
+
+    @Test
+    fun revokingIgnoresFailures() = runBlocking {
+        fake.revokeFails = true
+        authorization("Ov23liExample12345").revokeToken("gho_old")
+    }
+
+    @Test
+    fun aRevokedSignInIsReportedAsExpired() = runBlocking {
+        fake.userUnauthorized = true
+        try {
+            authorization("Ov23liExample12345").resolveRepository("gho_gone", "")
+            fail("A revoked token must not resolve a repository")
+        } catch (expected: GitHubSignInExpiredException) {
+            assertTrue(expected.message.orEmpty().contains("Reconnect"))
+        }
+    }
+
     private class FakeGitHubAccount : Dispatcher() {
+        var revokedBody: String? = null
+        var revokeAuthorization: String? = null
+        var revokeFails = false
+        var userUnauthorized = false
         var existing = false
         var public = false
         var createConflict = false
@@ -128,6 +157,13 @@ class GitHubDeviceAuthorizationTest {
                     if (tokenPolls <= failTokenPolls) MockResponse().setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.DISCONNECT_AT_START)
                     else json("""{"access_token":"gho_token","token_type":"bearer","scope":"repo"}""")
                 }
+                path == "/api/credentials/revoke" -> {
+                    revokedBody = request.body.readUtf8()
+                    revokeAuthorization = request.getHeader("Authorization")
+                    if (revokeFails) MockResponse().setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.DISCONNECT_AT_START)
+                    else MockResponse().setResponseCode(202)
+                }
+                path == "/api/user" && userUnauthorized -> MockResponse().setResponseCode(401)
                 path == "/api/user" -> if (failUserLookups-- > 0) MockResponse().setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.DISCONNECT_AT_START) else json("""{"login":"octo"}""")
                 path == "/api/repos/octo/life-assistant-data" ->
                     if (existing) json("""{"full_name":"octo/life-assistant-data","private":${!public}}""")

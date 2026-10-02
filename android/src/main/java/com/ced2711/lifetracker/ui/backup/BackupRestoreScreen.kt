@@ -531,6 +531,8 @@ private fun CloudSyncCard(
                             "Automatic sync is waiting for Vault authentication."
                         CloudSyncAttention.GOOGLE_CONSENT ->
                             "Google Drive permission needs to be renewed."
+                        CloudSyncAttention.GITHUB_SIGN_IN ->
+                            "GitHub sign-in expired. Reconnect; your data and settings stay as they are."
                         CloudSyncAttention.FAILED ->
                             "The last automatic sync failed. Try syncing again."
                     }
@@ -543,7 +545,7 @@ private fun CloudSyncCard(
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Button(
                         enabled = !state.busy,
-                        onClick = if (state.attention == CloudSyncAttention.GOOGLE_CONSENT) {
+                        onClick = if (state.attention == CloudSyncAttention.GOOGLE_CONSENT || state.attention == CloudSyncAttention.GITHUB_SIGN_IN) {
                             onReconnect
                         } else {
                             onSync
@@ -559,7 +561,8 @@ private fun CloudSyncCard(
                             localizedText(
                                 when {
                                     state.busy -> "Syncing…"
-                                    state.attention == CloudSyncAttention.GOOGLE_CONSENT -> "Reconnect"
+                                    state.attention == CloudSyncAttention.GOOGLE_CONSENT ||
+                                        state.attention == CloudSyncAttention.GITHUB_SIGN_IN -> "Reconnect"
                                     else -> "Sync now"
                                 },
                             ),
