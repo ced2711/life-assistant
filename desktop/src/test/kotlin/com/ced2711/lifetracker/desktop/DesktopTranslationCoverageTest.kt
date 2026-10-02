@@ -14,7 +14,10 @@ class DesktopTranslationCoverageTest {
     private val sources = File("src/main/kotlin/com/ced2711/lifetracker/desktop").walkTopDown().filter { it.extension == "kt" }.toList()
 
     // Texts that are meant to look the same in both languages.
-    private val sameInBothLanguages = setOf("GitHub", "Ctrl+N", "OK", "9:30", "Google Drive", "English", "简体中文", "Life Assistant")
+    private val sameInBothLanguages = setOf("GitHub", "Ctrl+N", "OK", "9:30", "Google Drive", "English", "简体中文", "Life Assistant", "Claude Desktop", "Claude Code")
+
+    // Files whose every capitalised text is shown to the user through helpers that translate.
+    private val fullyShown = setOf("DesktopSettingsPage.kt")
 
     private fun candidates(): Set<String> {
         val direct = Regex("""desktopText\(\s*"((?:[^"\\$]|\\.)+)"""")
@@ -24,8 +27,9 @@ class DesktopTranslationCoverageTest {
             val text = file.readText()
             direct.findAll(text).forEach { found += it.groupValues[1] }
             // Every English literal on a line that shows text, e.g. desktopText(if (x) "A" else "B").
-            val shows = Regex("""desktopText\(|PageHeader\(|FilterSectionTitle\(|SeriesScopeDialog\(|StatCard\(|DataPasswordDialog\(|title = "|message = """")
-            text.lines().filter { shows.containsMatchIn(it) && !it.trimStart().startsWith("//") }.forEach { line ->
+            val shows = Regex("""desktopText\(|PageHeader\(|FilterHeader\(|FieldLabel\(|SeriesScopeDialog\(|DataPasswordDialog\(|ChoosePasswordDialog\(|title = "|message = "|TodoView|CalendarView|LedgerPeriod|LedgerTab|SettingsSection""")
+            val code = text.lines().filterNot { it.trimStart().startsWith("//") || it.trimStart().startsWith("*") || it.trimStart().startsWith("/*") }
+            code.filter { file.name in fullyShown || shows.containsMatchIn(it) }.forEach { line ->
                 Regex(""""([A-Z][^"\$]*[a-z.?)…][^"\$]*)"""").findAll(line).forEach { found += it.groupValues[1] }
             }
             // Label tables: functions and enums whose values are passed to desktopText.
@@ -34,6 +38,7 @@ class DesktopTranslationCoverageTest {
                 Regex("""\w+\("([A-Z][^"\\$]*)"\)[,;]""").findAll(text).forEach { found += it.groupValues[1] }
             }
         }
+        DesktopAgentTools.TOOLS.forEach { found += it.title }
         return found.map { it.replace("\\\"", "\"").replace("\\n", "\n") }.filterNot { it in sameInBothLanguages || it.length < 2 || it.endsWith(" ") /* first part of a joined string */ }.toSet()
     }
 

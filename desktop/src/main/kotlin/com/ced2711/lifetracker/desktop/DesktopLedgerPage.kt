@@ -174,7 +174,7 @@ internal fun LedgerPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
     var anchor by remember { mutableStateOf(LocalDate.now()) }
     var customStart by remember { mutableStateOf("") }
     var customEnd by remember { mutableStateOf("") }
-    var tab by remember { mutableStateOf(LedgerTab.ENTRIES) }
+    var tab by remember { mutableStateOf(LedgerTab.entries.firstOrNull { it.name == DesktopStartHints.ledgerTab } ?: LedgerTab.ENTRIES) }
     var query by remember { mutableStateOf("") }
     var editing by remember { mutableStateOf<LedgerEditing?>(null) }
     var deleteScopeFor by remember { mutableStateOf<LedgerEntryEntity?>(null) }

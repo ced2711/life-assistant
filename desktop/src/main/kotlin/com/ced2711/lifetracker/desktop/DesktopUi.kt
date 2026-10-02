@@ -249,3 +249,9 @@ internal fun ColumnDivider() {
 /** Fixed-width spacer helper for rows of fields. */
 @Composable
 internal fun HSpace(width: Dp) = Spacer(Modifier.width(width))
+
+/** Where a page starts when it is opened next: which Settings topic, which Ledger tab. */
+internal object DesktopStartHints {
+    @Volatile var settingsSection: String? = null
+    @Volatile var ledgerTab: String? = null
+}
