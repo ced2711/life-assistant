@@ -407,6 +407,9 @@ class TaskLedgerViewModel(private val container: AppContainer) : ViewModel() {
     fun attachments(ownerType: AttachmentOwnerType, ownerId: Long) =
         repository.attachments(ownerType, ownerId)
 
+    /** Ids of the ledger entries that have files attached. */
+    val ledgerAttachmentOwnerIds = repository.attachmentOwnerIds(AttachmentOwnerType.LEDGER)
+
     fun attachmentOwnerExists(
         ownerType: AttachmentOwnerType,
         ownerId: Long,

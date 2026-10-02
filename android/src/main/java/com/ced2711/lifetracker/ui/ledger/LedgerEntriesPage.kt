@@ -1,719 +1,529 @@
 package com.ced2711.lifetracker.ui.ledger
 
-import android.net.Uri
 import android.os.Bundle
-import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material.icons.rounded.AttachFile
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.ChevronLeft
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.ReceiptLong
+import androidx.compose.material.icons.rounded.Repeat
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Surface
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
-import com.ced2711.lifetracker.ui.localization.localizedText
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.ced2711.lifetracker.data.local.AttachmentEntity
 import com.ced2711.lifetracker.data.local.LedgerEntryEntity
 import com.ced2711.lifetracker.domain.model.LedgerDraft
-import com.ced2711.lifetracker.domain.model.LedgerSaveResult
 import com.ced2711.lifetracker.domain.model.LedgerType
+import com.ced2711.lifetracker.domain.model.MoneyTotals
 import com.ced2711.lifetracker.domain.model.RecurrenceRule
 import com.ced2711.lifetracker.domain.model.RecurrenceUnit
-import kotlinx.coroutines.flow.Flow
+import com.ced2711.lifetracker.domain.model.UiLanguage
+import com.ced2711.lifetracker.domain.model.parseTags
+import com.ced2711.lifetracker.ui.components.DatePickerButton
+import com.ced2711.lifetracker.ui.components.SearchField
+import com.ced2711.lifetracker.ui.design.EmptyState
+import com.ced2711.lifetracker.ui.design.LifeTextField
+import com.ced2711.lifetracker.ui.design.ListRow
+import com.ced2711.lifetracker.ui.design.MoneyText
+import com.ced2711.lifetracker.ui.design.Panel
+import com.ced2711.lifetracker.ui.design.RowDivider
+import com.ced2711.lifetracker.ui.design.SectionLabel
+import com.ced2711.lifetracker.ui.design.Segmented
+import com.ced2711.lifetracker.ui.design.Space
+import com.ced2711.lifetracker.ui.design.Stat
+import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
+import com.ced2711.lifetracker.ui.localization.localizedText
+import com.ced2711.lifetracker.ui.theme.LifeTheme
+import java.time.LocalDate
 import java.time.LocalDateTime
-import java.util.UUID
 
+/** What the quick-add row needs to know about its last save. */
+internal data class LedgerQuickAddUi(
+    val isSaving: Boolean = false,
+    val saveSucceeded: Boolean = false,
+    val failureMessage: String? = null,
+)
+
+/** Week, Month, Year… as a segmented control, with a jump back to the current period. */
 @Composable
-internal fun LedgerEntriesPage(
-    entries: List<LedgerEntryEntity>,
-    isWide: Boolean,
-    contentPadding: PaddingValues,
-    onSave: (
-        draft: LedgerDraft,
-        clientOperationToken: String?,
-        onSaved: (LedgerSaveResult) -> Unit,
-        onFailure: (String) -> Unit,
-    ) -> Unit,
-    onLoad: (Long, (LedgerDraft) -> Unit) -> Unit,
-    onDelete: (Long) -> Unit,
-    onOwnerExists: (
-        ownerId: Long,
-        onResult: (Boolean) -> Unit,
-        onFailure: (String) -> Unit,
-    ) -> Unit,
-    onAddAttachments: (
-        ownerId: Long,
-        uris: List<Uri>,
-        copyAttemptId: String,
-        onCopied: () -> Unit,
-        onFailure: (String) -> Unit,
-    ) -> Unit,
-    attachmentsForEntry: (Long) -> Flow<List<AttachmentEntity>>,
-    onOpenAttachment: (AttachmentEntity) -> Unit,
-    onRemoveAttachment: (AttachmentEntity) -> Unit,
-    onUndoAttachmentDelete: (PendingLedgerAttachmentDelete) -> Unit,
-    formatting: LedgerDisplayFormatting,
-    uiOperations: LedgerUiOperationsViewModel,
-    quickAddRequestToken: String? = null,
-    onQuickAddRequestHandled: (String) -> Unit = {},
-    requestedEditId: Long? = null,
-    onRequestedEditHandled: (Long) -> Unit = {},
-) {
-    var editorState by rememberSaveable { mutableStateOf<Bundle?>(null) }
-    var pendingEditId by rememberSaveable { mutableStateOf<Long?>(null) }
-    var editorSessionKey by rememberSaveable { mutableStateOf<String?>(null) }
-    var quickSessionKey by rememberSaveable {
-        mutableStateOf("$QUICK_LEDGER_SESSION_KEY:${UUID.randomUUID()}")
-    }
-    val entryListState = rememberLazyListState()
-    val editorDraft = editorState?.toLedgerDraft()
-
-    LaunchedEffect(quickAddRequestToken) {
-        if (quickAddRequestToken != null) entryListState.scrollToItem(0)
-    }
-
-    fun openEditor(draft: LedgerDraft) {
-        if (uiOperations.savingSessionKey != null) return
-        editorSessionKey = UUID.randomUUID().toString()
-        editorState = draft.toEditorState()
-    }
-
-    fun requestEdit(id: Long) {
-        if (uiOperations.savingSessionKey != null) return
-        editorState = null
-        editorSessionKey = UUID.randomUUID().toString()
-        pendingEditId = id
-    }
-
-    LaunchedEffect(requestedEditId) {
-        val id = requestedEditId ?: return@LaunchedEffect
-        requestEdit(id)
-        onRequestedEditHandled(id)
-    }
-
-    fun closeEditor() {
-        val closingSession = editorSessionKey
-        if (uiOperations.savingSessionKey == closingSession) return
-        editorState = null
-        pendingEditId = null
-        editorSessionKey = null
-        uiOperations.abandonSession(closingSession)
-    }
-
-    fun saveQuickEntry(draft: LedgerDraft) {
-        val sessionKey = quickSessionKey
-        val operationToken = uiOperations.clientOperationToken(sessionKey, draft.toString())
-        val attempt = uiOperations.beginSave(sessionKey) ?: return
-        onSave(
-            draft,
-            operationToken,
-            { uiOperations.markSaveSucceeded(sessionKey, attempt) },
-            { message -> uiOperations.markSaveFailed(sessionKey, attempt, message) },
-        )
-    }
-
-    fun consumeQuickSuccess() {
-        val completedSession = quickSessionKey
-        uiOperations.consumeSaved(completedSession)
-        quickSessionKey = "$QUICK_LEDGER_SESSION_KEY:${UUID.randomUUID()}"
-    }
-
-    LaunchedEffect(pendingEditId) {
-        pendingEditId?.let { id ->
-            onLoad(id) { loaded ->
-                editorState = loaded.toEditorState()
-                pendingEditId = null
-            }
-        }
-    }
-
-    LaunchedEffect(uiOperations.savedSessionKeys, editorSessionKey) {
-        val sessionKey = editorSessionKey ?: return@LaunchedEffect
-        if (sessionKey in uiOperations.savedSessionKeys) {
-            uiOperations.consumeSaved(sessionKey)
-            closeEditor()
-        }
-    }
-
-    if (editorDraft != null && editorSessionKey != null) {
-        val sessionKey = requireNotNull(editorSessionKey)
-        LedgerEditorDialog(
-            initialDraft = editorDraft,
-            isWide = isWide,
-            formatting = formatting,
-            attachmentsForEntry = attachmentsForEntry,
-            onOpenAttachment = onOpenAttachment,
-            onRemoveAttachment = onRemoveAttachment,
-            pendingAttachmentDelete = uiOperations.pendingAttachmentDeletes.firstOrNull(),
-            onUndoAttachmentDelete = onUndoAttachmentDelete,
-            onConsumeAttachmentDelete = uiOperations::consumeAttachmentDelete,
-            isSaving = uiOperations.savingSessionKey == sessionKey,
-            failureMessage = uiOperations.failureFor(sessionKey),
-            onDismiss = ::closeEditor,
-            onSave = { draft, attachments ->
-                val attempt = uiOperations.beginSave(sessionKey) ?: return@LedgerEditorDialog
-                val ownerRequest = draft.toString()
-                if (draft.id == null) {
-                    uiOperations.clientOperationToken(sessionKey, ownerRequest)
-                }
-                val previouslySavedOwnerId = uiOperations.savedOwnerId(sessionKey, ownerRequest)
-
-                fun copyAttachmentsAndFinish(ownerId: Long?) {
-                    if (attachments.isEmpty()) {
-                        uiOperations.markSaveSucceeded(sessionKey, attempt)
-                    } else if (ownerId == null) {
-                        uiOperations.markSaveFailed(
-                            sessionKey,
-                            attempt,
-                            "Attachments require a generated ledger entry.",
-                        )
-                    } else {
-                        val copyAttemptId = uiOperations.attachmentCopyAttemptId(
-                            sessionKey,
-                            attachments.map(Uri::toString),
-                        )
-                        onAddAttachments(
-                            ownerId,
-                            attachments,
-                            copyAttemptId,
-                            { uiOperations.markSaveSucceeded(sessionKey, attempt) },
-                            { message ->
-                                uiOperations.markSaveFailed(
-                                    sessionKey,
-                                    attempt,
-                                    receiptCopyFailureMessage(message),
-                                )
-                            },
-                        )
-                    }
-                }
-
-                fun saveOwnerAndCopy(ownerId: Long?) {
-                    val retrySafeDraft = ownerId?.let { draft.copy(id = it) } ?: draft
-                    val operationToken = if (draft.id == null && ownerId == null) {
-                        uiOperations.clientOperationToken(sessionKey, ownerRequest)
-                    } else {
-                        null
-                    }
-                    onSave(
-                        retrySafeDraft,
-                        operationToken,
-                        { result ->
-                            result.entryId?.let { savedOwnerId ->
-                                uiOperations.markOwnerSaved(
-                                    sessionKey,
-                                    attempt,
-                                    savedOwnerId,
-                                    ownerRequest,
-                                )
-                            }
-                            copyAttachmentsAndFinish(result.entryId ?: ownerId)
-                        },
-                        { message -> uiOperations.markSaveFailed(sessionKey, attempt, message) },
-                    )
-                }
-
-                if (previouslySavedOwnerId == null) {
-                    saveOwnerAndCopy(null)
-                } else {
-                    onOwnerExists(
-                        previouslySavedOwnerId,
-                        { ownerExists ->
-                            if (ownerExists) {
-                                saveOwnerAndCopy(previouslySavedOwnerId)
-                            } else {
-                                uiOperations.rejectSavedOwner(sessionKey, previouslySavedOwnerId)
-                                saveOwnerAndCopy(null)
-                            }
-                        },
-                        { message -> uiOperations.markSaveFailed(sessionKey, attempt, message) },
-                    )
-                }
-            },
-        )
-    }
-
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val useTwoPanes = isWide && maxWidth >= 720.dp
-        if (useTwoPanes) {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                Column(
-                    modifier = Modifier
-                        .widthIn(min = 280.dp, max = 360.dp)
-                        .fillMaxHeight()
-                        .verticalScroll(rememberScrollState())
-                        .padding(bottom = 24.dp),
-                ) {
-                    QuickEntryCard(
-                        isSaving = uiOperations.savingSessionKey == quickSessionKey,
-                        saveSucceeded = quickSessionKey in uiOperations.savedSessionKeys,
-                        failureMessage = uiOperations.failureFor(quickSessionKey),
-                        onConsumeSuccess = ::consumeQuickSuccess,
-                        onSave = ::saveQuickEntry,
-                        onOpenDetails = ::openEditor,
-                        quickAddRequestToken = quickAddRequestToken.takeIf { editorDraft == null },
-                        onQuickAddRequestHandled = onQuickAddRequestHandled,
-                    )
-                }
-                EntryList(
-                    entries = entries,
-                    contentPadding = contentPadding,
-                    formatting = formatting,
-                    modifier = Modifier.weight(1f),
-                    onEdit = ::requestEdit,
-                    onDelete = onDelete,
-                )
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                state = entryListState,
-                contentPadding = PaddingValues(
-                    start = 16.dp,
-                    end = 16.dp,
-                    bottom = contentPadding.calculateBottomPadding(),
-                ),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                item {
-                    QuickEntryCard(
-                        isSaving = uiOperations.savingSessionKey == quickSessionKey,
-                        saveSucceeded = quickSessionKey in uiOperations.savedSessionKeys,
-                        failureMessage = uiOperations.failureFor(quickSessionKey),
-                        onConsumeSuccess = ::consumeQuickSuccess,
-                        onSave = ::saveQuickEntry,
-                        onOpenDetails = ::openEditor,
-                        quickAddRequestToken = quickAddRequestToken.takeIf { editorDraft == null },
-                        onQuickAddRequestHandled = onQuickAddRequestHandled,
-                    )
-                }
-                item {
-                    Text(
-                        text = localizedText("Recent entries"),
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
-                }
-                if (entries.isEmpty()) {
-                    item { EmptyEntries() }
-                } else {
-                    items(entries, key = { it.id }) { entry ->
-                        LedgerEntryCard(
-                            entry = entry,
-                            formatting = formatting,
-                            onEdit = { requestEdit(entry.id) },
-                            onDelete = { onDelete(entry.id) },
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun EntryList(
-    entries: List<LedgerEntryEntity>,
-    contentPadding: PaddingValues,
-    formatting: LedgerDisplayFormatting,
-    modifier: Modifier = Modifier,
-    onEdit: (Long) -> Unit,
-    onDelete: (Long) -> Unit,
-) {
-    LazyColumn(
-        modifier = modifier.fillMaxHeight(),
-        contentPadding = contentPadding,
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        item { Text(localizedText("Recent entries"), style = MaterialTheme.typography.titleMedium) }
-        if (entries.isEmpty()) {
-            item { EmptyEntries() }
-        } else {
-            items(entries, key = { it.id }) { entry ->
-                LedgerEntryCard(
-                    entry = entry,
-                    formatting = formatting,
-                    onEdit = { onEdit(entry.id) },
-                    onDelete = { onDelete(entry.id) },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun QuickEntryCard(
-    isSaving: Boolean,
-    saveSucceeded: Boolean,
-    failureMessage: String?,
-    onConsumeSuccess: () -> Unit,
-    onSave: (LedgerDraft) -> Unit,
-    onOpenDetails: (LedgerDraft) -> Unit,
-    quickAddRequestToken: String?,
-    onQuickAddRequestHandled: (String) -> Unit,
-) {
-    var amount by rememberSaveable { mutableStateOf("") }
-    var typeName by rememberSaveable { mutableStateOf(LedgerType.EXPENSE.name) }
-    val type = LedgerType.entries.firstOrNull { it.name == typeName } ?: LedgerType.EXPENSE
-    val amountCents = parseAmountCents(amount)
-    val amountFocusRequester = remember { FocusRequester() }
-    val softwareKeyboardController = LocalSoftwareKeyboardController.current
-
-    LaunchedEffect(quickAddRequestToken) {
-        val requestToken = quickAddRequestToken ?: return@LaunchedEffect
-        amountFocusRequester.requestFocus()
-        softwareKeyboardController?.show()
-        onQuickAddRequestHandled(requestToken)
-    }
-
-    LaunchedEffect(saveSucceeded) {
-        if (saveSucceeded) {
-            amount = ""
-            typeName = LedgerType.EXPENSE.name
-            onConsumeSuccess()
-        }
-    }
-
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text(localizedText("Quick entry"), style = MaterialTheme.typography.titleMedium)
-            LedgerTypeChooser(type = type, onTypeChanged = { typeName = it.name })
-            OutlinedTextField(
-                value = amount,
-                onValueChange = { candidate ->
-                    sanitizeAmountInput(candidate)?.let { amount = it }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .focusRequester(amountFocusRequester),
-                label = { Text(localizedText("Amount")) },
-                prefix = { Text(localizedText("$")) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Decimal,
-                    imeAction = ImeAction.Done,
-                ),
-                supportingText = {
-                    Text(localizedText(failureMessage ?: "Up to $999,999,999.99 · max 2 decimal places"))
-                },
-                isError = (amount.isNotEmpty() && amountCents == null) || failureMessage != null,
-            )
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                FilledTonalButton(
-                    enabled = !isSaving,
-                    onClick = {
-                        onOpenDetails(
-                            newLedgerDraft().copy(
-                                type = type,
-                                amountCents = amountCents ?: 0,
-                            ),
-                        )
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(Icons.Outlined.Add, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text(localizedText("Details"))
-                }
-                Button(
-                    enabled = amountCents != null && !isSaving,
-                    onClick = {
-                        val cents = amountCents ?: return@Button
-                        onSave(newLedgerDraft().copy(type = type, amountCents = cents))
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text(localizedText("Save")) }
-            }
-        }
-    }
-}
-
-@Composable
-internal fun LedgerTypeChooser(
-    type: LedgerType,
-    onTypeChanged: (LedgerType) -> Unit,
-) {
-    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-        if (maxWidth < 320.dp) {
-            Column(
-                modifier = Modifier.fillMaxWidth().selectableGroup(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                LedgerType.entries.forEach { option ->
-                    LedgerTypeOption(
-                        option = option,
-                        selected = option == type,
-                        onSelected = { onTypeChanged(option) },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            }
-        } else {
-            Row(
-                modifier = Modifier.fillMaxWidth().selectableGroup(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                LedgerType.entries.forEach { option ->
-                    LedgerTypeOption(
-                        option = option,
-                        selected = option == type,
-                        onSelected = { onTypeChanged(option) },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun LedgerTypeOption(
-    option: LedgerType,
-    selected: Boolean,
-    onSelected: () -> Unit,
+internal fun LedgerPeriodSwitch(
+    period: LedgerPeriod,
+    periods: List<LedgerPeriod>,
+    onPeriod: (LedgerPeriod) -> Unit,
+    showToday: Boolean,
+    onToday: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        modifier = modifier.selectable(
-            selected = selected,
-            onClick = onSelected,
-            role = Role.RadioButton,
-        ),
-        shape = MaterialTheme.shapes.medium,
-        color = if (selected) {
-            if (option == LedgerType.INCOME) incomeColor().copy(alpha = 0.20f)
-            else expenseColor().copy(alpha = 0.20f)
-        } else {
-            MaterialTheme.colorScheme.surfaceContainerHigh
-        },
-    ) {
+    Row(modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
+        // Five periods do not fit a small phone, so the control scrolls sideways when it has to.
+        Box(Modifier.weight(1f).horizontalScroll(rememberScrollState())) {
+            Segmented(periods, period, onPeriod, { localizedText(it.label) })
+        }
+        if (showToday) {
+            TextButton(onClick = onToday, modifier = Modifier.padding(start = Space.xs)) { Text(localizedText("Today")) }
+        }
+    }
+}
+
+/**
+ * The period at one glance: its name with previous and next, then income, expense and what is
+ * left of them.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun LedgerTotalsPanel(
+    title: String,
+    canStep: Boolean,
+    onShift: (Long) -> Unit,
+    totals: MoneyTotals,
+    modifier: Modifier = Modifier,
+) {
+    Panel(modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            Modifier.fillMaxWidth().padding(horizontal = Space.xs).padding(top = Space.xs),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            RadioButton(selected = selected, onClick = null)
-            Text(localizedText(option.displayName()), maxLines = 1)
+            if (canStep) {
+                IconButton(onClick = { onShift(-1) }) { Icon(Icons.Rounded.ChevronLeft, localizedText("Previous")) }
+            } else {
+                Spacer(Modifier.size(width = Space.md, height = 48.dp))
+            }
+            Text(
+                title,
+                style = MaterialTheme.typography.titleMedium,
+                textAlign = if (canStep) TextAlign.Center else TextAlign.Start,
+                maxLines = 2,
+                modifier = Modifier.weight(1f).semantics { heading() },
+            )
+            if (canStep) {
+                IconButton(onClick = { onShift(1) }) { Icon(Icons.Rounded.ChevronRight, localizedText("Next")) }
+            }
         }
-    }
-}
-
-@Composable
-private fun LedgerEntryCard(
-    entry: LedgerEntryEntity,
-    formatting: LedgerDisplayFormatting,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit,
-) {
-    val accent = if (entry.type == LedgerType.INCOME) incomeColor() else expenseColor()
-    val formattedDate = formatting.date(entry.epochDay)
-    Card(modifier = Modifier.fillMaxWidth()) {
-        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-            if (maxWidth < 420.dp) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 16.dp, top = 12.dp, bottom = 6.dp, end = 6.dp),
-                ) {
-                    EntrySummary(entry = entry, formatting = formatting)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = (if (entry.type == LedgerType.INCOME) "+" else "−") +
-                                formatMoney(entry.amountCents),
-                            color = accent,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.weight(1f),
-                        )
-                        IconButton(onClick = onEdit) {
-                            Icon(
-                                Icons.Outlined.Edit,
-                                contentDescription = ledgerEntryActionDescription(
-                                    "Edit",
-                                    entry,
-                                    formattedDate,
-                                ),
-                            )
-                        }
-                        IconButton(onClick = onDelete) {
-                            Icon(
-                                Icons.Outlined.Delete,
-                                contentDescription = ledgerEntryActionDescription(
-                                    "Delete",
-                                    entry,
-                                    formattedDate,
-                                ),
-                            )
-                        }
-                    }
+        val income = formatMoney(totals.incomeCents)
+        val expense = formatMoney(totals.expenseCents)
+        val valueStyle = MaterialTheme.typography.headlineSmall
+        BoxWithConstraints(Modifier.padding(start = Space.lg, end = Space.lg, top = Space.xs, bottom = Space.md)) {
+            // Side by side while both amounts fit in full; very large amounts and large fonts stack instead.
+            val needed = 12.5.dp * maxOf(income.length, expense.length) * LocalDensity.current.fontScale
+            val incomeStat: @Composable (Modifier) -> Unit = {
+                Stat(localizedText("Income"), income, it, valueColor = LifeTheme.colors.income, valueStyle = valueStyle)
+            }
+            val expenseStat: @Composable (Modifier) -> Unit = {
+                Stat(localizedText("Expense"), expense, it, valueColor = LifeTheme.colors.expense, valueStyle = valueStyle)
+            }
+            if (needed * 2 + Space.lg <= maxWidth) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Space.lg)) {
+                    incomeStat(Modifier.weight(1f))
+                    expenseStat(Modifier.weight(1f))
                 }
             } else {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    EntrySummary(
-                        entry = entry,
-                        formatting = formatting,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Text(
-                        text = (if (entry.type == LedgerType.INCOME) "+" else "−") +
-                            formatMoney(entry.amountCents),
-                        color = accent,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(horizontal = 8.dp),
-                    )
-                    IconButton(onClick = onEdit) {
-                        Icon(
-                            Icons.Outlined.Edit,
-                            contentDescription = ledgerEntryActionDescription(
-                                "Edit",
-                                entry,
-                                formattedDate,
-                            ),
-                        )
-                    }
-                    IconButton(onClick = onDelete) {
-                        Icon(
-                            Icons.Outlined.Delete,
-                            contentDescription = ledgerEntryActionDescription(
-                                "Delete",
-                                entry,
-                                formattedDate,
-                            ),
-                        )
-                    }
+                Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+                    incomeStat(Modifier.fillMaxWidth())
+                    expenseStat(Modifier.fillMaxWidth())
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun EntrySummary(
-    entry: LedgerEntryEntity,
-    formatting: LedgerDisplayFormatting,
-    modifier: Modifier = Modifier,
-) {
-    Column(modifier = modifier) {
-        Text(
-            text = when {
-                entry.merchant.isNotBlank() -> entry.merchant
-                entry.note.isNotBlank() -> entry.note
-                else -> localizedText(entry.type.displayName())
-            },
-            style = MaterialTheme.typography.titleSmall,
-            maxLines = 2,
-        )
-        Text(
-            text = localizedText("${formatting.date(entry.epochDay)} · ${formatting.time(entry.minuteOfDay)}"),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        if (entry.tagsCsv.isNotBlank()) {
+        RowDivider(inset = Space.lg, modifier = Modifier.padding(end = Space.lg))
+        FlowRow(
+            Modifier.fillMaxWidth().padding(horizontal = Space.lg, vertical = Space.md),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            itemVerticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(localizedText("Net"), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
-                text = entry.tagsCsv.split(',').joinToString("  ") { "#$it" },
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                signedMoney(totals.netCents),
+                style = valueStyle.copy(fontFeatureSettings = "tnum"),
+                color = if (totals.netCents < 0) LifeTheme.colors.expense else LifeTheme.colors.income,
                 maxLines = 1,
             )
         }
     }
 }
 
+/** Start and end of a custom period: typed in the user's date format or picked from a calendar. */
 @Composable
-private fun EmptyEntries() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(120.dp),
-        contentAlignment = Alignment.Center,
+internal fun LedgerCustomRangeFields(
+    startText: String,
+    endText: String,
+    startDate: LocalDate?,
+    endDate: LocalDate?,
+    onStart: (String) -> Unit,
+    onEnd: (String) -> Unit,
+    onStartPicked: (LocalDate) -> Unit,
+    onEndPicked: (LocalDate) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+        AdaptivePair(
+            first = {
+                LifeTextField(
+                    startText, onStart,
+                    placeholder = localizedText("Start date"),
+                    isError = startDate == null,
+                    trailing = { DatePickerButton(startDate, onStartPicked) },
+                    modifier = it,
+                )
+            },
+            second = {
+                LifeTextField(
+                    endText, onEnd,
+                    placeholder = localizedText("End date"),
+                    isError = endDate == null,
+                    trailing = { DatePickerButton(endDate, onEndPicked) },
+                    modifier = it,
+                )
+            },
+        )
+        if (startDate == null || endDate == null) {
+            Text(
+                localizedText("Enter a valid day, month/day, or month/day/year"),
+                style = MaterialTheme.typography.bodySmall,
+                color = LifeTheme.colors.danger,
+            )
+        }
+    }
+}
+
+/** Two fields side by side when there is room for both, otherwise one under the other. */
+@Composable
+internal fun AdaptivePair(
+    modifier: Modifier = Modifier,
+    firstWeight: Float = 1f,
+    first: @Composable (Modifier) -> Unit,
+    second: @Composable (Modifier) -> Unit,
+) {
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        if (maxWidth < 330.dp * LocalDensity.current.fontScale) {
+            Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+                first(Modifier.fillMaxWidth())
+                second(Modifier.fillMaxWidth())
+            }
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                first(Modifier.weight(firstWeight))
+                second(Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+/**
+ * Adds an entry for today, now, from an amount and a few words. Details opens the full editor
+ * with what was typed so far. A request from the home-screen widget puts the cursor in the
+ * amount field and shows the keyboard.
+ */
+@Composable
+internal fun LedgerQuickAdd(
+    state: LedgerQuickAddUi,
+    onSave: (LedgerDraft) -> Unit,
+    onConsumeSuccess: () -> Unit,
+    onDetails: (LedgerDraft) -> Unit,
+    requestToken: String?,
+    onRequestHandled: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var amount by rememberSaveable { mutableStateOf("") }
+    var what by rememberSaveable { mutableStateOf("") }
+    var typeName by rememberSaveable { mutableStateOf(LedgerType.EXPENSE.name) }
+    val type = LedgerType.entries.firstOrNull { it.name == typeName } ?: LedgerType.EXPENSE
+    val cents = parseAmountCents(amount)
+    val amountFocus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val handled by rememberUpdatedState(onRequestHandled)
+
+    LaunchedEffect(requestToken) {
+        val token = requestToken ?: return@LaunchedEffect
+        runCatching { amountFocus.requestFocus() }
+        keyboard?.show()
+        handled(token)
+    }
+    LaunchedEffect(state.saveSucceeded) {
+        if (state.saveSucceeded) {
+            amount = ""
+            what = ""
+            typeName = LedgerType.EXPENSE.name
+            onConsumeSuccess()
+        }
+    }
+
+    fun draft(amountCents: Long) = newLedgerDraft().copy(type = type, amountCents = amountCents, merchant = what.trim())
+    fun save() {
+        if (state.isSaving) return
+        cents?.let { onSave(draft(it)) }
+    }
+
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Segmented(
+                listOf(LedgerType.EXPENSE, LedgerType.INCOME), type, { typeName = it.name },
+                { localizedText(it.displayName()) },
+            )
+            Spacer(Modifier.weight(1f))
+            TextButton(enabled = !state.isSaving, onClick = { onDetails(draft(cents ?: 0)) }) { Text(localizedText("Details")) }
+        }
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val fontScale = LocalDensity.current.fontScale
+            val amountWidth = (if (maxWidth < 340.dp) 96.dp else 120.dp) * fontScale
+            val amountField: @Composable (Modifier) -> Unit = { fieldModifier ->
+                LifeTextField(
+                    amount, { candidate -> sanitizeAmountInput(candidate)?.let { amount = it } },
+                    placeholder = "0.00",
+                    prefix = "$",
+                    isError = (amount.isNotEmpty() && cents == null) || state.failureMessage != null,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Next),
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(fontFeatureSettings = "tnum"),
+                    modifier = fieldModifier.focusRequester(amountFocus),
+                )
+            }
+            val whatField: @Composable (Modifier) -> Unit = { fieldModifier ->
+                LifeTextField(
+                    what, { what = it },
+                    placeholder = localizedText("Where or what"),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { save() }),
+                    modifier = fieldModifier,
+                )
+            }
+            val saveButton: @Composable () -> Unit = {
+                FilledIconButton(onClick = ::save, enabled = cents != null && !state.isSaving, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.Rounded.Check, localizedText("Save"))
+                }
+            }
+            if (maxWidth < 280.dp * fontScale) {
+                // Large fonts: the amount and Save share a line, the words get a line of their own.
+                Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(Space.sm), verticalAlignment = Alignment.CenterVertically) {
+                        amountField(Modifier.weight(1f))
+                        saveButton()
+                    }
+                    whatField(Modifier.fillMaxWidth())
+                }
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(Space.sm), verticalAlignment = Alignment.CenterVertically) {
+                    amountField(Modifier.width(amountWidth))
+                    whatField(Modifier.weight(1f))
+                    saveButton()
+                }
+            }
+        }
+        val message = state.failureMessage
+            ?: "Up to $999,999,999.99 · max 2 decimal places".takeIf { amount.isNotEmpty() && cents == null }
+        if (message != null) {
+            Text(localizedText(message), style = MaterialTheme.typography.bodySmall, color = LifeTheme.colors.danger)
+        }
+    }
+}
+
+/**
+ * The Entries list: [header] (the period and its totals) and [quickAdd] scroll away with the
+ * entries, so small screens keep room for them. Entries are grouped by day, newest first, with
+ * each day's net.
+ */
+@Composable
+internal fun LedgerEntriesList(
+    shown: List<LedgerEntryEntity>,
+    query: String,
+    onQuery: (String) -> Unit,
+    formatting: LedgerDisplayFormatting,
+    entriesWithAttachments: Set<Long>,
+    selectedEntryId: Long?,
+    listState: LazyListState,
+    onOpen: (Long) -> Unit,
+    onDelete: (Long) -> Unit,
+    modifier: Modifier = Modifier,
+    header: @Composable () -> Unit,
+    quickAdd: @Composable () -> Unit,
+) {
+    val language = LocalUiLanguage.current
+    val today = LocalDate.now()
+    val days = remember(shown) { shown.groupBy { it.epochDay }.toList() }
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        state = listState,
+        // The last rows stay clear of the floating button.
+        contentPadding = PaddingValues(start = Space.lg, end = Space.lg, top = Space.xs, bottom = 96.dp),
     ) {
-        Text(
-            text = localizedText("No entries yet"),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        item(key = "period") { header() }
+        item(key = "quick") { Box(Modifier.padding(top = Space.lg)) { quickAdd() } }
+        item(key = "search") {
+            SearchField(query, onQuery, Modifier.fillMaxWidth().padding(top = Space.sm, bottom = Space.xs))
+        }
+        if (shown.isEmpty()) {
+            item(key = "empty") {
+                EmptyState(
+                    title = localizedText(if (query.isBlank()) "No entries in this period" else "No entries match"),
+                    icon = Icons.Rounded.ReceiptLong,
+                    body = localizedText(
+                        if (query.isBlank()) "Type an amount above and save it, or tap + for an entry with all details."
+                        else "Try other words, or pick a longer period.",
+                    ),
+                )
+            }
+        }
+        days.forEach { (day, rows) ->
+            item(key = "day-$day") {
+                val net = rows.sumOf { if (it.type == LedgerType.INCOME) it.amountCents else -it.amountCents }
+                SectionLabel(
+                    ledgerDayHeading(day, today, formatting, language),
+                    // In line with the rows' text and amounts.
+                    modifier = Modifier.padding(top = Space.sm).padding(horizontal = Space.md),
+                    trailing = {
+                        Text(
+                            signedMoney(net),
+                            style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    },
+                )
+            }
+            items(rows, key = { it.id }) { entry ->
+                LedgerEntryRow(
+                    entry = entry,
+                    formatting = formatting,
+                    hasAttachments = entry.id in entriesWithAttachments,
+                    selected = entry.id == selectedEntryId,
+                    onOpen = { onOpen(entry.id) },
+                    onDelete = { onDelete(entry.id) },
+                    modifier = Modifier.animateItem(),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * One entry: what it was, a quiet line with the time, note and tags, marks for repeating and
+ * attached files, and the signed amount. Tap opens it; swipe left deletes it (with Undo).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LedgerEntryRow(
+    entry: LedgerEntryEntity,
+    formatting: LedgerDisplayFormatting,
+    hasAttachments: Boolean,
+    selected: Boolean,
+    onOpen: () -> Unit,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val language = LocalUiLanguage.current
+    val delete by rememberUpdatedState(onDelete)
+    val swipe = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value == SwipeToDismissBoxValue.EndToStart) delete()
+            // The row leaves when the entry does; until then it slides back.
+            false
+        },
+    )
+    val label = ledgerLabel(entry.merchant, entry.note, entry.type, language)
+    val detail = listOf(
+        formatting.time(entry.minuteOfDay),
+        entry.note.takeIf { entry.merchant.isNotBlank() }.orEmpty(),
+        parseTags(entry.tagsCsv).joinToString(" ") { "#$it" },
+    ).filter(String::isNotBlank).joinToString(" · ")
+    val deleteLabel = ledgerDeleteActionLabel(entry, formatting.date(entry.epochDay), language)
+    SwipeToDismissBox(
+        state = swipe,
+        modifier = modifier,
+        enableDismissFromStartToEnd = false,
+        backgroundContent = {
+            // Only while the row is being swiped, so nothing red shows around a resting row.
+            if (swipe.dismissDirection == SwipeToDismissBoxValue.EndToStart) {
+                Box(
+                    Modifier.fillMaxSize().clip(MaterialTheme.shapes.medium).background(LifeTheme.colors.dangerContainer)
+                        .padding(horizontal = Space.lg),
+                    contentAlignment = Alignment.CenterEnd,
+                ) {
+                    Icon(Icons.Rounded.DeleteOutline, null, tint = LifeTheme.colors.danger)
+                }
+            }
+        },
+    ) {
+        ListRow(
+            title = label,
+            supporting = detail,
+            maxTitleLines = 1,
+            selected = selected,
+            onClick = onOpen,
+            onClickLabel = localizedText("Edit entry"),
+            // Opaque, so the red behind the row only shows while it is being swiped.
+            modifier = Modifier
+                .background(MaterialTheme.colorScheme.background, MaterialTheme.shapes.medium)
+                .semantics { customActions = listOf(CustomAccessibilityAction(deleteLabel) { delete(); true }) },
+            trailing = {
+                if (entry.seriesId != null) {
+                    Icon(Icons.Rounded.Repeat, localizedText("Repeats"), Modifier.size(15.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (hasAttachments) {
+                    Icon(Icons.Rounded.AttachFile, localizedText("Attachments"), Modifier.size(15.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                MoneyText(entry.amountCents, entry.type, formatMoney(entry.amountCents), modifier = Modifier.padding(start = Space.xs))
+            },
         )
     }
 }
 
-@Composable
-internal fun incomeColor(): Color = if (MaterialTheme.colorScheme.background.luminance() < 0.5f) {
-    Color(0xFF77D89B)
-} else {
-    Color(0xFF147A42)
-}
-
-@Composable
-internal fun expenseColor(): Color = if (MaterialTheme.colorScheme.background.luminance() < 0.5f) {
-    Color(0xFFFF8A80)
-} else {
-    Color(0xFFB3261E)
-}
+/** What a screen reader calls the delete action of a row. */
+private fun ledgerDeleteActionLabel(entry: LedgerEntryEntity, formattedDate: String, language: UiLanguage): String =
+    when (language) {
+        UiLanguage.ENGLISH -> ledgerEntryActionDescription("Delete", entry, formattedDate)
+        UiLanguage.SIMPLIFIED_CHINESE ->
+            "删除 ${ledgerLabel(entry.merchant, entry.note, entry.type, language)}，${formatMoney(entry.amountCents)}，$formattedDate"
+    }
 
 internal fun newLedgerDraft(now: LocalDateTime = LocalDateTime.now()): LedgerDraft {
     return LedgerDraft(
@@ -741,7 +551,7 @@ internal fun receiptCopyFailureMessage(reason: String): String {
 }
 
 /** Bundle-backed editor state keeps an open editor and its seed data through rotation/process restore. */
-private fun LedgerDraft.toEditorState(): Bundle = Bundle().apply {
+internal fun LedgerDraft.toEditorState(): Bundle = Bundle().apply {
     putBoolean("has_id", id != null)
     id?.let { putLong("id", it) }
     putString("type", type.name)
@@ -760,7 +570,7 @@ private fun LedgerDraft.toEditorState(): Bundle = Bundle().apply {
     }
 }
 
-private fun Bundle.toLedgerDraft(): LedgerDraft? = runCatching {
+internal fun Bundle.toLedgerDraft(): LedgerDraft? = runCatching {
     val recurrence = if (getBoolean("has_recurrence")) {
         RecurrenceRule(
             unit = RecurrenceUnit.valueOf(getString("recurrence_unit") ?: return null),

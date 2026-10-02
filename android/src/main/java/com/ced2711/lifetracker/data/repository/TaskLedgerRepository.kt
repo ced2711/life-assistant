@@ -111,6 +111,7 @@ class TaskLedgerRepository(
     fun reminders(todoId: Long) = dao.observeReminders(todoId)
     fun attachments(ownerType: AttachmentOwnerType, ownerId: Long) =
         dao.observeAttachments(ownerType.name, ownerId)
+    fun attachmentOwnerIds(ownerType: AttachmentOwnerType) = dao.observeAttachmentOwnerIds(ownerType.name)
 
     suspend fun getAttachments(ownerType: AttachmentOwnerType, ownerId: Long) =
         dao.getAttachments(ownerType.name, ownerId)
