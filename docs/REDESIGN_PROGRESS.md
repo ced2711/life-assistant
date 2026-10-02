@@ -42,3 +42,15 @@ Branch `feat/2.0-redesign`. Nothing is published until the user has tried the bu
 - Not started: Vault, Settings + Backup & sync (with the daily backups list) + app lock screen.
 - `ScreenRenderTest.tabletLandscape` (1280x800) was added: it is the only render device where `isWide` is true.
 - After that: review passes on every device, instrumented tests on a headless emulator, then step 8 (version 2.0.0, builds).
+
+## Status 2026-10-02 (later)
+
+- All Android screens are rewritten and merged: Today, Todo, Ledger, Calendar, Notes, Diary, Confessional, Vault,
+  Settings, Backup & sync, app lock.
+- Foldables: a flexible screen that is half folded uses the whole window (tablet layout). Only a hinge that hides
+  part of the window (two screens) splits the app into a navigation pane and a content pane.
+- Two-pane layouts start at 700dp of content width.
+- `ScreenRenderTest` draws dialog windows too; devices: phone, smallPhone, landscapePhone, tablet, tabletLandscape,
+  dualScreen, foldBook, foldTabletop, largeFont.
+- Version is 2.0.0 (versionCode 18). Release notes: `docs/releases/RELEASE_2.0.0.md`.
+- Left: instrumented tests on the emulator, release builds, the user's own test, then publishing.
