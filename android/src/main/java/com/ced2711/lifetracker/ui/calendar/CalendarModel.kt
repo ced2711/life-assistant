@@ -96,7 +96,7 @@ internal val MONTH_CELL_TITLES_MIN_WIDTH: Dp = 88.dp
  */
 internal fun monthGridRowHeight(fontScale: Float, withTitles: Boolean = false): Dp {
     val scale = fontScale.coerceAtLeast(1f)
-    return if (withTitles) (36f + 66f * scale).dp else (22f + 42f * scale).dp
+    return if (withTitles) (36f + 66f * scale).dp else (10f + 54f * scale).dp
 }
 
 /** Everything that happens on each day, gathered once per change of the data. */
