@@ -493,6 +493,9 @@ class MainActivity : FragmentActivity() {
                                             viewModel.setLastDestination(TopLevelDestination.TODO)
                                         },
                                         onOpenLedger = {
+                                            // "Add entry" lands in the amount field with the keyboard open.
+                                            pendingWidgetQuickAddAction = WidgetNavigation.ACTION_OPEN_LEDGER
+                                            pendingWidgetQuickAddToken = newWidgetRequestToken()
                                             selectedOverride = TopLevelDestination.LEDGER.name
                                             auxiliaryName = null
                                             viewModel.setLastDestination(TopLevelDestination.LEDGER)
