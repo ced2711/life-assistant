@@ -501,6 +501,10 @@ interface TaskLedgerDao {
     @Query("SELECT * FROM attachments WHERE ownerType = :ownerType AND ownerId = :ownerId AND pendingDeleteAt IS NULL ORDER BY createdAt")
     fun observeAttachments(ownerType: String, ownerId: Long): Flow<List<AttachmentEntity>>
 
+    /** The items of one kind that have at least one attachment, for the paper-clip mark in lists. */
+    @Query("SELECT DISTINCT ownerId FROM attachments WHERE ownerType = :ownerType AND pendingDeleteAt IS NULL")
+    fun observeAttachmentOwnerIds(ownerType: String): Flow<List<Long>>
+
     @Query("SELECT * FROM attachments WHERE ownerType = :ownerType AND ownerId = :ownerId AND pendingDeleteAt IS NULL ORDER BY createdAt")
     suspend fun getAttachments(ownerType: String, ownerId: Long): List<AttachmentEntity>
 
