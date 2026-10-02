@@ -119,6 +119,10 @@ interface TaskLedgerDao {
     @Query("SELECT * FROM subtasks WHERE todoId = :todoId ORDER BY sortOrder, id")
     fun observeSubtasks(todoId: Long): Flow<List<SubtaskEntity>>
 
+    /** Every subtask, for lists that show each todo's progress. */
+    @Query("SELECT * FROM subtasks ORDER BY todoId, sortOrder, id")
+    fun observeAllSubtasks(): Flow<List<SubtaskEntity>>
+
     @Query("SELECT * FROM subtasks WHERE todoId = :todoId ORDER BY sortOrder, id")
     suspend fun getSubtasks(todoId: Long): List<SubtaskEntity>
 

@@ -81,6 +81,7 @@ fun TodayScreen(
     val diary by viewModel.diaryEntries.collectAsState()
     val notes by viewModel.notes.collectAsState()
     val settings by viewModel.settings.collectAsState()
+    val subtasksByTodo by viewModel.subtasksByTodo.collectAsState()
     val today = LocalDate.now()
     val overview = remember(active, completed, ledger, today) { TodayOverview.of(active + completed, ledger, today) }
     TodayContent(
@@ -95,7 +96,7 @@ fun TodayScreen(
         onToggle = { todo, done, withSubtasks ->
             if (done) viewModel.completeTodo(todo.id, withSubtasks) else viewModel.restoreTodo(todo.id)
         },
-        hasOpenSubtasks = { id -> viewModel.subtasks(id) },
+        subtasksByTodo = subtasksByTodo,
         onAdd = { text ->
             viewModel.addQuickTodo(
                 TodoDraft(
@@ -123,7 +124,7 @@ internal fun TodayContent(
     showNotes: Boolean,
     modifier: Modifier = Modifier,
     onToggle: (TodoEntity, Boolean, Boolean) -> Unit,
-    hasOpenSubtasks: (Long) -> kotlinx.coroutines.flow.Flow<List<com.ced2711.lifetracker.data.local.SubtaskEntity>>,
+    subtasksByTodo: Map<Long, List<com.ced2711.lifetracker.data.local.SubtaskEntity>>,
     onAdd: (String) -> Unit,
     onOpenTodo: (Long) -> Unit,
     onOpenLedger: () -> Unit,
@@ -137,7 +138,7 @@ internal fun TodayContent(
 
     @Composable
     fun todoRow(todo: TodoEntity, showDate: Boolean) {
-        val subtasks by hasOpenSubtasks(todo.id).collectAsState(initial = emptyList())
+        val subtasks = subtasksByTodo[todo.id].orEmpty()
         val overdue = todo.completedAt == null && (todo.deadlineEpochDay ?: Long.MAX_VALUE) < overview.date.toEpochDay()
         val details = buildList {
             todo.deadlineEpochDay?.let { day ->
@@ -172,12 +173,13 @@ internal fun TodayContent(
 
     LazyColumn(
         modifier,
-        contentPadding = PaddingValues(start = Space.lg, end = Space.lg, top = Space.md, bottom = 96.dp),
+        contentPadding = PaddingValues(start = Space.lg, end = Space.lg, top = Space.xs, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(Space.xs),
     ) {
         item {
             Column(verticalArrangement = Arrangement.spacedBy(Space.md)) {
-                PageTitle(localizedText("Today"), subtitle = subtitle(overview, language))
+                // The top bar names the page; this line says what kind of day it is.
+                Text(subtitle(overview, language), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 val total = overview.completedToday.size + overview.dueToday.size + overview.overdue.size
                 if (total > 0) ProgressLine(overview.progress)
                 LifeTextField(

@@ -17,12 +17,17 @@ fun uiLocale(language: UiLanguage): Locale = when (language) {
 
 fun translateUiText(text: String, language: UiLanguage): String {
     if (language == UiLanguage.ENGLISH || text.isEmpty()) return text
-    zhHans[text]?.let { return it }
+    chinese(text)?.let { return it }
     // Button labels such as " Stop" carry spacing next to an icon; keep it around the translation.
     val trimmed = text.trim()
-    if (trimmed.isNotEmpty() && trimmed != text) zhHans[trimmed]?.let { return text.replace(trimmed, it) }
+    if (trimmed.isNotEmpty() && trimmed != text) chinese(trimmed)?.let { return text.replace(trimmed, it) }
     return translateDynamicChinese(text)
 }
+
+// Each group of screens keeps its texts in a file of its own (ZhTodo.kt, ZhLedger.kt, …).
+private val zhAreas: List<Map<String, String>> by lazy { listOf(zhShell, zhTodo, zhLedger, zhCalendar, zhNotes, zhVault, zhSettings) }
+
+private fun chinese(text: String): String? = zhHans[text] ?: zhAreas.firstNotNullOfOrNull { it[text] }
 
 private fun translateDynamicChinese(text: String): String {
     fun match(pattern: String): MatchResult? = Regex(pattern).matchEntire(text)

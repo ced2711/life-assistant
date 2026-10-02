@@ -37,7 +37,7 @@ sourceSets {
             include("com/ced2711/lifetracker/domain/format/UserFormatting.kt")
             include("com/ced2711/lifetracker/ui/theme/TaskLedgerTheme.kt")
             include("com/ced2711/lifetracker/ui/design/**")
-            include("com/ced2711/lifetracker/ui/localization/UiLocalization.kt")
+            include("com/ced2711/lifetracker/ui/localization/**")
             include("com/ced2711/lifetracker/data/MonotonicTimestamps.kt")
             include("com/ced2711/lifetracker/data/local/Entities.kt")
             include("com/ced2711/lifetracker/data/backup/BackupModels.kt")

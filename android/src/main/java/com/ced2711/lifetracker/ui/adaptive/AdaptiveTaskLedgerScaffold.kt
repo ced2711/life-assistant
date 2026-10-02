@@ -1,5 +1,16 @@
 package com.ced2711.lifetracker.ui.adaptive
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.heading
+import com.ced2711.lifetracker.ui.theme.LifeTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -468,6 +479,11 @@ private fun ExpandedScaffold(
     }
 }
 
+/**
+ * Bottom navigation: a flat bar with a hairline on top. The selected module's icon sits on a
+ * soft accent pill; labels show when there is room (five modules or fewer), otherwise only the
+ * selected one is named.
+ */
 @Composable
 private fun TaskLedgerNavigationBar(
     selected: TopLevelDestination,
@@ -475,31 +491,69 @@ private fun TaskLedgerNavigationBar(
     isSettings: Boolean,
     compact: Boolean,
 ) {
-    NavigationBar(
-        modifier = Modifier.height(if (compact) 48.dp else 72.dp),
-        windowInsets = NoInsets,
-    ) {
-        val destinations = LocalNavigationDestinations.current
-        // Six items do not fit readable labels on a phone; show only the selected label then.
-        val crowded = destinations.size > 5
-        destinations.forEach { destination ->
-            val localizedLabel = localizedText(destination.label)
-            NavigationBarItem(
-                selected = !isSettings && selected == destination,
-                onClick = { onSelected(destination) },
-                modifier = Modifier.semantics {
-                    contentDescription = localizedLabel
-                },
-                icon = {
-                    DestinationIcon(
+    val destinations = LocalNavigationDestinations.current
+    // More than five items do not fit readable labels on a phone; name only the selected one then.
+    val crowded = destinations.size > 5
+    Surface(color = MaterialTheme.colorScheme.surfaceContainerLow) {
+        Column {
+            Box(Modifier.fillMaxWidth().height(1.dp).background(LifeTheme.colors.divider))
+            Row(
+                Modifier.fillMaxWidth().height(if (compact) 47.dp else 71.dp).padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                destinations.forEach { destination ->
+                    val isSelected = !isSettings && selected == destination
+                    NavigationEntry(
                         destination = destination,
-                        contentDescription = null,
+                        selected = isSelected,
+                        showLabel = !compact && (!crowded || isSelected),
+                        onClick = { onSelected(destination) },
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
                     )
-                },
-                label = if (compact) null else {
-                    { Text(localizedLabel, maxLines = 1) }
-                },
-                alwaysShowLabel = !compact && !crowded,
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NavigationEntry(
+    destination: TopLevelDestination,
+    selected: Boolean,
+    showLabel: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val localizedLabel = localizedText(destination.label)
+    val pill by animateColorAsState(if (selected) LifeTheme.colors.accentSoft else Color.Transparent, label = "navigation-pill")
+    val tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    Column(
+        modifier
+            .selectable(
+                selected = selected,
+                role = Role.Tab,
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            )
+            .semantics { contentDescription = localizedLabel },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Box(
+            Modifier.clip(CircleShape).background(pill).padding(horizontal = 16.dp, vertical = 4.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(destination.icon, null, Modifier.size(22.dp), tint = tint)
+        }
+        if (showLabel) {
+            Text(
+                localizedLabel,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.labelSmall,
+                color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 3.dp).clearAndSetSemantics { },
             )
         }
     }
@@ -515,45 +569,37 @@ private fun TaskLedgerNavigationRail(
 ) {
     val island = LocalHeaderCutoutIsland.current
     var railTopClearance by remember { mutableIntStateOf(0) }
-    NavigationRail(
+    Surface(
         modifier = if (island == null) modifier else modifier.onGloballyPositioned { coordinates ->
             val bounds = coordinates.boundsInWindow()
             val overlaps = island.left < bounds.right && island.right > bounds.left && island.top < bounds.bottom
             railTopClearance = if (overlaps) (island.bottom - bounds.top.roundToInt()).coerceAtLeast(0) else 0
         },
-        windowInsets = NoInsets,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxHeight()
                 .padding(top = with(LocalDensity.current) { railTopClearance.toDp() })
+                .padding(vertical = if (compact) 4.dp else 12.dp)
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(if (compact) 0.dp else 4.dp),
         ) {
             LocalNavigationDestinations.current.forEach { destination ->
-                val localizedLabel = localizedText(destination.label)
-                NavigationRailItem(
-                selected = !isSettings && selected == destination,
-                onClick = { onSelected(destination) },
-                modifier = (if (compact) Modifier.height(48.dp) else Modifier).semantics {
-                    contentDescription = localizedLabel
-                },
-                icon = {
-                    DestinationIcon(
-                        destination = destination,
-                        contentDescription = null,
-                    )
-                },
-                    label = if (compact) null else {
-                        { Text(localizedLabel, maxLines = 1) }
-                    },
-                    alwaysShowLabel = !compact,
+                NavigationEntry(
+                    destination = destination,
+                    selected = !isSettings && selected == destination,
+                    showLabel = !compact,
+                    onClick = { onSelected(destination) },
+                    modifier = Modifier.fillMaxWidth().height(if (compact) 48.dp else 60.dp),
                 )
             }
         }
     }
 }
 
+/** The page's name with the sync status and the way to Settings (or back from it). */
 @Composable
 private fun TaskLedgerTopBar(
     selected: TopLevelDestination,
@@ -573,7 +619,7 @@ private fun TaskLedgerTopBar(
                 barTop = bounds.top,
                 barRight = bounds.right,
                 barBottom = bounds.bottom,
-                titleStart = 16.dp.roundToPx(),
+                titleStart = 20.dp.roundToPx(),
                 trailingWidth = (if (syncStatus == null) 52.dp else 100.dp).roundToPx(),
                 minimumTitleWidth = 48.dp.roundToPx(),
                 gap = 8.dp.roundToPx(),
@@ -589,44 +635,39 @@ private fun TaskLedgerTopBar(
                 bounds.right.roundToInt(), bounds.bottom.roundToInt(),
             )
         },
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 2.dp,
+        color = MaterialTheme.colorScheme.background,
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(if (compact) 48.dp else 56.dp)
-                .padding(start = 16.dp, end = 4.dp)
+                .height(if (compact) 48.dp else 60.dp)
+                .padding(start = if (isSettings) 4.dp else 20.dp, end = 4.dp)
                 .padding(
                     start = with(density) { cutoutPadding.start.toDp() },
                     end = with(density) { cutoutPadding.end.toDp() },
                 ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (isSettings) {
+                IconButton(onClick = onSettings) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, localizedText("Back"), tint = MaterialTheme.colorScheme.onSurface)
+                }
+            }
             Text(
                 text = localizedText(auxiliaryTitle ?: if (isSettings) "Settings" else selected.label),
                 modifier = Modifier
                     .weight(1f)
-                    .padding(end = with(density) { cutoutPadding.titleEnd.toDp() }),
-                style = MaterialTheme.typography.titleLarge,
+                    .padding(end = with(density) { cutoutPadding.titleEnd.toDp() })
+                    .semantics { heading() },
+                style = if (compact) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineMedium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             syncStatus?.let { CloudSyncStatusButton(it) }
-            IconButton(onClick = onSettings) {
-                Icon(
-                    imageVector = if (isSettings) {
-                        Icons.AutoMirrored.Filled.ArrowBack
-                    } else {
-                        Icons.Outlined.Settings
-                    },
-                    contentDescription = localizedText(if (isSettings) "Back" else "Settings"),
-                    tint = if (isSettings) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
+            if (!isSettings) {
+                IconButton(onClick = onSettings) {
+                    Icon(Icons.Outlined.Settings, localizedText("Settings"), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
     }

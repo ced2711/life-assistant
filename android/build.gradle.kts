@@ -208,4 +208,6 @@ tasks.withType<Test>().configureEach {
     System.getProperty("screens.dir")?.let { systemProperty("screens.dir", it) }
     System.getProperty("screens.theme")?.let { systemProperty("screens.theme", it) }
     System.getProperty("screens.language")?.let { systemProperty("screens.language", it) }
+    System.getProperty("screens.only")?.let { systemProperty("screens.only", it) }
+    System.getProperty("translations.area")?.let { systemProperty("translations.area", it) }
 }
