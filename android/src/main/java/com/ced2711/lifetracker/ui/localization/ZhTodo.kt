@@ -24,7 +24,7 @@ internal val zhTodo: Map<String, String> = mapOf(
     "Search todos" to "搜索待办",
     "Nothing to do yet" to "还没有待办",
     "No todos here" to "这里没有待办",
-    "Type above and press Enter to add your first todo." to "在上方输入并按回车，添加第一条待办。",
+    "Type above to add your first todo." to "在上方输入，添加第一条待办。",
     "Try another view or clear the filters." to "换个视图，或清除筛选。",
     "Yesterday" to "昨天",
     "Later" to "以后",

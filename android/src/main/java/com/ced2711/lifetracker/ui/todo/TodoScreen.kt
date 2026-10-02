@@ -218,11 +218,14 @@ fun TodoScreen(
                         reminderOffsetsMinutes = settings.defaultReminderOffsetsMinutes.filter { it >= 0 }.sorted(),
                     )
                 }
-                quick = quick.copy(inFlight = true, error = null)
+                // The line empties at once and keeps the keyboard, so several todos can be typed
+                // one after another. The optional fields stay as they are for the next one.
+                val typed = quick.description
+                quick = quick.copy(description = "", inFlight = true, error = null)
                 viewModel.addQuickTodo(
                     draft = draft,
-                    onSaved = { quick = TodoQuickAdd() },
-                    onFailure = { quick = quick.copy(inFlight = false) },
+                    onSaved = { quick = quick.copy(inFlight = false, deadlineText = "", tagsText = "") },
+                    onFailure = { quick = quick.copy(inFlight = false, description = quick.description.ifEmpty { typed }) },
                 )
             }
         }

@@ -229,7 +229,6 @@ internal fun TodoContent(
                         onValueChange = { onQuickChange(quick.copy(description = it, error = quick.error.takeIf { _ -> it.isBlank() })) },
                         placeholder = localizedText("Add a todo"),
                         leadingIcon = Icons.Rounded.Add,
-                        enabled = !quick.inFlight,
                         isError = quick.error == "Description is required",
                         modifier = Modifier.fillMaxWidth().focusRequester(quickAddFocus),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -298,7 +297,7 @@ internal fun TodoContent(
                     EmptyState(
                         title = localizedText(if (nothingAtAll) "Nothing to do yet" else "No todos here"),
                         icon = Icons.Rounded.Checklist,
-                        body = localizedText(if (nothingAtAll) "Type above and press Enter to add your first todo." else "Try another view or clear the filters."),
+                        body = localizedText(if (nothingAtAll) "Type above to add your first todo." else "Try another view or clear the filters."),
                         modifier = Modifier.fillMaxWidth().padding(vertical = Space.xl),
                     )
                 }
