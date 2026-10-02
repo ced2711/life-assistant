@@ -477,6 +477,35 @@ class MainActivity : FragmentActivity() {
 
                             null -> {
                                 when (selected) {
+                                    TopLevelDestination.TODAY -> com.ced2711.lifetracker.ui.today.TodayScreen(
+                                        viewModel = viewModel,
+                                        modifier = Modifier.fillMaxSize(),
+                                        showLedger = TopLevelDestination.LEDGER in visibleDestinations,
+                                        showDiary = TopLevelDestination.DIARY in visibleDestinations,
+                                        showNotes = TopLevelDestination.NOTES in visibleDestinations,
+                                        onOpenTodo = { todoId ->
+                                            pendingReminderTodoId = todoId
+                                            selectedOverride = TopLevelDestination.TODO.name
+                                            auxiliaryName = null
+                                            viewModel.setLastDestination(TopLevelDestination.TODO)
+                                        },
+                                        onOpenLedger = {
+                                            selectedOverride = TopLevelDestination.LEDGER.name
+                                            auxiliaryName = null
+                                            viewModel.setLastDestination(TopLevelDestination.LEDGER)
+                                        },
+                                        onOpenDiary = { epochDay ->
+                                            requestedDiaryDay = epochDay
+                                            selectedOverride = TopLevelDestination.DIARY.name
+                                            auxiliaryName = null
+                                            viewModel.setLastDestination(TopLevelDestination.DIARY)
+                                        },
+                                        onOpenNote = {
+                                            selectedOverride = TopLevelDestination.NOTES.name
+                                            auxiliaryName = null
+                                            viewModel.setLastDestination(TopLevelDestination.NOTES)
+                                        },
+                                    )
                                     TopLevelDestination.TODO -> TodoScreen(
                                         viewModel = viewModel,
                                         modifier = Modifier.fillMaxSize(),

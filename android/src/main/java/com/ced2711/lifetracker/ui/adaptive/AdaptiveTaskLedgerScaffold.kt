@@ -21,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.Book
 import androidx.compose.material.icons.outlined.CalendarMonth
@@ -699,6 +700,7 @@ private fun PixelPaneBounds.toDpBounds(density: Density): SafePaneBounds = with(
 
 internal val TopLevelDestination.label: String
     get() = when (this) {
+        TopLevelDestination.TODAY -> "Today"
         TopLevelDestination.TODO -> "Todo"
         TopLevelDestination.LEDGER -> "Ledger"
         TopLevelDestination.CALENDAR -> "Calendar"
@@ -709,6 +711,7 @@ internal val TopLevelDestination.label: String
 
 internal val TopLevelDestination.icon: ImageVector
     get() = when (this) {
+        TopLevelDestination.TODAY -> Icons.Outlined.WbSunny
         TopLevelDestination.TODO -> Icons.Outlined.CheckCircle
         TopLevelDestination.LEDGER -> Icons.Outlined.AccountBalanceWallet
         TopLevelDestination.CALENDAR -> Icons.Outlined.CalendarMonth

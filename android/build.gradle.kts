@@ -180,6 +180,10 @@ dependencies {
     debugImplementation(libs.compose.ui.test.manifest)
 
     testImplementation(libs.junit)
+    // Screens rendered on the JVM (no emulator) for design review; see ScreenRenderTest.
+    testImplementation(libs.robolectric)
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.room.testing)
@@ -196,4 +200,12 @@ tasks.configureEach {
             }
         }
     }
+}
+
+// Design review without an emulator: renders screens to PNG with Robolectric.
+// ./gradlew :android:testStandardDebugUnitTest --tests '*ScreenRenderTest*' -Dscreens.dir=<folder>
+tasks.withType<Test>().configureEach {
+    System.getProperty("screens.dir")?.let { systemProperty("screens.dir", it) }
+    System.getProperty("screens.theme")?.let { systemProperty("screens.theme", it) }
+    System.getProperty("screens.language")?.let { systemProperty("screens.language", it) }
 }

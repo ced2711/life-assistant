@@ -29,6 +29,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.Notes
+import androidx.compose.material.icons.rounded.AccountBalanceWallet
+import androidx.compose.material.icons.rounded.AutoStories
+import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.LocalFireDepartment
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.TaskAlt
+import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Add
@@ -158,21 +167,30 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private enum class DesktopDestination(val label: String, val icon: ImageVector) {
-    TODO("Todo", Icons.Default.TaskAlt),
-    LEDGER("Ledger", Icons.Default.Payments),
-    CALENDAR("Calendar", Icons.Default.CalendarMonth),
-    NOTES("Notes", Icons.AutoMirrored.Filled.Notes),
-    DIARY("Diary", Icons.Default.Book),
-    CONFESSIONAL("Confessional", Icons.Default.LocalFireDepartment),
-    VAULT("Vault", Icons.Default.Lock),
-    SETTINGS("Settings", Icons.Default.Settings),
+    TODAY("Today", Icons.Rounded.WbSunny),
+    TODO("Todo", Icons.Rounded.TaskAlt),
+    LEDGER("Ledger", Icons.Rounded.AccountBalanceWallet),
+    CALENDAR("Calendar", Icons.Rounded.CalendarMonth),
+    NOTES("Notes", Icons.AutoMirrored.Rounded.Notes),
+    DIARY("Diary", Icons.Rounded.AutoStories),
+    CONFESSIONAL("Confessional", Icons.Rounded.LocalFireDepartment),
+    VAULT("Vault", Icons.Rounded.Lock),
+    SETTINGS("Settings", Icons.Rounded.Settings),
 }
 
-/** Small count shown next to a module in the sidebar. */
-private fun sidebarBadge(destination: DesktopDestination, snapshot: BackupSnapshot): String? = when (destination) {
-    DesktopDestination.TODO -> snapshot.todos.count { it.deletedAt == null && it.completedAt == null }.takeIf { it > 0 }?.toString()
-    DesktopDestination.NOTES -> snapshot.notes.size.takeIf { it > 0 }?.toString()
-    else -> null
+/** Small count shown next to a module in the sidebar; Today's is red while something is overdue. */
+private fun sidebarItem(destination: DesktopDestination, snapshot: BackupSnapshot): SidebarItem {
+    val today = LocalDate.now().toEpochDay()
+    val open = snapshot.todos.filter { it.deletedAt == null && it.completedAt == null }
+    return when (destination) {
+        DesktopDestination.TODAY -> {
+            val due = open.count { (it.deadlineEpochDay ?: Long.MAX_VALUE) <= today }
+            SidebarItem(destination.label, destination.icon, due.takeIf { it > 0 }?.toString(), badgeAlert = open.any { (it.deadlineEpochDay ?: Long.MAX_VALUE) < today })
+        }
+        DesktopDestination.TODO -> SidebarItem(destination.label, destination.icon, open.size.takeIf { it > 0 }?.toString())
+        DesktopDestination.NOTES -> SidebarItem(destination.label, destination.icon, snapshot.notes.size.takeIf { it > 0 }?.toString())
+        else -> SidebarItem(destination.label, destination.icon)
+    }
 }
 
 private val LocalDesktopErrorReporter = staticCompositionLocalOf<(Throwable) -> Unit> { {} }
@@ -415,6 +433,7 @@ private fun DesktopHome(
         .toDesktopDestination()
     var destination by remember { mutableStateOf(configuredDestination) }
     var requestedDiaryDay by remember { mutableStateOf<Long?>(null) }
+    var requestedNoteId by remember { mutableStateOf<Long?>(null) }
     val confessionStore = remember { DesktopConfessionStore() }
     val scope = rememberSafeCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
@@ -486,7 +505,7 @@ private fun DesktopHome(
             Row(Modifier.fillMaxSize().padding(padding)) {
                 DesktopSidebar(
                     expanded = expanded,
-                    destinations = mainDestinations.map { SidebarItem(it.label, it.icon, sidebarBadge(it, snapshot)) },
+                    destinations = mainDestinations.map { sidebarItem(it, snapshot) },
                     selectedIndex = mainDestinations.indexOf(destination),
                     onSelect = { navigate(mainDestinations[it]) },
                     vaultSelected = destination == DesktopDestination.VAULT,
@@ -499,12 +518,29 @@ private fun DesktopHome(
                             state = cloudState,
                             onSync = { cloud.launch { synchronize() } },
                             onOpenSettings = { destination = DesktopDestination.SETTINGS },
+                            expanded = expanded,
                         )
                     },
                 )
                 VerticalDivider()
                 Column(Modifier.weight(1f).fillMaxHeight()) {
                     when (destination) {
+                        DesktopDestination.TODAY -> TodayPage(
+                            snapshot = snapshot,
+                            store = dataStore,
+                            showDiary = DesktopDestination.DIARY in mainDestinations,
+                            showNotes = DesktopDestination.NOTES in mainDestinations,
+                            showLedger = DesktopDestination.LEDGER in mainDestinations,
+                            onOpenDiary = { day ->
+                                requestedDiaryDay = day
+                                navigate(DesktopDestination.DIARY)
+                            },
+                            onOpenNote = { id ->
+                                requestedNoteId = id
+                                navigate(DesktopDestination.NOTES)
+                            },
+                            onOpenLedger = { navigate(DesktopDestination.LEDGER) },
+                        )
                         DesktopDestination.TODO -> TodoPage(snapshot, dataStore)
                         DesktopDestination.LEDGER -> LedgerPage(snapshot, dataStore)
                         DesktopDestination.CALENDAR -> CalendarPage(
@@ -518,7 +554,7 @@ private fun DesktopHome(
                         )
                         DesktopDestination.DIARY -> DiaryPage(snapshot, dataStore, requestedDiaryDay) { requestedDiaryDay = null }
                         DesktopDestination.CONFESSIONAL -> ConfessionalPage(confessionStore, dataStore::verifyPassword)
-                        DesktopDestination.NOTES -> NotesPage(snapshot, dataStore) { destination = DesktopDestination.VAULT }
+                        DesktopDestination.NOTES -> NotesPage(snapshot, dataStore, requestedNoteId, { requestedNoteId = null }) { destination = DesktopDestination.VAULT }
                         DesktopDestination.VAULT -> VaultPage(snapshot, dataStore)
                         DesktopDestination.SETTINGS -> SettingsPage(
                             cloudState = cloudState,
@@ -1074,6 +1110,7 @@ internal fun noteFolderPath(folderId: Long, snapshot: BackupSnapshot): String {
 }
 
 private fun DesktopDestination.toTopLevelDestination(): TopLevelDestination = when (this) {
+    DesktopDestination.TODAY -> TopLevelDestination.TODAY
     DesktopDestination.TODO -> TopLevelDestination.TODO
     DesktopDestination.LEDGER -> TopLevelDestination.LEDGER
     DesktopDestination.CALENDAR -> TopLevelDestination.CALENDAR
@@ -1084,6 +1121,7 @@ private fun DesktopDestination.toTopLevelDestination(): TopLevelDestination = wh
 }
 
 private fun TopLevelDestination.toDesktopDestination(): DesktopDestination = when (this) {
+    TopLevelDestination.TODAY -> DesktopDestination.TODAY
     TopLevelDestination.TODO -> DesktopDestination.TODO
     TopLevelDestination.LEDGER -> DesktopDestination.LEDGER
     TopLevelDestination.CALENDAR -> DesktopDestination.CALENDAR

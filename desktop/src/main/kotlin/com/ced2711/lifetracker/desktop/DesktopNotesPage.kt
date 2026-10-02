@@ -92,7 +92,13 @@ private data class NoteEditing(val session: String, val id: Long?)
  * once), so there is no save dialog.
  */
 @Composable
-internal fun NotesPage(snapshot: BackupSnapshot, store: DesktopDataStore, openVault: () -> Unit) {
+internal fun NotesPage(
+    snapshot: BackupSnapshot,
+    store: DesktopDataStore,
+    requestedNoteId: Long? = null,
+    onRequestHandled: () -> Unit = {},
+    openVault: () -> Unit,
+) {
     val scope = rememberSafeCoroutineScope()
     val language = LocalUiLanguage.current
     var noteScope by remember { mutableStateOf<NoteScope>(NoteScope.All) }
@@ -107,6 +113,13 @@ internal fun NotesPage(snapshot: BackupSnapshot, store: DesktopDataStore, openVa
 
     fun newNote() {
         editing = NoteEditing(UUID.randomUUID().toString(), null)
+    }
+    // Opened from elsewhere (Today's pinned notes): show that note.
+    LaunchedEffect(requestedNoteId) {
+        requestedNoteId?.let { id ->
+            if (snapshot.notes.any { it.id == id }) editing = NoteEditing(UUID.randomUUID().toString(), id)
+            onRequestHandled()
+        }
     }
     RegisterPageShortcuts(onNew = ::newNote, onFind = { runCatching { searchFocus.requestFocus() } })
 
