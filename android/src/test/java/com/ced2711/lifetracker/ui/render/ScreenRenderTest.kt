@@ -138,8 +138,12 @@ class ScreenRenderTest {
         scenes.forEachIndexed { position, scene ->
             index = position
             compose.waitForIdle()
-            // A scene that opens a dialog (an editor, a confirmation) is drawn in the last window.
-            val image = compose.onAllNodes(isRoot()).onLast().captureToImage().asAndroidBitmap()
+            // A scene that opens a dialog (an editor, a confirmation) is drawn in the dialog's
+            // window. The picture must be taken from the dialog node: a root node is always
+            // captured from the activity window, which does not show the dialog.
+            val dialogs = compose.onAllNodes(androidx.compose.ui.test.isDialog())
+            val shown = if (dialogs.fetchSemanticsNodes().isNotEmpty()) dialogs.onLast() else compose.onAllNodes(isRoot()).onLast()
+            val image = shown.captureToImage().asAndroidBitmap()
             File(directory, "%02d-%s.png".format(position + 1, scene.name)).outputStream().use { stream ->
                 image.compress(Bitmap.CompressFormat.PNG, 100, stream)
             }

@@ -90,6 +90,8 @@ data class CloudSyncUiState(
     /** This build carries its own GitHub sign-in, so connecting needs no Client ID. */
     val builtInGitHub: Boolean = false,
     val gitHubPrompt: GitHubCodePrompt? = null,
+    /** Why the last sync failed, in English; shown with the attention message. */
+    val lastError: String? = null,
 ) {
     val busy: Boolean get() = task != CloudSyncTask.NONE
 }
@@ -547,6 +549,7 @@ class CloudSyncViewModel internal constructor(
             // New connections use the built-in sign-in; reconnecting keeps the saved Client ID.
             gitHubClientId = defaultGitHubClientId.ifBlank { value.gitHubClientId },
             builtInGitHub = defaultGitHubClientId.isNotBlank(),
+            lastError = value.lastError,
         )
     }
 
