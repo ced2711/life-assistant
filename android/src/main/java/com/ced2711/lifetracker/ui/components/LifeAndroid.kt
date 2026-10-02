@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -26,7 +27,7 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DatePickerDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -235,16 +236,26 @@ fun DatePickerButton(initial: LocalDate?, onPicked: (LocalDate) -> Unit, modifie
     }
     if (open) {
         val state = rememberDatePickerState(initialSelectedDateMillis = (initial ?: LocalDate.now()).toEpochDay() * 86_400_000L)
-        DatePickerDialog(
-            onDismissRequest = { open = false },
-            dismissButton = { TextButton(onClick = { open = false }) { Text(localizedText("Cancel")) } },
-            confirmButton = {
-                TextButton(onClick = {
-                    state.selectedDateMillis?.let { onPicked(LocalDate.ofEpochDay(Math.floorDiv(it, 86_400_000L))) }
-                    open = false
-                }) { Text(localizedText("OK")) }
-            },
-        ) { DatePicker(state = state) }
+        // Not the Material date picker dialog: that one is centred in the window and would sit
+        // across a fold's hinge.
+        HingeSafeDialog(onDismissRequest = { open = false }) {
+            Surface(
+                Modifier.widthIn(max = 380.dp).padding(Space.md),
+                shape = MaterialTheme.shapes.extraLarge,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            ) {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    DatePicker(state = state, colors = DatePickerDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh))
+                    Row(Modifier.fillMaxWidth().padding(horizontal = Space.md, vertical = Space.sm), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = { open = false }) { Text(localizedText("Cancel")) }
+                        TextButton(onClick = {
+                            state.selectedDateMillis?.let { onPicked(LocalDate.ofEpochDay(Math.floorDiv(it, 86_400_000L))) }
+                            open = false
+                        }) { Text(localizedText("OK")) }
+                    }
+                }
+            }
+        }
     }
 }
 

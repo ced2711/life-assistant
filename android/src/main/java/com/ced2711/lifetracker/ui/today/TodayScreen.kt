@@ -59,6 +59,7 @@ import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
 import com.ced2711.lifetracker.ui.localization.localizedText
 import com.ced2711.lifetracker.ui.localization.uiLocale
 import com.ced2711.lifetracker.ui.theme.LifeTheme
+import com.ced2711.lifetracker.ui.todo.CompleteWithSubtasksDialog
 import java.time.LocalDate
 import java.time.format.TextStyle
 
@@ -173,11 +174,11 @@ internal fun TodayContent(
 
     LazyColumn(
         modifier,
-        contentPadding = PaddingValues(start = Space.lg, end = Space.lg, top = Space.xs, bottom = 32.dp),
+        contentPadding = PaddingValues(start = Space.xs, end = Space.xs, top = Space.xs, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(Space.xs),
     ) {
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(Space.md)) {
+            Column(Modifier.padding(horizontal = Space.md), verticalArrangement = Arrangement.spacedBy(Space.md)) {
                 // The top bar names the page; this line says what kind of day it is.
                 Text(subtitle(overview, language), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 val total = overview.completedToday.size + overview.dueToday.size + overview.overdue.size
@@ -197,29 +198,30 @@ internal fun TodayContent(
             }
         }
         if (overview.overdue.isNotEmpty()) {
-            item { SectionLabel(localizedText("Overdue"), count = overview.overdue.size, color = LifeTheme.colors.danger) }
+            item { SectionLabel(localizedText("Overdue"), Modifier.padding(horizontal = Space.md), count = overview.overdue.size, color = LifeTheme.colors.danger) }
             overview.overdue.forEach { todo -> item(key = "o${todo.id}") { todoRow(todo, showDate = true) } }
         }
-        item { SectionLabel(localizedText("Today"), count = overview.dueToday.size) }
+        item { SectionLabel(localizedText("Today"), Modifier.padding(horizontal = Space.md), count = overview.dueToday.size) }
         if (overview.dueToday.isEmpty()) {
             item {
                 Text(
                     localizedText(if (overview.completedToday.isEmpty()) "Nothing due today." else "Everything due today is done."),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = Space.md, vertical = Space.sm),
+                    modifier = Modifier.padding(horizontal = Space.md + Space.md, vertical = Space.sm),
                 )
             }
         }
         overview.dueToday.forEach { todo -> item(key = "t${todo.id}") { todoRow(todo, showDate = false) } }
         if (overview.upcoming.isNotEmpty()) {
-            item { SectionLabel(localizedText("Next 7 days"), count = overview.upcoming.size) }
+            item { SectionLabel(localizedText("Next 7 days"), Modifier.padding(horizontal = Space.md), count = overview.upcoming.size) }
             overview.upcoming.take(6).forEach { todo -> item(key = "u${todo.id}") { todoRow(todo, showDate = true) } }
         }
         if (overview.completedToday.isNotEmpty()) {
             item {
                 SectionLabel(
                     localizedText("Done today"),
+                    Modifier.padding(start = Space.md),
                     count = overview.completedToday.size,
                     trailing = { TextButton(onClick = { showDone = !showDone }) { Text(localizedText(if (showDone) "Hide" else "Show")) } },
                 )
@@ -229,7 +231,7 @@ internal fun TodayContent(
         if (showLedger) {
             item {
                 Spacer(Modifier.height(Space.sm))
-                Panel(padding = PaddingValues(Space.lg)) {
+                Panel(Modifier.padding(horizontal = Space.md), padding = PaddingValues(Space.lg)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(localizedText("Money"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
                         TextButton(onClick = onOpenLedger) { Text(localizedText("Add entry")) }
@@ -255,7 +257,7 @@ internal fun TodayContent(
         }
         if (showDiary) {
             item {
-                Panel(padding = PaddingValues(Space.lg)) {
+                Panel(Modifier.padding(horizontal = Space.md), padding = PaddingValues(Space.lg)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Rounded.AutoStories, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                         Text(localizedText("Diary"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(start = Space.sm).weight(1f))
@@ -273,7 +275,7 @@ internal fun TodayContent(
         }
         if (showNotes && pinnedNotes.isNotEmpty()) {
             item {
-                Panel(padding = PaddingValues(vertical = Space.sm)) {
+                Panel(Modifier.padding(horizontal = Space.md), padding = PaddingValues(vertical = Space.sm)) {
                     Row(Modifier.padding(horizontal = Space.lg, vertical = Space.xs), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Rounded.PushPin, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                         Text(localizedText("Pinned notes"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(start = Space.sm))
@@ -287,12 +289,10 @@ internal fun TodayContent(
     }
 
     completing?.let { todo ->
-        AlertDialog(
-            onDismissRequest = { completing = null },
-            title = { Text(localizedText("Complete task?")) },
-            text = { Text(localizedText("It still has open subtasks.")) },
-            dismissButton = { TextButton(onClick = { completing = null; onToggle(todo, true, false) }) { Text(localizedText("Task only")) } },
-            confirmButton = { Button(onClick = { completing = null; onToggle(todo, true, true) }) { Text(localizedText("Task + subtasks")) } },
+        CompleteWithSubtasksDialog(
+            onDismiss = { completing = null },
+            onTaskOnly = { completing = null; onToggle(todo, true, false) },
+            onWithSubtasks = { completing = null; onToggle(todo, true, true) },
         )
     }
 }
