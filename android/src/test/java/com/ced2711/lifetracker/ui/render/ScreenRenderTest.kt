@@ -76,6 +76,11 @@ class ScreenRenderTest {
     @Config(qualifiers = "w800dp-h1280dp-xhdpi")
     fun tablet() = render("tablet")
 
+    /** Wide enough for the two-pane layouts (isWide). */
+    @Test
+    @Config(qualifiers = "w1280dp-h800dp-land-xhdpi")
+    fun tabletLandscape() = render("tabletLandscape")
+
     /** An unfolded book-style foldable held half open: the hinge runs top to bottom. */
     @Test
     @Config(qualifiers = "w841dp-h701dp-xhdpi")
