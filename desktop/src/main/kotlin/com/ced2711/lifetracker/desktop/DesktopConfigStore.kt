@@ -19,7 +19,7 @@ data class DesktopCloudConfig(
     val automaticSync: Boolean,
     val syncState: LocalCloudSyncState,
     val uiLanguage: UiLanguage = UiLanguage.ENGLISH,
-    val lastDestination: TopLevelDestination = TopLevelDestination.TODO,
+    val lastDestination: TopLevelDestination = TopLevelDestination.TODAY,
     val visibleDestinations: Set<TopLevelDestination> = DefaultVisibleDestinations,
     val appLockEnabled: Boolean = false,
     val appLockTimeout: AppLockTimeout = AppLockTimeout.ONE_MINUTE,
@@ -56,7 +56,7 @@ class DesktopConfigStore(
                 ?: UiLanguage.ENGLISH,
             lastDestination = properties.getProperty(KEY_LAST_DESTINATION)
                 ?.let { value -> runCatching { TopLevelDestination.valueOf(value) }.getOrNull() }
-                ?: TopLevelDestination.TODO,
+                ?: TopLevelDestination.TODAY,
             // Hidden rather than visible modules are stored so modules added later start visible.
             // No saved choice yet means the defaults; an empty saved value means every module is shown.
             visibleDestinations = (

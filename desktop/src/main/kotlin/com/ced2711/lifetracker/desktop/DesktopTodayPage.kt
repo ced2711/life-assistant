@@ -208,7 +208,7 @@ internal fun TodayPage(
     fun sideColumn() {
         Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
             val dueTotal = overview.completedToday.size + overview.dueToday.size + overview.overdue.size
-            Panel(padding = PaddingValues(Space.xl)) {
+            if (dueTotal > 0) Panel(padding = PaddingValues(Space.xl)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.EventAvailable, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                     Text(desktopText("Progress"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(start = Space.sm).weight(1f))

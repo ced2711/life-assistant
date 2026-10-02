@@ -220,10 +220,12 @@ internal fun TodoPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
     val nextOfSeries = live.filter { it.completedAt == null && it.seriesId != null }
         .groupBy { it.seriesId }
         .mapValues { (_, occurrences) -> occurrences.minOf { it.deadlineEpochDay ?: Long.MAX_VALUE } }
+    fun listed(todo: TodoEntity) = todo.seriesId == null || (todo.deadlineEpochDay ?: Long.MAX_VALUE).let { it <= today + 7 || it == nextOfSeries[todo.seriesId] }
     val active = matching
-        .filter { it.completedAt == null && filters.view.matches(it, today) }
-        .filter { todo -> todo.seriesId == null || (todo.deadlineEpochDay ?: Long.MAX_VALUE).let { it <= today + 7 || it == nextOfSeries[todo.seriesId] } }
+        .filter { it.completedAt == null && filters.view.matches(it, today) && listed(it) }
         .sortedWith(todoComparator(filters.sortBy))
+    // What the counts in the filter column are counted from: the open todos the list can show.
+    val countable = live.filter { it.completedAt == null && listed(it) }
     val completed = matching.filter { it.completedAt != null }.sortedByDescending { it.completedAt }
     val visible = active + if (filters.showCompleted) completed else emptyList()
     val subtasksByTodo = snapshot.subtasks.groupBy { it.todoId }
@@ -305,6 +307,7 @@ internal fun TodoPage(snapshot: BackupSnapshot, store: DesktopDataStore) {
                     TodoFilterColumn(
                         snapshot = snapshot,
                         live = live,
+                        open = countable,
                         filters = filters,
                         today = today,
                         onNewCategory = { newCategory = true },
@@ -575,6 +578,7 @@ private fun NewCategoryDialog(snapshot: BackupSnapshot, defaultParent: Long?, on
 private fun TodoFilterColumn(
     snapshot: BackupSnapshot,
     live: List<TodoEntity>,
+    open: List<TodoEntity>,
     filters: TodoFilters,
     today: Long,
     onNewCategory: () -> Unit,
@@ -584,7 +588,6 @@ private fun TodoFilterColumn(
     onDeleteTag: (String) -> Unit,
     modifier: Modifier,
 ) {
-    val open = live.filter { it.completedAt == null }
     FilterColumn(modifier) {
         TodoView.entries.forEach { view ->
             FilterEntry(

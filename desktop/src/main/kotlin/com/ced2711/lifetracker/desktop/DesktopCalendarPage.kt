@@ -104,6 +104,7 @@ private class DayContents(snapshot: BackupSnapshot) {
  * selected day beside it to tick todos off, add things and open the diary. Arrow keys move the
  * selected day, Page Up/Down the page, T jumps to today.
  */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 internal fun CalendarPage(
     snapshot: BackupSnapshot,
@@ -171,7 +172,13 @@ internal fun CalendarPage(
                     }
                     .focusable(),
             ) {
-                Row(Modifier.fillMaxWidth().padding(start = PagePadding, end = PagePadding, top = 28.dp, bottom = Space.lg), verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.foundation.layout.FlowRow(
+                    Modifier.fillMaxWidth().padding(start = PagePadding, end = PagePadding, top = 28.dp, bottom = Space.lg),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalArrangement = Arrangement.spacedBy(Space.sm),
+                    itemVerticalAlignment = Alignment.CenterVertically,
+                ) {
+                  Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         when (view) {
                             CalendarView.MONTH -> monthTitle(month, language)
@@ -190,7 +197,7 @@ internal fun CalendarPage(
                         IconButton(onClick = { page(true) }) { Icon(Icons.Rounded.ChevronRight, desktopText("Next")) }
                         if (selected != LocalDate.now()) TextButton(onClick = { selected = LocalDate.now() }) { Text(desktopText("Today")) }
                     }
-                    Spacer(Modifier.weight(1f))
+                  }
                     Segmented(CalendarView.entries, view, { view = it }, { desktopText(it.label) })
                 }
                 when (view) {

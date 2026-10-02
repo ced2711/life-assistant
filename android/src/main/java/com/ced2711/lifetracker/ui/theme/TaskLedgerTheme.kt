@@ -110,7 +110,8 @@ private object Neutral {
     val lightBackground = Color(0xFFF6F6F4)
     val lightLowest = Color(0xFFFFFFFF)
     val lightLow = Color(0xFFFBFBFA)
-    val lightContainer = Color(0xFFF0F0EE)
+    // Panels are white on the off-white page, the classic paper look.
+    val lightContainer = Color(0xFFFFFFFF)
     val lightHigh = Color(0xFFE9E9E6)
     val lightHighest = Color(0xFFE1E1DE)
     val lightText = Color(0xFF17181A)

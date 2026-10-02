@@ -20,7 +20,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.MenuOpen
@@ -107,10 +109,13 @@ fun DesktopSidebar(
                 }
             }
             Spacer(Modifier.height(14.dp))
-            destinations.forEachIndexed { index, item ->
-                SidebarEntry(item, selected = index == selectedIndex, expanded = expanded, shortcut = "Ctrl+${index + 1}".takeIf { index < 9 }) { onSelect(index) }
+            // The modules scroll when the window is too short, so Vault and Settings stay in reach.
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                destinations.forEachIndexed { index, item ->
+                    SidebarEntry(item, selected = index == selectedIndex, expanded = expanded, shortcut = "Ctrl+${index + 1}".takeIf { index < 9 }) { onSelect(index) }
+                }
             }
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.height(8.dp))
             Box(Modifier.fillMaxWidth().padding(bottom = 6.dp), contentAlignment = if (expanded) Alignment.CenterStart else Alignment.Center) { syncStatus() }
             SidebarEntry(SidebarItem("Vault", Icons.Rounded.Lock), vaultSelected, expanded, shortcut = null, onClick = onVault)
             SidebarEntry(SidebarItem("Settings", Icons.Rounded.Settings), settingsSelected, expanded, shortcut = "Ctrl+,", onClick = onSettings)

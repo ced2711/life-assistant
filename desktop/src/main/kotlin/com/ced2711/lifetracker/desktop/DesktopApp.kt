@@ -130,10 +130,15 @@ private val LocalDesktopErrorReporter = staticCompositionLocalOf<(Throwable) -> 
  * a PC whose password is remembered uses that. Only data whose password is not remembered asks.
  */
 @Composable
-fun LifeTrackerDesktopApp(onShowWindow: () -> Unit = {}) {
-    val dataStore = remember { DesktopDataStore() }
-    val credentials = remember { DesktopCredentialStore() }
-    val config = remember { DesktopConfigStore() }
+fun LifeTrackerDesktopApp(
+    onShowWindow: () -> Unit = {},
+    // Tests run the whole app in a folder of their own.
+    appDirectory: File = DesktopPlatform.appDirectory(),
+    protection: DeviceProtection = DesktopPlatform.protection,
+) {
+    val dataStore = remember { DesktopDataStore(appDirectory) }
+    val credentials = remember { DesktopCredentialStore(File(appDirectory, "credentials"), protection) }
+    val config = remember { DesktopConfigStore(File(appDirectory, "desktop.properties")) }
     val oauth = remember { DesktopGoogleOAuth(config, credentials) }
     val cloud = remember { DesktopCloudSyncController(dataStore, config, oauth, credentials = credentials) }
     val storeState by dataStore.state.collectAsDesktopState()
@@ -226,6 +231,7 @@ fun LifeTrackerDesktopApp(onShowWindow: () -> Unit = {}) {
                             cloud = cloud,
                             configStore = config,
                             credentials = credentials,
+                            protection = protection,
                             agentActivity = agentServer.activity,
                             onUiLanguageChanged = { uiLanguage = it },
                             appLockEnabled = appLockEnabled,
@@ -290,6 +296,7 @@ private fun DesktopHome(
     cloud: DesktopCloudSyncController,
     configStore: DesktopConfigStore,
     credentials: DesktopCredentialStore,
+    protection: DeviceProtection,
     agentActivity: StateFlow<List<DesktopAgentActivity>>,
     onUiLanguageChanged: (UiLanguage) -> Unit,
     appLockEnabled: Boolean,
@@ -302,7 +309,9 @@ private fun DesktopHome(
     var destination by remember { mutableStateOf(configuredDestination) }
     var requestedDiaryDay by remember { mutableStateOf<Long?>(null) }
     var requestedNoteId by remember { mutableStateOf<Long?>(null) }
-    val confessionStore = remember { DesktopConfessionStore() }
+    val confessionStore = remember {
+        DesktopConfessionStore(File(dataStore.appDirectory, "confessional/sealed.bin"), protection::protect, protection::unprotect)
+    }
     val scope = rememberSafeCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
     val cloudState by cloud.state.collectAsDesktopState()
@@ -514,14 +523,22 @@ private fun SyncPasswordDialog(retry: Boolean, onSubmit: (CharArray) -> Unit, on
     )
 }
 
+/** A page's title with its actions; in a narrow window the actions move to a line of their own. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 internal fun PageHeader(title: String, subtitle: String? = null, actions: @Composable RowScope.() -> Unit = {}) {
-    PageTitle(
-        title = desktopText(title),
-        subtitle = subtitle,
-        actions = actions,
-        modifier = Modifier.padding(start = PagePadding, end = PagePadding, top = 28.dp, bottom = 16.dp),
-    )
+    androidx.compose.foundation.layout.FlowRow(
+        Modifier.fillMaxWidth().padding(start = PagePadding, end = PagePadding, top = 28.dp, bottom = 16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalArrangement = Arrangement.spacedBy(Space.md),
+        itemVerticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.padding(end = Space.lg)) {
+            Text(desktopText(title), style = MaterialTheme.typography.headlineLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(Space.xs), verticalAlignment = Alignment.CenterVertically, content = actions)
+    }
 }
 
 /** A choice pill (see Pill in the shared design); a check box or radio button for screen readers. */

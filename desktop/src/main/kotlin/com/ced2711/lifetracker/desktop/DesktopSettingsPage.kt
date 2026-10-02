@@ -3,6 +3,7 @@ package com.ced2711.lifetracker.desktop
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -139,7 +140,9 @@ internal fun SettingsPage(
                 Column(Modifier.widthIn(max = 820.dp).fillMaxWidth().padding(horizontal = PagePadding).padding(top = 28.dp, bottom = 64.dp), verticalArrangement = Arrangement.spacedBy(Space.lg)) {
                     if (!sideNav) {
                         Text(desktopText("Settings"), style = MaterialTheme.typography.headlineLarge)
-                        Segmented(SettingsSection.entries, section, { section = it }, { desktopText(it.label) })
+                        Box(Modifier.horizontalScroll(rememberScrollState())) {
+                            Segmented(SettingsSection.entries, section, { section = it }, { desktopText(it.label) })
+                        }
                     } else {
                         Text(desktopText(section.label), style = MaterialTheme.typography.headlineLarge)
                     }

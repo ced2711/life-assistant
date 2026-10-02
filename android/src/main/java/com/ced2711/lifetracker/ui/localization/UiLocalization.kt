@@ -132,7 +132,8 @@ private fun translateDynamicChinese(text: String): String {
     match("(\\d+) (todo|todos)  \\|  (\\d+) ledger (entry|entries)")?.let {
         return "${it.groupValues[1]} 项待办  |  ${it.groupValues[3]} 笔流水"
     }
-    match("(.+) to (.+)")?.let { return "${it.groupValues[1]} 至 ${it.groupValues[2]}" }
+    // A date range such as "10/01/2026 to 10/07/2026"; never a sentence that contains "to".
+    match("([0-9/.-]+) to ([0-9/.-]+)")?.let { return "${it.groupValues[1]} 至 ${it.groupValues[2]}" }
     match("(\\d+) (day|days|hour|hours|week|weeks) before")?.let {
         val unit = when (it.groupValues[2]) {
             "day", "days" -> "天"
@@ -758,16 +759,16 @@ private val zhHans = mapOf(
     "Life Assistant is locked" to "生活助手已锁定",
     "Use your fingerprint, face or screen lock to continue." to "请使用指纹、面部或锁屏密码继续。",
     "This device has no screen lock, so the app lock cannot verify you. Set a screen lock to protect the app." to
-        "此设备没有设置锁屏，软件锁无法验证你的身份。请设置锁屏来保护应用。",
-    "App lock" to "软件锁",
+        "此设备没有设置锁屏，应用锁无法验证你的身份。请设置锁屏来保护应用。",
+    "App lock" to "应用锁",
     "Ask for fingerprint, face or screen lock when opening the app" to "打开应用时需要指纹、面部或锁屏密码验证",
     "Lock after leaving the app" to "离开应用后锁定",
     "Immediately" to "立即",
     "After 1 minute" to "1 分钟后",
     "After 5 minutes" to "5 分钟后",
     "Set a screen lock on this device first." to "请先为此设备设置锁屏。",
-    "Turn on app lock" to "开启软件锁",
-    "Turn off app lock" to "关闭软件锁",
+    "Turn on app lock" to "开启应用锁",
+    "Turn off app lock" to "关闭应用锁",
     "Menu" to "菜单",
     "Modules in menu" to "菜单显示的功能",
     "All modules" to "全部功能",
@@ -779,7 +780,7 @@ private val zhHans = mapOf(
     "Enter your data password to continue." to "请输入数据密码继续。",
     "Ask for the data password when returning to the app" to "回到应用时要求输入数据密码",
     "Applies even when Windows remembers the password." to "即使 Windows 已记住密码也会生效。",
-    "Enter your data password to turn off the app lock." to "请输入数据密码以关闭软件锁。",
+    "Enter your data password to turn off the app lock." to "请输入数据密码以关闭应用锁。",
     "Delete this todo?" to "删除这个待办？",
     "Say what you need to say. Burn it to let it go for good, or seal it on this PC. " +
         "Sealed words are protected by Windows and never exported or synced." to
@@ -884,6 +885,13 @@ private val zhHans = mapOf(
     "Cloud sync needs attention" to "云同步需要处理",
     "The saved sync password could not be read. Sync will try again." to "暂时读不到已保存的同步密码，稍后会自动重试。",
     "The saved GitHub sign-in could not be read. Sync will try again." to "暂时读不到已保存的 GitHub 登录，稍后会自动重试。",
+    "Choose an entry, or press Ctrl+N for a new one." to "选择一个条目，或按 Ctrl+N 新建。",
+    "Choose where to save" to "选择保存位置",
+    "Delete this Vault entry?" to "删除这个密码库条目？",
+    "Press Ctrl+N to store an account and its password." to "按 Ctrl+N 保存一个账号和它的密码。",
+    "Press Ctrl+N to write one. Notes save themselves as you type." to "按 Ctrl+N 写一条。笔记会在输入时自动保存。",
+    "This PC remembers the password, protected by your Linux account. Turn off to type it at every start." to "这台电脑会记住密码，并受你的 Linux 账户保护。关闭后每次启动都要输入密码。",
+    "This PC remembers the password, protected by your Windows account. Turn off to type it at every start." to "这台电脑会记住密码，并受你的 Windows 账户保护。关闭后每次启动都要输入密码。",
     "A few seconds after each change, when the window is focused, and every 2 minutes while Life Assistant is open." to "每次改动几秒后、窗口获得焦点时，以及生活助手打开期间每 2 分钟同步一次。",
     "AI assistants" to "AI 助手",
     "AI assistants on this PC, such as Claude, can look things up for you and make changes. Ask things like: what is due this week, add milk to my todos, how much did I spend on food. The Vault and sealed confessions are never available to them." to "这台电脑上的 AI 助手（例如 Claude）可以替你查询和修改数据。你可以问它：这周有什么到期、把买牛奶加到待办、我在吃饭上花了多少钱。密码库和封存的告解永远不会对它们开放。",

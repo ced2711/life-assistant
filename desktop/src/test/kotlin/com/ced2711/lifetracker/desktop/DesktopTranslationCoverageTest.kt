@@ -44,7 +44,12 @@ class DesktopTranslationCoverageTest {
 
     @Test
     fun everyDesktopLabelHasAChineseTranslation() {
-        val missing = candidates().filter { desktopText(it, UiLanguage.SIMPLIFIED_CHINESE) == it }.sorted()
+        // Still English when unchanged, or when a loose pattern only swapped a word inside the sentence.
+        val english = Regex("""[A-Za-z]{2,} [A-Za-z]{2,} [A-Za-z]{2,}""")
+        val missing = candidates().filter { text ->
+            val translated = desktopText(text, UiLanguage.SIMPLIFIED_CHINESE)
+            translated == text || english.containsMatchIn(translated)
+        }.sorted()
         assertTrue("Missing Chinese translations (${missing.size}):\n" + missing.joinToString("\n"), missing.isEmpty())
     }
 }

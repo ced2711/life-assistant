@@ -1153,7 +1153,7 @@ class DesktopDataStore(
                 defaultAllDayReminderMinute = 0,
                 defaultReminderOffsetsMinutes = setOf(0L),
                 todoQuickAddFields = emptySet(),
-                lastDestination = TopLevelDestination.TODO,
+                lastDestination = TopLevelDestination.TODAY,
             ),
             categories = emptyList(),
             todoSeries = emptyList(),

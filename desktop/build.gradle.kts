@@ -63,6 +63,9 @@ dependencies {
     implementation(libs.jna.platform)
 
     testImplementation(libs.junit)
+    // Click-through tests of the whole window without showing it.
+    @OptIn(org.jetbrains.compose.ExperimentalComposeLibrary::class)
+    testImplementation(compose.uiTest)
 }
 
 val prepareLegalResources = tasks.register<Sync>("prepareLegalResources") {
@@ -239,4 +242,9 @@ tasks.register<JavaExec>("renderScreens") {
             providers.gradleProperty("screenTheme").orNull ?: "dark",
         )
     }
+}
+
+// -Dflow.shots=<folder> makes DesktopFlowTest save a picture of every step.
+tasks.withType<Test>().configureEach {
+    System.getProperty("flow.shots")?.let { systemProperty("flow.shots", it) }
 }
