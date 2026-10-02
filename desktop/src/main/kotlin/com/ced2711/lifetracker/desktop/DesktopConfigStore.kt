@@ -165,6 +165,20 @@ class DesktopConfigStore(
     @Synchronized
     fun setPasswordChosen(chosen: Boolean) = load().let { it.setProperty(KEY_PASSWORD_CHOSEN, chosen.toString()); save(it) }
 
+    /** Whether AI assistants on this PC may use Life Assistant (off until the user turns it on). */
+    @Synchronized
+    fun agentAccess(): Boolean = load().getProperty(KEY_AGENT_ACCESS)?.toBooleanStrictOrNull() ?: false
+
+    @Synchronized
+    fun setAgentAccess(enabled: Boolean) = load().let { it.setProperty(KEY_AGENT_ACCESS, enabled.toString()); save(it) }
+
+    /** Whether those assistants may also change data, not only read it (on by default). */
+    @Synchronized
+    fun agentChanges(): Boolean = load().getProperty(KEY_AGENT_CHANGES)?.toBooleanStrictOrNull() ?: true
+
+    @Synchronized
+    fun setAgentChanges(enabled: Boolean) = load().let { it.setProperty(KEY_AGENT_CHANGES, enabled.toString()); save(it) }
+
     /** Whether the sidebar is folded to icons (off by default). */
     @Synchronized
     fun sidebarCollapsed(): Boolean = load().getProperty(KEY_SIDEBAR_COLLAPSED)?.toBooleanStrictOrNull() ?: false
@@ -266,6 +280,8 @@ class DesktopConfigStore(
         const val KEY_DESKTOP_REMINDERS = "reminders.desktop"
         const val KEY_SIDEBAR_COLLAPSED = "ui.sidebarCollapsed"
         const val KEY_PASSWORD_CHOSEN = "security.passwordChosen"
+        const val KEY_AGENT_ACCESS = "agent.access"
+        const val KEY_AGENT_CHANGES = "agent.changes"
         const val KEY_KEEP_IN_TRAY = "window.keepInTray"
         const val KEY_REMINDERS_CHECKED_AT = "reminders.checkedAt"
     }

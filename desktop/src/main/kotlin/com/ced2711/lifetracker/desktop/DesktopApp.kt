@@ -92,6 +92,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -196,7 +197,7 @@ private fun lifeTrackerColors(accentColor: AccentColor): ColorScheme = darkColor
 )
 
 @Composable
-fun LifeTrackerDesktopApp() {
+fun LifeTrackerDesktopApp(onShowWindow: () -> Unit = {}) {
     val dataStore = remember { DesktopDataStore() }
     val credentials = remember { DesktopCredentialStore() }
     val config = remember { DesktopConfigStore() }
@@ -231,6 +232,22 @@ fun LifeTrackerDesktopApp() {
 
     DisposableEffect(Unit) {
         onDispose { dataStore.close() }
+    }
+    // AI assistants (through `--mcp`) and a second start of the app reach this window here.
+    val agentLocked by rememberUpdatedState(appLockEnabled && appLocked)
+    val agentServer = remember {
+        DesktopAgentServer(
+            appDirectory = dataStore.appDirectory,
+            tools = DesktopAgentTools(dataStore),
+            accessEnabled = config::agentAccess,
+            changesAllowed = config::agentChanges,
+            locked = { agentLocked || dataStore.currentSnapshot() == null },
+            onShowWindow = onShowWindow,
+        )
+    }
+    DisposableEffect(agentServer) {
+        runCatching { agentServer.start() }
+        onDispose { agentServer.stop() }
     }
     // Nothing is asked at start: the remembered password, or a new PC's own random one, opens the data.
     var starting by remember { mutableStateOf(true) }
