@@ -241,13 +241,48 @@ class BackupRestoreViewModelTest {
         assertEquals(BackupRestoreNotice.RESTORE_COMPLETE, viewModel.uiState.value.notice)
     }
 
+    @Test
+    fun dailyCopyIsRestoredThenUndoneAndTheListFollows() {
+        val daily = FakeDailyBackups()
+        var rebuilt = 0
+        val viewModel = viewModel(FakeGateway(), FakeDocuments(), hasVault = false, rebuild = { rebuilt++ }, daily = daily)
+
+        viewModel.refreshDailyBackups()
+        assertEquals(listOf(DAY), viewModel.dailyBackups.value.copies.map { it.day })
+        assertFalse(viewModel.dailyBackups.value.canUndo)
+
+        viewModel.restoreDailyBackup(DAY)
+        assertEquals(listOf(DAY), daily.restored)
+        assertEquals(1, rebuilt)
+        assertEquals(BackupRestoreNotice.DAILY_RESTORE_COMPLETE, viewModel.uiState.value.notice)
+        assertEquals(BackupRestoreTask.NONE, viewModel.uiState.value.task)
+        assertTrue(viewModel.dailyBackups.value.canUndo)
+
+        viewModel.undoDailyRestore()
+        assertEquals(BackupRestoreNotice.DAILY_UNDO_COMPLETE, viewModel.uiState.value.notice)
+        assertFalse(viewModel.dailyBackups.value.canUndo)
+    }
+
+    @Test
+    fun failedDailyRestoreSaysSoAndLeavesTheScreenUsable() {
+        val daily = FakeDailyBackups(failure = IOException("unreadable"))
+        val viewModel = viewModel(FakeGateway(), FakeDocuments(), hasVault = false, daily = daily)
+
+        viewModel.restoreDailyBackup(DAY)
+
+        assertEquals(BackupRestoreNotice.DAILY_RESTORE_FAILED, viewModel.uiState.value.notice)
+        assertEquals(BackupRestoreTask.NONE, viewModel.uiState.value.task)
+    }
+
     private fun viewModel(
         gateway: FakeGateway,
         documents: FakeDocuments,
         hasVault: Boolean,
         rebuild: suspend () -> Unit = {},
         openIncludedBackup: (() -> InputStream?)? = null,
+        daily: DailyBackupAccess? = null,
     ) = BackupRestoreViewModel(
+        dailyBackupAccess = daily,
         gateway = gateway,
         documents = documents,
         hasVault = { hasVault },
@@ -256,6 +291,25 @@ class BackupRestoreViewModelTest {
         openIncludedBackup = openIncludedBackup,
         dispatcher = Dispatchers.Unconfined,
     )
+}
+
+private val DAY: java.time.LocalDate = java.time.LocalDate.of(2026, 10, 1)
+
+private class FakeDailyBackups(private val failure: Throwable? = null) : DailyBackupAccess {
+    val restored = mutableListOf<java.time.LocalDate>()
+    private var undoable = false
+
+    override fun list() = listOf(DailyBackupCopy(DAY, 1_024L))
+    override fun canUndo() = undoable
+    override suspend fun restore(day: java.time.LocalDate) {
+        failure?.let { throw it }
+        restored += day
+        undoable = true
+    }
+
+    override suspend fun undoRestore() {
+        undoable = false
+    }
 }
 
 private class FakeGateway(
