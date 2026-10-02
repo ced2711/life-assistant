@@ -66,6 +66,7 @@ import com.ced2711.lifetracker.ui.notes.NotesScreen
 import com.ced2711.lifetracker.ui.settings.SettingsScreen
 import com.ced2711.lifetracker.ui.theme.TaskLedgerTheme
 import com.ced2711.lifetracker.ui.theme.isTaskLedgerDarkTheme
+import com.ced2711.lifetracker.ui.today.TodayGlance
 import com.ced2711.lifetracker.ui.todo.TodoScreen
 import com.ced2711.lifetracker.ui.vault.VaultScreen
 import com.ced2711.lifetracker.ui.vault.VaultAccessState
@@ -381,6 +382,7 @@ class MainActivity : FragmentActivity() {
                     AdaptiveTaskLedgerScaffold(
                     destinations = visibleDestinations,
                     selected = selected,
+                    glance = { TodayGlance(viewModel, showLedger = TopLevelDestination.LEDGER in visibleDestinations) },
                     onSelected = { destination ->
                         if (!showBackup ||
                             (backupUiState.task == BackupRestoreTask.NONE && !cloudSyncUiState.busy)

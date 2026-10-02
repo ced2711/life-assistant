@@ -297,6 +297,58 @@ internal fun TodayContent(
     }
 }
 
+/**
+ * The day at a glance, without anything to tap: for the spare half of a folded screen. The date,
+ * how the day stands, the next few things to do and, when the Ledger is shown, what was spent.
+ */
+@Composable
+fun TodayGlance(viewModel: TaskLedgerViewModel, showLedger: Boolean, modifier: Modifier = Modifier) {
+    val active by viewModel.activeTodos.collectAsState()
+    val completed by viewModel.completedTodos.collectAsState()
+    val ledger by viewModel.ledgerEntries.collectAsState()
+    val settings by viewModel.settings.collectAsState()
+    val today = LocalDate.now()
+    val overview = remember(active, completed, ledger, today) { TodayOverview.of(active + completed, ledger, today) }
+    TodayGlanceContent(overview, settings, showLedger, modifier)
+}
+
+@Composable
+internal fun TodayGlanceContent(overview: TodayOverview, settings: AppSettings, showLedger: Boolean, modifier: Modifier = Modifier) {
+    val language = LocalUiLanguage.current
+    val locale = uiLocale(language)
+    val next = (overview.overdue + overview.dueToday).take(3)
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+        Text(subtitle(overview, language), style = MaterialTheme.typography.titleMedium)
+        if (overview.completedToday.size + overview.dueToday.size + overview.overdue.size > 0) ProgressLine(overview.progress)
+        next.forEach { todo ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                com.ced2711.lifetracker.ui.design.Dot(priorityColor(todo.priority) ?: MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    todo.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = Space.sm).weight(1f),
+                )
+                todo.deadlineMinute?.takeIf { todo.deadlineEpochDay == overview.date.toEpochDay() }?.let {
+                    Text(
+                        UserFormatting.formatMinuteOfDay(it, settings.timeFormat, false, locale),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+        if (showLedger && overview.moneyToday.expenseCents > 0) {
+            Text(
+                localizedText("Spent today") + "  " + formatMoney(overview.moneyToday.expenseCents),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
 private fun dayLabel(day: Long, minute: Int?, settings: AppSettings, language: UiLanguage): String {
     val locale = uiLocale(language)
     val date = LocalDate.ofEpochDay(day)

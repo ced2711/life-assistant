@@ -30,7 +30,9 @@ import com.ced2711.lifetracker.domain.model.UiLanguage
 import com.ced2711.lifetracker.ui.adaptive.AdaptiveTaskLedgerScaffold
 import com.ced2711.lifetracker.ui.adaptive.TopBarSyncStatus
 import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
+import com.ced2711.lifetracker.domain.model.TodayOverview
 import com.ced2711.lifetracker.ui.theme.TaskLedgerTheme
+import com.ced2711.lifetracker.ui.today.TodayGlanceContent
 import java.io.File
 import org.junit.Assume.assumeTrue
 import org.junit.Rule
@@ -127,6 +129,9 @@ class ScreenRenderTest {
                             destinations = TopLevelDestination.entries.filterNot { it == TopLevelDestination.CONFESSIONAL || it == TopLevelDestination.DIARY } +
                                 listOfNotNull(scene.destination?.takeIf { it == TopLevelDestination.CONFESSIONAL || it == TopLevelDestination.DIARY }),
                             syncStatus = TopBarSyncStatus(CloudSyncIndicator(CloudSyncIndicatorState.UP_TO_DATE, null), {}, {}),
+                            glance = {
+                                TodayGlanceContent(TodayOverview.of(RenderSamples.todos, RenderSamples.ledger, RenderSamples.today), RenderSamples.settings, showLedger = true)
+                            },
                         ) { padding ->
                             BoxWithConstraints(Modifier.fillMaxSize().padding(padding)) {
                                 scene.content(maxWidth >= 840.dp)

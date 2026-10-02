@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clipToBounds
@@ -83,6 +84,12 @@ import com.ced2711.lifetracker.domain.model.TopLevelDestination
 private val NoInsets = WindowInsets(0, 0, 0, 0)
 private val LocalAuxiliaryTitle = staticCompositionLocalOf<String?> { null }
 // The modules the user chose to show, in navigation order.
+/**
+ * A small overview of the day for the half of a folded screen that otherwise only holds the
+ * navigation: above the hinge in tabletop posture, under the module list in book posture.
+ */
+private val LocalGlance = staticCompositionLocalOf<(@Composable () -> Unit)?> { null }
+
 private val LocalNavigationDestinations = staticCompositionLocalOf<List<TopLevelDestination>> { TopLevelDestination.entries }
 private val CompactHeightThreshold = 320.dp
 private val RailWidth = 80.dp
@@ -109,6 +116,7 @@ fun AdaptiveTaskLedgerScaffold(
     foldingFeature: FoldingFeature? = null,
     destinations: List<TopLevelDestination> = TopLevelDestination.entries,
     syncStatus: TopBarSyncStatus? = null,
+    glance: (@Composable () -> Unit)? = null,
     content: @Composable (PaddingValues) -> Unit,
 ) {
     val effectiveAuxiliaryTitle = if (isSettings) auxiliaryTitle ?: "Settings" else null
@@ -147,6 +155,7 @@ fun AdaptiveTaskLedgerScaffold(
             LocalAuxiliaryTitle provides effectiveAuxiliaryTitle,
             LocalNavigationDestinations provides destinations,
             LocalTopBarSyncStatus provides syncStatus,
+            LocalGlance provides glance,
         ) {
             FoldAwareScaffold(
                 safePaneLayout = safePaneLayout,
@@ -294,16 +303,28 @@ private fun VerticalFoldScaffold(
                 } else {
                     Alignment.CenterStart
                 }
-                TaskLedgerNavigationRail(
-                    selected = selected,
-                    onSelected = onSelected,
-                    isSettings = isSettings,
-                    compact = compactChrome,
-                    modifier = Modifier
-                        .align(navigationAlignment)
-                        .width(navigationWidth)
-                        .fillMaxHeight(),
-                )
+                if (!compactChrome && maxWidth >= 260.dp) {
+                    // A whole pane beside the hinge: a full sidebar with names instead of a thin
+                    // rail in an empty half.
+                    TaskLedgerNavigationPane(
+                        selected = selected,
+                        onSelected = onSelected,
+                        onSettings = onSettings,
+                        isSettings = isSettings,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    TaskLedgerNavigationRail(
+                        selected = selected,
+                        onSelected = onSelected,
+                        isSettings = isSettings,
+                        compact = compactChrome,
+                        modifier = Modifier
+                            .align(navigationAlignment)
+                            .width(navigationWidth)
+                            .fillMaxHeight(),
+                    )
+                }
             }
         }
     }
@@ -348,7 +369,7 @@ private fun HorizontalFoldScaffold(
             color = MaterialTheme.colorScheme.surface,
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
-                if (chromeIsAboveContent) Spacer(Modifier.weight(1f))
+                if (chromeIsAboveContent) GlanceArea(Modifier.weight(1f), show = !compactChrome)
                 if (!chromeIsAboveContent) {
                     TaskLedgerNavigationBar(
                         selected = selected,
@@ -371,7 +392,7 @@ private fun HorizontalFoldScaffold(
                         compact = compactChrome,
                     )
                 }
-                if (!chromeIsAboveContent) Spacer(Modifier.weight(1f))
+                if (!chromeIsAboveContent) GlanceArea(Modifier.weight(1f), show = !compactChrome)
             }
         }
     }
@@ -383,6 +404,17 @@ private fun HorizontalFoldScaffold(
             contentWindowInsets = NoInsets,
             content = content,
         )
+    }
+}
+
+/** The free part of the chrome pane: the overview of the day when there is one and room for it. */
+@Composable
+private fun GlanceArea(modifier: Modifier, show: Boolean) {
+    val glance = LocalGlance.current
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        if (glance != null && show && maxHeight >= 150.dp) {
+            Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 16.dp)) { glance() }
+        }
     }
 }
 
@@ -596,6 +628,76 @@ private fun TaskLedgerNavigationRail(
                 )
             }
         }
+    }
+}
+
+/**
+ * Navigation for a pane of its own (a book-style foldable held half open): the app's name and
+ * every module as a row with its name, and Settings at the bottom.
+ */
+@Composable
+private fun TaskLedgerNavigationPane(
+    selected: TopLevelDestination,
+    onSelected: (TopLevelDestination) -> Unit,
+    onSettings: () -> Unit,
+    isSettings: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Surface(modifier = modifier, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+        Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 20.dp)) {
+            Text(
+                localizedText("Life Assistant"),
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.padding(start = 12.dp, bottom = 16.dp).semantics { heading() },
+            )
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                LocalNavigationDestinations.current.forEach { destination ->
+                    NavigationPaneRow(
+                        icon = destination.icon,
+                        label = localizedText(destination.label),
+                        selected = !isSettings && selected == destination,
+                        onClick = { onSelected(destination) },
+                    )
+                }
+                LocalGlance.current?.let { glance ->
+                    Box(Modifier.padding(top = 20.dp, start = 12.dp, end = 12.dp)) { glance() }
+                }
+            }
+            if (LocalAuxiliaryTitle.current == null || isSettings) {
+                NavigationPaneRow(
+                    icon = Icons.Outlined.Settings,
+                    label = localizedText("Settings"),
+                    selected = isSettings,
+                    onClick = { if (!isSettings) onSettings() },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun NavigationPaneRow(icon: ImageVector, label: String, selected: Boolean, onClick: () -> Unit) {
+    val background by animateColorAsState(if (selected) LifeTheme.colors.accentSoft else Color.Transparent, label = "navigation-row")
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .widthIn(max = 420.dp)
+            .clip(MaterialTheme.shapes.large)
+            .background(background)
+            .selectable(selected = selected, role = Role.Tab, onClick = onClick)
+            .height(52.dp)
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, Modifier.size(22.dp), tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            label,
+            style = MaterialTheme.typography.titleMedium,
+            color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 16.dp),
+        )
     }
 }
 
