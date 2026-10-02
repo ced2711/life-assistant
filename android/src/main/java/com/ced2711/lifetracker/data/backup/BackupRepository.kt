@@ -519,7 +519,9 @@ class BackupRepository(
             val stable = settingsBefore == settingsAfter &&
                 fullDatabaseFingerprint(stateBefore) == fullDatabaseFingerprint(stateAfter)
             if (stable) {
-                val snapshot = stateBefore.toBackupSnapshot(
+                // A copy without the Vault (the daily backup) leaves the Vault rows out as well.
+                val exportedState = if (includeVault) stateBefore else stateBefore.copy(vaultEntries = emptyList())
+                val snapshot = exportedState.toBackupSnapshot(
                     settings = settingsBefore.toBackupSettings(),
                     vaultEntries = vaultEntries,
                     attachmentPlan = attachmentPlan,

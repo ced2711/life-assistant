@@ -56,6 +56,7 @@ import com.ced2711.lifetracker.ui.localization.localizedText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -130,8 +131,13 @@ fun AdaptiveTaskLedgerScaffold(
     val latestContentStateKey by rememberUpdatedState(contentStateKey)
     val movableFeatureContent = remember(contentStateHolder) {
         movableContentOf<PaddingValues> { paddingValues ->
-            contentStateHolder.SaveableStateProvider(latestContentStateKey) {
-                latestContent(paddingValues)
+            // key(): a page that replaces another must start as a new group. Reusing the group
+            // left the new page out of the saved state, so a todo being edited was lost when the
+            // screen was rotated or folded after switching pages.
+            key(latestContentStateKey) {
+                contentStateHolder.SaveableStateProvider(latestContentStateKey) {
+                    latestContent(paddingValues)
+                }
             }
         }
     }
