@@ -7,10 +7,12 @@
   for apps registered since August 2026). The apps threw that second key away and never renewed,
   so every device was disconnected at most eight hours after it connected. Now each device keeps
   the renewal key, renews its sign-in by itself shortly before it expires, and tries once more
-  when GitHub turns a sign-in down. Nothing has to be reconnected by hand any more.
-- **Reconnecting or disconnecting one device no longer signs the others out.** 2.0.0 asked GitHub
-  to revoke the sign-in a device had used before, and GitHub then removed the app's whole
-  authorization, with the sign-ins of every device. The apps no longer revoke anything.
+  when GitHub turns a sign-in down. Token expiration is also turned off for the app on GitHub, so
+  new sign-ins do not expire at all.
+- **Reconnecting or disconnecting one device no longer risks signing the others out.** 2.0.0 asked
+  GitHub to revoke the sign-in a device had used before. Shortly after one such request GitHub
+  removed the app's whole authorization, with the sign-ins of every device. The apps no longer
+  revoke anything; a replaced sign-in is simply forgotten on the device.
 
 ## New
 
