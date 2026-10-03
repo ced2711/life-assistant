@@ -214,20 +214,13 @@ class CloudSyncViewModel internal constructor(
                 _uiState.update { it.copy(gitHubPrompt = GitHubCodePrompt(code.userCode, code.verificationUri)) }
                 val token = authorization.awaitToken(code)
                 _uiState.update { it.copy(gitHubPrompt = null) }
-                val resolved = try {
-                    authorization.resolveRepository(token.accessToken, repository).also { resolved ->
-                        // Prove write access to the branch history before anything is saved.
-                        GitHubBackupStore({ token.accessToken }, resolved).listRevisions()
-                    }
-                } catch (error: Throwable) {
-                    // This sign-in will not be kept; retire it so it does not count against the account.
-                    withContext(NonCancellable) { authorization.revokeToken(token.accessToken) }
-                    throw error
+                val resolved = authorization.resolveRepository(token.accessToken, repository).also { resolved ->
+                    // Prove write access to the branch history before anything is saved.
+                    GitHubBackupStore({ token.accessToken }, resolved).listRevisions()
                 }
-                val replaced = gitHubTokenStore.load()?.let { old -> try { old.concatToString() } finally { old.fill('\u0000') } }
+                // The sign-in this replaces is only forgotten, never revoked: see GitHubDeviceAuthorization.
                 gitHubTokenStore.save(token.accessToken.toCharArray())
                 preferences.setAttention(null)
-                if (replaced != null && replaced != token.accessToken) authorization.revokeToken(replaced)
                 if (reconnecting) {
                     preferences.setProvider(CloudProvider.GITHUB, clientId.trim(), resolved.fullName)
                     _uiState.value = readState().copy(task = CloudSyncTask.NONE, message = "GitHub reconnected.")
@@ -387,13 +380,6 @@ class CloudSyncViewModel internal constructor(
     fun disconnect() {
         if (_uiState.value.busy) return
         viewModelScope.launch { runCatching { authorization.disconnect() } }
-        gitHubTokenStore.load()?.let { saved ->
-            val token = try { saved.concatToString() } finally { saved.fill('\u0000') }
-            val clientId = preferences.read().gitHubClientId.ifBlank { defaultGitHubClientId }
-            runCatching { GitHubDeviceAuthorization(clientId) }.getOrNull()?.let { github ->
-                viewModelScope.launch(NonCancellable) { github.revokeToken(token) }
-            }
-        }
         clearPendingPassword()
         pendingResolution = null
         pendingExpectedRemoteRevisionId = null

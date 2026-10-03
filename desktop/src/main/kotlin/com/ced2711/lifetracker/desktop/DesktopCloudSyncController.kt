@@ -206,23 +206,15 @@ class DesktopCloudSyncController(
             _state.update { it.copy(gitHubCode = code) }
             val token = authorization.awaitToken(code)
             _state.update { it.copy(gitHubCode = null) }
-            val resolved = try {
-                authorization.resolveRepository(token.accessToken, repository).also { resolved ->
-                    if (!matchCloudPassword(GitHubBackupStore({ token.accessToken }, resolved))) {
-                        throw CancellationException("password not given")
-                    }
+            val resolved = authorization.resolveRepository(token.accessToken, repository).also { resolved ->
+                if (!matchCloudPassword(GitHubBackupStore({ token.accessToken }, resolved))) {
+                    throw CancellationException("password not given")
                 }
-            } catch (error: Throwable) {
-                // This sign-in will not be kept; retire it so it does not count against the account.
-                withContext(NonCancellable) { authorization.revokeToken(token.accessToken) }
-                throw error
             }
             val store = requireNotNull(credentials) { "Secure credential storage is unavailable." }
-            val replaced = store.load(DesktopCredentialStore.GITHUB_TOKEN)?.let { old -> String(old).also { old.fill(' ') } }
+            // The sign-in this replaces is only forgotten, never revoked: see GitHubDeviceAuthorization.
             store.save(DesktopCredentialStore.GITHUB_TOKEN, token.accessToken.toCharArray())
             signInExpired = false
-            // GitHub keeps ten sign-ins per account; retiring the old one keeps other devices connected.
-            if (replaced != null && replaced != token.accessToken) authorization.revokeToken(replaced)
             val sameRepository = configStore.read().let {
                 it.provider == DesktopCloudProvider.GITHUB && it.gitHubRepository == resolved.fullName
             }
@@ -316,11 +308,6 @@ class DesktopCloudSyncController(
         if (_state.value.syncing) return
         val provider = configStore.read().provider
         if (provider == DesktopCloudProvider.GITHUB) {
-            credentials?.load(DesktopCredentialStore.GITHUB_TOKEN)?.let { saved ->
-                val token = String(saved).also { saved.fill(' ') }
-                runCatching { GitHubDeviceAuthorization(configStore.read().gitHubClientId.ifBlank { DesktopCloudDefaults.builtIn.gitHubClientId }) }
-                    .getOrNull()?.revokeToken(token)
-            }
             credentials?.delete(DesktopCredentialStore.GITHUB_TOKEN)
             signInExpired = false
             configStore.clearSyncState()
