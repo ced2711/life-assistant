@@ -94,7 +94,7 @@ internal fun accentOf(accentColor: AccentColor, dark: Boolean): Color = when (ac
     AccentColor.GREEN -> if (dark) Color(0xFF6CD68B) else Color(0xFF1D8545)
 }
 
-private object Neutral {
+internal object Neutral {
     // Dark: near-black with a hint of blue-grey; light: paper white with a hint of warmth.
     val darkBackground = Color(0xFF0F1012)
     val darkLowest = Color(0xFF0B0C0E)

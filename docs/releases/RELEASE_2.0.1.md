@@ -12,6 +12,15 @@
   to revoke the sign-in a device had used before, and GitHub then removed the app's whole
   authorization, with the sign-ins of every device. The apps no longer revoke anything.
 
+## New
+
+- **The home-screen widget was rebuilt.** It wears the app's own colours and accent and follows
+  the app's light or dark setting. It lists what is overdue (in red) and due today, with the
+  round check marks in their priority colours, the due time, and a bar for the day's progress.
+  The list scrolls, ticking a todo off shows at once, tapping a title opens that todo, and two
+  round buttons add a todo or an expense with the keyboard already open. The single-cell and the
+  one-row sizes show the count and the next todo.
+
 ## Changed
 
 - **Today is no longer in the menu by default.** Switch it on in Settings → Appearance → modules

@@ -43,7 +43,7 @@ class TaskLedgerApplication : Application() {
             onReady = { recoveredRestore ->
                 runCatching { launcherIconMoodCoordinator.start() }
                 runCatching {
-                    WidgetRefreshCoordinator.observeRoomChanges(this, container.repository)
+                    WidgetRefreshCoordinator.observeRoomChanges(this, container.repository, container.settingsRepository.settings)
                 }
                 if (recoveredRestore) {
                     runCatching {
