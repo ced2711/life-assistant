@@ -30,7 +30,7 @@ All versions and release notes: [Releases](https://github.com/ced2711/life-assis
 - Diary with one page per day, saved automatically; days with a page show a small green dot in the calendar.
 - Confessional: write something down, then burn it for good or seal it on this device only. Sealed words are encrypted with a device key (Android Keystore or Windows DPAPI) and are never backed up or synced; screenshots are blocked on Android.
 - Optional app lock, off by default: Android asks for fingerprint, face or screen lock, Windows for the data password, after the app has been in the background for a chosen time.
-- Choose which modules appear in the navigation menu. Diary and Confessional start hidden; turn them on in Settings. Hidden modules keep their data.
+- Choose which modules appear in the navigation menu. Today, Diary and Confessional start hidden; turn them on in Settings. Hidden modules keep their data.
 - Encrypted local Vault for credentials and private notes, protected by Android system authentication.
 - Password-encrypted `.tlb` backup and full-replacement restore with validation and preview.
 - Responsive Today Todo widget, including wide horizontal layouts.
@@ -94,7 +94,7 @@ Release Android signing is configured locally, never through committed credentia
 
 ## Verification
 
-The project includes JVM, Android instrumentation, sync transport/branch-conflict, Windows encrypted-store/attachment, and Windows DPAPI tests. See the [release notes](docs/releases/): [2.0.0](docs/releases/RELEASE_2.0.0.md), [1.9.0](docs/releases/RELEASE_1.9.0.md), [1.8.0](docs/releases/RELEASE_1.8.0.md), [1.7.1 fullscreen and compatibility report](docs/releases/RELEASE_1.7.1.md), [1.7.0](docs/releases/RELEASE_1.7.0.md) and the historical [1.6.0 verification report](docs/releases/RELEASE_1.6.0.md). The cloud tests use a local HTTP fixture; a real OAuth end-to-end check additionally requires the developer's configured Google Cloud project and interactive consent. Unit tests alone do not establish that live Google authorization is configured.
+The project includes JVM, Android instrumentation, sync transport/branch-conflict, Windows encrypted-store/attachment, and Windows DPAPI tests. See the [release notes](docs/releases/): [2.0.1](docs/releases/RELEASE_2.0.1.md), [2.0.0](docs/releases/RELEASE_2.0.0.md), [1.9.0](docs/releases/RELEASE_1.9.0.md), [1.8.0](docs/releases/RELEASE_1.8.0.md), [1.7.1 fullscreen and compatibility report](docs/releases/RELEASE_1.7.1.md), [1.7.0](docs/releases/RELEASE_1.7.0.md) and the historical [1.6.0 verification report](docs/releases/RELEASE_1.6.0.md). The cloud tests use a local HTTP fixture; a real OAuth end-to-end check additionally requires the developer's configured Google Cloud project and interactive consent. Unit tests alone do not establish that live Google authorization is configured.
 
 Android support remains **Android 8.0 (API 26) and newer**, for phone/tablet app environments. There is no Samsung-only restriction. Tests on Android 8 and Android 16 emulators and resized/folded layouts do not prove compatibility with every OEM, keyboard, or future OS release. Camera hardware cannot be removed; system-owned authentication, permission or external-app screens control their own bars. Flip cover-screen launch access is controlled by Samsung/One UI (and may require its supported launcher/settings); adapting the app's small-window layout does not bypass those restrictions.
 

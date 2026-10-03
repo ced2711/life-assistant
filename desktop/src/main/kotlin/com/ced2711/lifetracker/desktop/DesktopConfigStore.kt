@@ -2,7 +2,8 @@ package com.ced2711.lifetracker.desktop
 
 import com.ced2711.lifetracker.cloudsync.LocalCloudSyncState
 import com.ced2711.lifetracker.domain.model.AppLockTimeout
-import com.ced2711.lifetracker.domain.model.DefaultHiddenDestinations
+import com.ced2711.lifetracker.domain.model.OptInDestinations
+import com.ced2711.lifetracker.domain.model.resolveVisibleDestinations
 import com.ced2711.lifetracker.domain.model.DefaultVisibleDestinations
 import com.ced2711.lifetracker.domain.model.TopLevelDestination
 import com.ced2711.lifetracker.domain.model.UiLanguage
@@ -19,7 +20,7 @@ data class DesktopCloudConfig(
     val automaticSync: Boolean,
     val syncState: LocalCloudSyncState,
     val uiLanguage: UiLanguage = UiLanguage.ENGLISH,
-    val lastDestination: TopLevelDestination = TopLevelDestination.TODAY,
+    val lastDestination: TopLevelDestination = TopLevelDestination.TODO,
     val visibleDestinations: Set<TopLevelDestination> = DefaultVisibleDestinations,
     val appLockEnabled: Boolean = false,
     val appLockTimeout: AppLockTimeout = AppLockTimeout.ONE_MINUTE,
@@ -56,17 +57,13 @@ class DesktopConfigStore(
                 ?: UiLanguage.ENGLISH,
             lastDestination = properties.getProperty(KEY_LAST_DESTINATION)
                 ?.let { value -> runCatching { TopLevelDestination.valueOf(value) }.getOrNull() }
-                ?: TopLevelDestination.TODAY,
-            // Hidden rather than visible modules are stored so modules added later start visible.
-            // No saved choice yet means the defaults; an empty saved value means every module is shown.
-            visibleDestinations = (
-                properties.getProperty(KEY_HIDDEN_DESTINATIONS)
-                    ?: DefaultHiddenDestinations.joinToString(",") { it.name }
-                )
-                .split(',')
-                .map(String::trim)
-                .toSet()
-                .let { hidden -> TopLevelDestination.entries.filterNot { it.name in hidden }.toSet() },
+                ?: TopLevelDestination.TODO,
+            // Hidden rather than visible modules are stored so modules added later start visible;
+            // opt-in modules (Today) show only when chosen. No saved choice yet means the defaults.
+            visibleDestinations = resolveVisibleDestinations(
+                hidden = properties.getProperty(KEY_HIDDEN_DESTINATIONS)?.split(',')?.mapTo(mutableSetOf(), String::trim),
+                optedIn = properties.getProperty(KEY_OPTED_IN_DESTINATIONS)?.split(',')?.mapTo(mutableSetOf(), String::trim),
+            ),
             appLockEnabled = properties.getProperty(KEY_APP_LOCK)?.toBooleanStrictOrNull() ?: false,
             appLockTimeout = properties.getProperty(KEY_APP_LOCK_TIMEOUT)
                 ?.let { value -> AppLockTimeout.entries.firstOrNull { it.name == value } }
@@ -115,6 +112,7 @@ class DesktopConfigStore(
             KEY_HIDDEN_DESTINATIONS,
             TopLevelDestination.entries.filterNot(value::contains).joinToString(",") { it.name },
         )
+        properties.setProperty(KEY_OPTED_IN_DESTINATIONS, OptInDestinations.filter(value::contains).joinToString(",") { it.name })
         save(properties)
     }
 
@@ -267,6 +265,7 @@ class DesktopConfigStore(
         const val KEY_UI_LANGUAGE = "ui.language"
         const val KEY_LAST_DESTINATION = "ui.lastDestination"
         const val KEY_HIDDEN_DESTINATIONS = "ui.hiddenDestinations"
+        const val KEY_OPTED_IN_DESTINATIONS = "ui.optedInDestinations"
         const val KEY_APP_LOCK = "security.appLock"
         const val KEY_APP_LOCK_TIMEOUT = "security.appLockTimeout"
         const val KEY_PROVIDER = "cloud.provider"

@@ -106,17 +106,12 @@ class GitHubDeviceAuthorizationTest {
     }
 
     @Test
-    fun revokingSendsTheOldTokenWithoutAuthentication() = runBlocking {
-        authorization("Ov23liExample12345").revokeToken("gho_old")
-        val body = Json.parseToJsonElement(fake.revokedBody ?: error("nothing revoked")).jsonObject
-        assertEquals("gho_old", body["credentials"]!!.let { it as kotlinx.serialization.json.JsonArray }.single().jsonPrimitive.content)
-        assertEquals(null, fake.revokeAuthorization)
-    }
-
-    @Test
-    fun revokingIgnoresFailures() = runBlocking {
-        fake.revokeFails = true
-        authorization("Ov23liExample12345").revokeToken("gho_old")
+    fun signingInNeverAsksGitHubToRevokeAnything() = runBlocking {
+        // Revoking a replaced sign-in ended every sign-in of the app for the account.
+        val authorization = authorization("Ov23liExample12345")
+        val token = authorization.awaitToken(authorization.start())
+        authorization.resolveRepository(token.accessToken, "")
+        assertFalse(fake.revokeRequested)
     }
 
     @Test
@@ -131,9 +126,7 @@ class GitHubDeviceAuthorizationTest {
     }
 
     private class FakeGitHubAccount : Dispatcher() {
-        var revokedBody: String? = null
-        var revokeAuthorization: String? = null
-        var revokeFails = false
+        var revokeRequested = false
         var userUnauthorized = false
         var existing = false
         var public = false
@@ -158,10 +151,8 @@ class GitHubDeviceAuthorizationTest {
                     else json("""{"access_token":"gho_token","token_type":"bearer","scope":"repo"}""")
                 }
                 path == "/api/credentials/revoke" -> {
-                    revokedBody = request.body.readUtf8()
-                    revokeAuthorization = request.getHeader("Authorization")
-                    if (revokeFails) MockResponse().setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.DISCONNECT_AT_START)
-                    else MockResponse().setResponseCode(202)
+                    revokeRequested = true
+                    MockResponse().setResponseCode(202)
                 }
                 path == "/api/user" && userUnauthorized -> MockResponse().setResponseCode(401)
                 path == "/api/user" -> if (failUserLookups-- > 0) MockResponse().setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.DISCONNECT_AT_START) else json("""{"login":"octo"}""")

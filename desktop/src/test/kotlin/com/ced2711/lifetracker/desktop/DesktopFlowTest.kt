@@ -25,6 +25,8 @@ import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Image
 import org.junit.After
 import org.junit.Assert.assertEquals
+import com.ced2711.lifetracker.domain.model.DefaultVisibleDestinations
+import com.ced2711.lifetracker.domain.model.TopLevelDestination
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -44,7 +46,14 @@ class DesktopFlowTest {
         root.deleteRecursively()
     }
 
-    private fun app(width: Int = 1280, height: Int = 800, block: DesktopComposeUiTest.() -> Unit) = runDesktopComposeUiTest(width, height) {
+    private fun app(
+        width: Int = 1280,
+        height: Int = 800,
+        withToday: Boolean = false,
+        block: DesktopComposeUiTest.() -> Unit,
+    ) = runDesktopComposeUiTest(width, height) {
+        // Today is not in the menu until it is switched on in Settings.
+        if (withToday) DesktopConfigStore(File(root, "desktop.properties")).setVisibleDestinations(DefaultVisibleDestinations + TopLevelDestination.TODAY)
         val shortcuts = DesktopShortcuts()
         setContent {
             CompositionLocalProvider(LocalDesktopShortcuts provides shortcuts) {
@@ -52,7 +61,7 @@ class DesktopFlowTest {
             }
         }
         // The data opens by itself; no password screen on a new PC.
-        waitUntil(timeoutMillis = 20_000) { onAllNodesWithText("Today").fetchSemanticsNodes().isNotEmpty() }
+        waitUntil(timeoutMillis = 20_000) { onAllNodes(hasContentDescription("Todo", substring = true)).fetchSemanticsNodes().isNotEmpty() }
         block()
     }
 
@@ -74,8 +83,17 @@ class DesktopFlowTest {
     private fun store(): DesktopDataStore = DesktopDataStore(root)
 
     @Test
-    fun aNewPcOpensWithoutAPasswordAndTodosCanBeAddedAndTicked() = app {
+    fun aNewPcOpensOnTodoWithoutAPasswordAndWithoutToday() = app {
         assertFalse("no password is asked on a new PC", onAllNodesWithText("Data password").fetchSemanticsNodes().isNotEmpty())
+        waitForText("Add a todo and press Enter")
+        assertFalse("Today stays out of the menu by default", onAllNodes(hasContentDescription("Today", substring = true)).fetchSemanticsNodes().isNotEmpty())
+        shot("00-new-pc")
+    }
+
+    @Test
+    fun todayCanBeSwitchedOnAndTodosCanBeAddedAndTickedThere() = app(withToday = true) {
+        open("Today")
+        waitForText("Add a todo for today, then press Enter")
         shot("01-today-empty")
         val field = onNodeWithText("Add a todo for today, then press Enter")
         field.performClick()
@@ -155,7 +173,7 @@ class DesktopFlowTest {
     }
 
     @Test
-    fun everyPageShowsInASmallWindow() = app(width = 640, height = 480) {
+    fun everyPageShowsInASmallWindow() = app(width = 640, height = 480, withToday = true) {
         listOf("Today", "Todo", "Ledger", "Calendar", "Notes", "Vault", "Settings").forEach { module ->
             open(module)
             shot("small-$module")

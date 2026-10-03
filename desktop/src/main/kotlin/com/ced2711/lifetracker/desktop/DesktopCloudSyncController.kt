@@ -8,6 +8,8 @@ import com.ced2711.lifetracker.cloudsync.GitHubBackupStore
 import com.ced2711.lifetracker.cloudsync.GitHubDeviceAuthorization
 import com.ced2711.lifetracker.cloudsync.GitHubDeviceCode
 import com.ced2711.lifetracker.cloudsync.GitHubRepository
+import com.ced2711.lifetracker.cloudsync.GitHubSession
+import com.ced2711.lifetracker.cloudsync.GitHubSignIn
 import com.ced2711.lifetracker.cloudsync.GitHubSignInExpiredException
 import com.ced2711.lifetracker.cloudsync.GoogleDriveBackupStore
 import com.ced2711.lifetracker.cloudsync.NewCloudRevision
@@ -91,22 +93,30 @@ class DesktopCloudSyncController(
             when (config.provider) {
                 DesktopCloudProvider.GOOGLE_DRIVE -> googleDrive
                 DesktopCloudProvider.GITHUB -> GitHubBackupStore(
-                    tokenProvider = { gitHubToken() },
+                    tokenProvider = gitHubSession,
                     repository = GitHubRepository.parse(config.gitHubRepository),
                 )
             }
         }
 
-    private fun gitHubToken(): String {
-        val token = credentials?.load(DesktopCredentialStore.GITHUB_TOKEN)
-            ?: if (credentials?.exists(DesktopCredentialStore.GITHUB_TOKEN) == true) {
+    // One session for the app: it renews the eight-hour GitHub token and saves the new one.
+    private val gitHubSession = GitHubSession(
+        load = {
+            val saved = credentials?.load(DesktopCredentialStore.GITHUB_TOKEN)
+            if (saved == null && credentials?.exists(DesktopCredentialStore.GITHUB_TOKEN) == true) {
                 // Saved but unreadable for the moment: try again later rather than ask to sign in.
                 throw java.io.IOException("The saved GitHub sign-in could not be read. Sync will try again.")
-            } else {
-                throw GitHubSignInExpiredException()
             }
-        return try { token.concatToString() } finally { token.fill('\u0000') }
-    }
+            saved?.let { try { it.concatToString() } finally { it.fill('\u0000') } }
+        },
+        save = { text ->
+            requireNotNull(credentials) { "Secure credential storage is unavailable." }
+                .save(DesktopCredentialStore.GITHUB_TOKEN, text.toCharArray())
+        },
+        authorization = {
+            GitHubDeviceAuthorization(configStore.read().gitHubClientId.ifBlank { DesktopCloudDefaults.builtIn.gitHubClientId })
+        },
+    )
 
     private fun isConnected(): Boolean = connectionStatus?.invoke() ?: when (configStore.read().provider) {
         DesktopCloudProvider.GOOGLE_DRIVE -> oauth.isConnected()
@@ -206,23 +216,17 @@ class DesktopCloudSyncController(
             _state.update { it.copy(gitHubCode = code) }
             val token = authorization.awaitToken(code)
             _state.update { it.copy(gitHubCode = null) }
-            val resolved = try {
-                authorization.resolveRepository(token.accessToken, repository).also { resolved ->
-                    if (!matchCloudPassword(GitHubBackupStore({ token.accessToken }, resolved))) {
-                        throw CancellationException("password not given")
-                    }
+            val resolved = authorization.resolveRepository(token.accessToken, repository).also { resolved ->
+                if (!matchCloudPassword(GitHubBackupStore({ token.accessToken }, resolved))) {
+                    throw CancellationException("password not given")
                 }
-            } catch (error: Throwable) {
-                // This sign-in will not be kept; retire it so it does not count against the account.
-                withContext(NonCancellable) { authorization.revokeToken(token.accessToken) }
-                throw error
             }
             val store = requireNotNull(credentials) { "Secure credential storage is unavailable." }
-            val replaced = store.load(DesktopCredentialStore.GITHUB_TOKEN)?.let { old -> String(old).also { old.fill(' ') } }
-            store.save(DesktopCredentialStore.GITHUB_TOKEN, token.accessToken.toCharArray())
+            // The sign-in this replaces is only forgotten, never revoked: see GitHubDeviceAuthorization.
+            // The refresh token is saved with it so that the eight-hour token can be renewed.
+            gitHubSession.reset()
+            store.save(DesktopCredentialStore.GITHUB_TOKEN, GitHubSignIn.of(token).encode().toCharArray())
             signInExpired = false
-            // GitHub keeps ten sign-ins per account; retiring the old one keeps other devices connected.
-            if (replaced != null && replaced != token.accessToken) authorization.revokeToken(replaced)
             val sameRepository = configStore.read().let {
                 it.provider == DesktopCloudProvider.GITHUB && it.gitHubRepository == resolved.fullName
             }
@@ -316,11 +320,6 @@ class DesktopCloudSyncController(
         if (_state.value.syncing) return
         val provider = configStore.read().provider
         if (provider == DesktopCloudProvider.GITHUB) {
-            credentials?.load(DesktopCredentialStore.GITHUB_TOKEN)?.let { saved ->
-                val token = String(saved).also { saved.fill(' ') }
-                runCatching { GitHubDeviceAuthorization(configStore.read().gitHubClientId.ifBlank { DesktopCloudDefaults.builtIn.gitHubClientId }) }
-                    .getOrNull()?.revokeToken(token)
-            }
             credentials?.delete(DesktopCredentialStore.GITHUB_TOKEN)
             signInExpired = false
             configStore.clearSyncState()

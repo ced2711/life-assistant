@@ -1,56 +1,90 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- What the widget picker shows: the widget with two example todos. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_preview"
-    android:gravity="center_vertical"
     android:orientation="vertical"
-    android:padding="16dp">
+    android:paddingStart="14dp"
+    android:paddingTop="12dp"
+    android:paddingEnd="14dp"
+    android:paddingBottom="8dp">
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Today"
-        android:textColor="#F1F7F5"
-        android:textSize="18sp"
+        android:textColor="#EDEEF0"
+        android:textSize="16sp"
         android:textStyle="bold" />
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:text="2 remaining"
-        android:textColor="#8AD8BF"
+        android:text="2 left"
+        android:textColor="#9DA0A6"
         android:textSize="12sp" />
 
-    <TextView
+    <ImageView
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:text="○   Submit assignment"
-        android:textColor="#E3ECE9"
-        android:textSize="14sp" />
+        android:layout_height="4dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="6dp"
+        android:importantForAccessibility="no"
+        android:scaleType="fitXY"
+        android:src="@drawable/widget_preview_bar" />
 
-    <TextView
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:text="○   Pay electricity bill"
-        android:textColor="#E3ECE9"
-        android:textSize="14sp" />
+        android:layout_height="40dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
 
-    <TextView
+        <ImageView
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/ic_widget_ring"
+            tools:ignore="UseAppTint"
+            android:tint="#FF7B72" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="Submit assignment"
+            android:textColor="#EDEEF0"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="14dp"
-        android:gravity="end"
-        android:text="+ Todo     + Ledger"
-        android:textColor="#8AD8BF"
-        android:textSize="12sp"
-        android:textStyle="bold" />
+        android:layout_height="40dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/ic_widget_ring"
+            tools:ignore="UseAppTint"
+            android:tint="#3FD2BD" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="Pay electricity bill"
+            android:textColor="#EDEEF0"
+            android:textSize="14sp" />
+    </LinearLayout>
 
 </LinearLayout>

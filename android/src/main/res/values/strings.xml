@@ -1,5 +1,5 @@
 <resources>
     <string name="app_name">Life Assistant</string>
     <string name="today_todo_widget_name">Today’s todos</string>
-    <string name="today_todo_widget_description">Active todos due today, with quick Todo and Ledger shortcuts</string>
+    <string name="today_todo_widget_description">What is overdue and due today, to tick off from the home screen, with shortcuts to add a todo or an expense</string>
 </resources>

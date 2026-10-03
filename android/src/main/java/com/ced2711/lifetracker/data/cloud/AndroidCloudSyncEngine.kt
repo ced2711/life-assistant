@@ -7,6 +7,8 @@ import com.ced2711.lifetracker.cloudsync.ConflictResolution
 import com.ced2711.lifetracker.cloudsync.CloudAuthorizationException
 import com.ced2711.lifetracker.cloudsync.GitHubBackupStore
 import com.ced2711.lifetracker.cloudsync.GitHubRepository
+import com.ced2711.lifetracker.cloudsync.GitHubDeviceAuthorization
+import com.ced2711.lifetracker.cloudsync.GitHubSession
 import com.ced2711.lifetracker.cloudsync.GitHubSignInExpiredException
 import com.ced2711.lifetracker.cloudsync.GoogleDriveBackupStore
 import com.ced2711.lifetracker.cloudsync.NewCloudRevision
@@ -212,19 +214,28 @@ class AndroidCloudSyncEngine(
     private fun storeFor(settings: AndroidCloudSyncSettings): CloudBackupStore = when (settings.provider) {
         CloudProvider.GOOGLE_DRIVE -> driveStore
         CloudProvider.GITHUB -> GitHubBackupStore(
-            tokenProvider = {
-                val tokens = gitHubTokenStore
-                val token = tokens?.load() ?: if (tokens?.hasSecret() == true) {
-                    // Saved but unreadable for the moment: try again later rather than ask to sign in.
-                    throw IOException("The saved GitHub sign-in could not be read. Sync will try again.")
-                } else {
-                    throw GitHubSignInExpiredException()
-                }
-                try { token.concatToString() } finally { token.fill('\u0000') }
-            },
+            tokenProvider = gitHubSession,
             repository = GitHubRepository.parse(settings.gitHubRepository),
         )
     }
+
+    // One session for the app: it renews the eight-hour GitHub token and saves the new one.
+    private val gitHubSession = GitHubSession(
+        load = {
+            val tokens = gitHubTokenStore
+            val saved = tokens?.load()
+            if (saved == null && tokens?.hasSecret() == true) {
+                // Saved but unreadable for the moment: try again later rather than ask to sign in.
+                throw IOException("The saved GitHub sign-in could not be read. Sync will try again.")
+            }
+            saved?.let { try { it.concatToString() } finally { it.fill('\u0000') } }
+        },
+        save = { text -> requireNotNull(gitHubTokenStore) { "No storage for the GitHub sign-in." }.save(text.toCharArray()) },
+        authorization = {
+            GitHubDeviceAuthorization(preferences.read().gitHubClientId.ifBlank { com.ced2711.lifetracker.BuildConfig.GITHUB_CLIENT_ID })
+        },
+        now = now,
+    )
 
     /** Old revisions only cost cloud space; keep recent history and never touch competing tips. */
     private suspend fun pruneOldRevisions(revisions: List<CloudRevision>) {
