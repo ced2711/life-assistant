@@ -25,7 +25,7 @@ class DeviceLocalSettingsTest {
         assertEquals(false, settings.appLockEnabled)
         assertEquals(AppLockTimeout.ONE_MINUTE, settings.appLockTimeout)
         assertEquals(
-            setOf(TopLevelDestination.TODAY, TopLevelDestination.TODO, TopLevelDestination.LEDGER, TopLevelDestination.CALENDAR, TopLevelDestination.NOTES),
+            setOf(TopLevelDestination.TODO, TopLevelDestination.LEDGER, TopLevelDestination.CALENDAR, TopLevelDestination.NOTES),
             settings.visibleDestinations,
         )
     }

@@ -88,7 +88,16 @@ class GitHubBackupStore(
     private suspend fun <T> withToken(block: () -> T): T = withContext(ioDispatcher) {
         token = tokenProvider.accessToken()
         if (token.isBlank()) throw CloudAuthorizationException("GitHub is not connected.")
-        block()
+        try {
+            block()
+        } catch (rejected: GitHubSignInExpiredException) {
+            // GitHub turns a token down with the first request, before anything was changed, so the
+            // operation can simply run again with a renewed token.
+            val renewed = (tokenProvider as? RenewableTokenProvider)?.renewAfterRejection(token) ?: throw rejected
+            if (renewed.isBlank() || renewed == token) throw rejected
+            token = renewed
+            block()
+        }
     }
 
     override suspend fun listRevisions(limit: Int): List<CloudRevision> = retryTransient { listRevisionsOnce(limit) }

@@ -13,6 +13,7 @@ import com.ced2711.lifetracker.cloudsync.CloudRevision
 import com.ced2711.lifetracker.cloudsync.ConflictResolution
 import com.ced2711.lifetracker.cloudsync.GitHubBackupStore
 import com.ced2711.lifetracker.cloudsync.GitHubDeviceAuthorization
+import com.ced2711.lifetracker.cloudsync.GitHubSignIn
 import com.ced2711.lifetracker.cloudsync.GitHubSignInExpiredException
 import com.ced2711.lifetracker.data.cloud.CloudProvider
 import com.ced2711.lifetracker.data.cloud.AndroidCloudSyncEngine
@@ -219,7 +220,8 @@ class CloudSyncViewModel internal constructor(
                     GitHubBackupStore({ token.accessToken }, resolved).listRevisions()
                 }
                 // The sign-in this replaces is only forgotten, never revoked: see GitHubDeviceAuthorization.
-                gitHubTokenStore.save(token.accessToken.toCharArray())
+                // The refresh token is saved with it so that the eight-hour token can be renewed.
+                gitHubTokenStore.save(GitHubSignIn.of(token).encode().toCharArray())
                 preferences.setAttention(null)
                 if (reconnecting) {
                     preferences.setProvider(CloudProvider.GITHUB, clientId.trim(), resolved.fullName)

@@ -20,7 +20,7 @@ How the Android and desktop apps look and behave. Shared code: `android/src/main
 
 ## Navigation
 
-- Modules: **Today**, Todo, Ledger, Calendar, Notes, Diary, Confessional (Diary and Confessional hidden by default; any module can be hidden; at least one stays).
+- Modules: **Today**, Todo, Ledger, Calendar, Notes, Diary, Confessional (Today, Diary and Confessional hidden by default; any module can be hidden; at least one stays).
 - **Desktop:** left sidebar (232dp, folds to a 72dp rail with Ctrl+B or the button): app name, modules with counts, then sync status, Vault and Settings at the bottom. Ctrl+1…9 opens modules in order.
 - **Phone:** bottom navigation with the visible modules (labels shown). The top of each page has the page title, sync status and the settings entry. Vault and Backup & sync open from Settings (and Vault from Notes).
 
