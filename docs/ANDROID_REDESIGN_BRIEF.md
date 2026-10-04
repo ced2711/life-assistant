@@ -81,7 +81,7 @@ Instrumented tests in `android/src/androidTest` that use your composables must k
 
 - Stay inside your files (listed in your task), your `Zh<Area>.kt`, your `<Area>Scenes.kt`, and small additions to `TaskLedgerViewModel.kt`. Other people are rewriting the other screens at the same time; touching shared files causes conflicts. If a shared building block is missing something, add what you need as a private helper in your own file and mention it in your report.
 - Commit your work on your branch with a clear message. Never add Claude or AI attribution to commits, comments or files. Do not push.
-- Windows machine, Git Bash: use the Write tool for files (bash heredocs break on apostrophes and backslashes here). Portable Python is `/c/Users/cedri/agent-tools/python312/python.exe`. Never start an emulator and never control the screen.
+- Windows machine, Git Bash: use the Write tool for files (bash heredocs break on apostrophes and backslashes here). Python is not on PATH; use the portable Python 3.12 named in your task. Never start an emulator and never control the screen.
 - Code and comments in English. Comments say what the code is for, in plain words.
 
 ## Feature list to keep (per screen)
