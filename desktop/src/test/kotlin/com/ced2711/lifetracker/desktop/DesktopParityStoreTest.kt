@@ -60,7 +60,7 @@ class DesktopParityStoreTest {
             val defaults = config.read()
             assertFalse(defaults.automaticSync)
             assertEquals(UiLanguage.ENGLISH, defaults.uiLanguage)
-            assertEquals(TopLevelDestination.TODO, defaults.lastDestination)
+            assertEquals(TopLevelDestination.TODAY, defaults.lastDestination)
 
             config.setClientId("desktop-client")
             config.setAutomaticSync(true)

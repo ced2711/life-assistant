@@ -88,8 +88,13 @@ fun TodayScreen(
     val notes by viewModel.notes.collectAsState()
     val settings by viewModel.settings.collectAsState()
     val subtasksByTodo by viewModel.subtasksByTodo.collectAsState()
+    val checklistItems by viewModel.checklistItems.collectAsState()
+    val checklistChecks by viewModel.checklistChecks.collectAsState()
     val today = LocalDate.now()
     val overview = remember(active, completed, ledger, today) { TodayOverview.of(active + completed, ledger, today) }
+    val checkedToday = remember(checklistChecks, today) {
+        checklistChecks.filter { it.epochDay == today.toEpochDay() }.mapTo(HashSet()) { it.itemId }
+    }
     TodayContent(
         overview = overview,
         settings = settings,
@@ -117,6 +122,15 @@ fun TodayScreen(
         onOpenLedger = onOpenLedger,
         onOpenDiary = onOpenDiary,
         onOpenNote = onOpenNote,
+        checklist = DailyChecklistState(
+            items = checklistItems,
+            checkedToday = checkedToday,
+            onToggle = { itemId, checked -> viewModel.setChecklistChecked(itemId, LocalDate.now().toEpochDay(), checked) },
+            onAdd = viewModel::addChecklistItem,
+            onRename = viewModel::renameChecklistItem,
+            onDelete = viewModel::deleteChecklistItem,
+            onReorder = viewModel::reorderChecklist,
+        ),
     )
 }
 
@@ -138,6 +152,8 @@ internal fun TodayContent(
     onOpenLedger: () -> Unit,
     onOpenDiary: (Long) -> Unit,
     onOpenNote: (Long) -> Unit,
+    checklist: DailyChecklistState,
+    checklistUi: DailyChecklistUi = rememberDailyChecklistUi(),
 ) {
     val language = LocalUiLanguage.current
     var quick by rememberSaveable { mutableStateOf("") }
@@ -263,6 +279,7 @@ internal fun TodayContent(
                     )
                 }
             }
+            dailyChecklistItems(checklist, checklistUi)
             if (overview.overdue.isNotEmpty()) {
                 item { SectionLabel(localizedText("Overdue"), Modifier.padding(horizontal = Space.md), count = overview.overdue.size, color = LifeTheme.colors.danger) }
                 overview.overdue.forEach { todo -> item(key = "o${todo.id}") { todoRow(todo, showDate = true) } }
@@ -305,6 +322,8 @@ internal fun TodayContent(
     } else {
         todos(modifier, true)
     }
+
+    DailyChecklistDialogs(checklist, checklistUi)
 
     completing?.let { todo ->
         CompleteWithSubtasksDialog(

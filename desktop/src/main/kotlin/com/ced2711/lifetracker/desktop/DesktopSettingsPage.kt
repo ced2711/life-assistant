@@ -400,6 +400,7 @@ private fun SyncSection(
                         Triple("Ledger entries", preview.ledgerEntries.count { it.deletedAt == null }, snapshot.ledgerEntries.count { it.deletedAt == null }),
                         Triple("Notes", preview.notes.size, snapshot.notes.size),
                         Triple("Diary", preview.diaryEntries.size, snapshot.diaryEntries.size),
+                        Triple("Daily checklist", preview.checklistItems.size, snapshot.checklistItems.size),
                         Triple("Vault", preview.vaultEntries.size, snapshot.vaultEntries.size),
                         Triple("Attachments", preview.attachments.size, snapshot.attachments.size),
                     ).forEach { (label, backup, local) ->

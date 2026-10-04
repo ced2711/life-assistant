@@ -17,19 +17,14 @@ class NewModuleModelsTest {
     }
 
     @Test
-    fun todayShowsOnlyWhenItWasChosen() {
-        val usual = setOf(TopLevelDestination.TODO, TopLevelDestination.LEDGER, TopLevelDestination.CALENDAR, TopLevelDestination.NOTES)
-        // Nothing saved yet: the defaults, without Today.
+    fun todayShowsByDefaultAndCanBeHidden() {
+        val usual = setOf(TopLevelDestination.TODAY, TopLevelDestination.TODO, TopLevelDestination.LEDGER, TopLevelDestination.CALENDAR, TopLevelDestination.NOTES)
+        // Nothing saved yet: the defaults, with Today.
         assertEquals(usual, resolveVisibleDestinations(hidden = null, optedIn = null))
-        // A choice saved before Today existed does not name it as hidden; it still stays out.
+        // A choice saved before Today existed does not name it as hidden, so it shows.
         assertEquals(usual + TopLevelDestination.DIARY, resolveVisibleDestinations(hidden = setOf("CONFESSIONAL"), optedIn = null))
-        // Switched on in Settings.
-        assertEquals(
-            usual + TopLevelDestination.TODAY,
-            resolveVisibleDestinations(hidden = setOf("DIARY", "CONFESSIONAL"), optedIn = setOf("TODAY")),
-        )
-        // Hidden wins when both are saved.
-        assertEquals(usual, resolveVisibleDestinations(hidden = setOf("TODAY", "DIARY", "CONFESSIONAL"), optedIn = setOf("TODAY")))
+        // Hidden in Settings.
+        assertEquals(usual - TopLevelDestination.TODAY, resolveVisibleDestinations(hidden = setOf("TODAY", "DIARY", "CONFESSIONAL"), optedIn = emptySet()))
     }
 
     @Test

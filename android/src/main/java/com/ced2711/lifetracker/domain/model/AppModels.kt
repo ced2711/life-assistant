@@ -102,14 +102,14 @@ enum class TopLevelDestination {
 
 /** Optional modules stay out of the menu until the user turns them on in Settings. */
 val DefaultHiddenDestinations: Set<TopLevelDestination> =
-    setOf(TopLevelDestination.TODAY, TopLevelDestination.DIARY, TopLevelDestination.CONFESSIONAL)
+    setOf(TopLevelDestination.DIARY, TopLevelDestination.CONFESSIONAL)
 
 /**
  * Modules that show only when the user chose them, also on a device whose saved choice is older
  * than the module. The apps save the hidden modules, so that a module added later shows up by
- * itself; Today is the exception and must not appear uninvited.
+ * itself; a module listed here would be the exception. None is at the moment.
  */
-val OptInDestinations: Set<TopLevelDestination> = setOf(TopLevelDestination.TODAY)
+val OptInDestinations: Set<TopLevelDestination> = emptySet()
 
 /**
  * The modules in the menu, from what a device saved: the names of the hidden modules ([hidden],

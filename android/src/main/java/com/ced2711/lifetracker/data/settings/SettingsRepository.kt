@@ -39,7 +39,7 @@ data class AppSettings(
     val defaultAllDayReminderMinute: Int = 0,
     val defaultReminderOffsetsMinutes: Set<Long> = setOf(0L),
     val todoQuickAddFields: Set<TodoQuickAddField> = emptySet(),
-    val lastDestination: TopLevelDestination = TopLevelDestination.TODO,
+    val lastDestination: TopLevelDestination = TopLevelDestination.TODAY,
     // Device-local preferences below are never written to or restored from a backup.
     val visibleDestinations: Set<TopLevelDestination> = DefaultVisibleDestinations,
     val appLockEnabled: Boolean = false,
@@ -92,7 +92,7 @@ class SettingsRepository internal constructor(
                 .orEmpty()
                 .mapNotNull { saved -> TodoQuickAddField.entries.firstOrNull { it.name == saved } }
                 .toSet(),
-            lastDestination = this[Keys.lastDestination].enumOrDefault(TopLevelDestination.TODO),
+            lastDestination = this[Keys.lastDestination].enumOrDefault(TopLevelDestination.TODAY),
             // No saved choice yet means the defaults; an empty saved set means every module is shown.
             visibleDestinations = resolveVisibleDestinations(this[Keys.hiddenDestinations], this[Keys.optedInDestinations]),
             appLockEnabled = this[Keys.appLockEnabled] ?: false,

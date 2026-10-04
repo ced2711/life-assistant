@@ -12,6 +12,8 @@ import com.ced2711.lifetracker.data.backup.mergeSnapshots
 import com.ced2711.lifetracker.data.backup.validate
 import com.ced2711.lifetracker.data.local.AttachmentEntity
 import com.ced2711.lifetracker.data.local.CategoryEntity
+import com.ced2711.lifetracker.data.local.ChecklistCheckEntity
+import com.ced2711.lifetracker.data.local.ChecklistItemEntity
 import com.ced2711.lifetracker.data.local.DiaryEntryEntity
 import com.ced2711.lifetracker.data.local.LedgerEntryEntity
 import com.ced2711.lifetracker.data.local.NoteEntity
@@ -23,6 +25,8 @@ import com.ced2711.lifetracker.domain.model.AttachmentOwnerType
 import com.ced2711.lifetracker.domain.model.DateFormatOption
 import com.ced2711.lifetracker.domain.model.LedgerDraft
 import com.ced2711.lifetracker.domain.model.LedgerType
+import com.ced2711.lifetracker.domain.model.CHECKLIST_HISTORY_DAYS
+import com.ced2711.lifetracker.domain.model.MAX_CHECKLIST_TITLE_LENGTH
 import com.ced2711.lifetracker.domain.model.MAX_DIARY_LENGTH
 import com.ced2711.lifetracker.domain.model.ThemeMode
 import com.ced2711.lifetracker.domain.model.TimeFormatOption
@@ -246,7 +250,7 @@ class DesktopDataStore(
             snapshot.categories.isEmpty() && snapshot.todos.isEmpty() && snapshot.todoSeries.isEmpty() &&
             snapshot.ledgerEntries.isEmpty() && snapshot.ledgerSeries.isEmpty() &&
             snapshot.noteFolders.isEmpty() && snapshot.notes.isEmpty() &&
-            snapshot.diaryEntries.isEmpty() &&
+            snapshot.diaryEntries.isEmpty() && snapshot.checklistItems.isEmpty() &&
             snapshot.attachments.isEmpty() && snapshot.vaultEntries.isEmpty()
     } ?: true
 
@@ -608,6 +612,61 @@ class DesktopDataStore(
 
     suspend fun deleteDiary(epochDay: Long) = mutate { snapshot ->
         snapshot.copy(diaryEntries = snapshot.diaryEntries.filterNot { it.epochDay == epochDay })
+    }
+
+    /** Adds an item to the end of the daily checklist; a blank title is ignored. */
+    suspend fun addChecklistItem(title: String) = mutate { snapshot ->
+        val clean = title.trim().take(MAX_CHECKLIST_TITLE_LENGTH)
+        if (clean.isEmpty()) return@mutate snapshot
+        val now = System.currentTimeMillis()
+        snapshot.copy(
+            checklistItems = snapshot.checklistItems + ChecklistItemEntity(
+                id = snapshot.checklistItems.maxOfOrNull(ChecklistItemEntity::id)?.plus(1) ?: 1L,
+                title = clean,
+                sortOrder = (snapshot.checklistItems.maxOfOrNull(ChecklistItemEntity::sortOrder) ?: -1L) + 1,
+                createdAt = now,
+                updatedAt = now,
+            ),
+        )
+    }
+
+    suspend fun renameChecklistItem(itemId: Long, title: String) = mutate { snapshot ->
+        val clean = title.trim().take(MAX_CHECKLIST_TITLE_LENGTH)
+        if (clean.isEmpty()) return@mutate snapshot
+        snapshot.copy(
+            checklistItems = snapshot.checklistItems.map { item ->
+                if (item.id != itemId || item.title == clean) item else item.copy(title = clean, updatedAt = maxOf(System.currentTimeMillis(), item.updatedAt + 1))
+            },
+        )
+    }
+
+    /** Removes a checklist item and its ticks. */
+    suspend fun deleteChecklistItem(itemId: Long) = mutate { snapshot ->
+        snapshot.copy(
+            checklistItems = snapshot.checklistItems.filterNot { it.id == itemId },
+            checklistChecks = snapshot.checklistChecks.filterNot { it.itemId == itemId },
+        )
+    }
+
+    /** Puts the checklist in the order of [itemIds]; items not named keep their place at the end. */
+    suspend fun reorderChecklist(itemIds: List<Long>) = mutate { snapshot ->
+        val position = itemIds.withIndex().associate { (index, id) -> id to index }
+        val now = System.currentTimeMillis()
+        val ordered = snapshot.checklistItems.sortedWith(compareBy<ChecklistItemEntity> { position[it.id] ?: Int.MAX_VALUE }.thenBy { it.sortOrder })
+        snapshot.copy(
+            checklistItems = ordered.mapIndexed { index, item ->
+                if (item.sortOrder == index.toLong()) item else item.copy(sortOrder = index.toLong(), updatedAt = maxOf(now, item.updatedAt + 1))
+            },
+        )
+    }
+
+    /** Ticks or unticks a checklist item for [epochDay]. Ticks older than a month are let go. */
+    suspend fun setChecklistChecked(itemId: Long, epochDay: Long, checked: Boolean) = mutate { snapshot ->
+        if (snapshot.checklistItems.none { it.id == itemId }) return@mutate snapshot
+        val kept = snapshot.checklistChecks.filter { it.epochDay >= epochDay - CHECKLIST_HISTORY_DAYS && !(it.itemId == itemId && it.epochDay == epochDay) }
+        snapshot.copy(
+            checklistChecks = if (checked) kept + ChecklistCheckEntity(itemId, epochDay, System.currentTimeMillis()) else kept,
+        )
     }
 
     /**
@@ -1153,7 +1212,7 @@ class DesktopDataStore(
                 defaultAllDayReminderMinute = 0,
                 defaultReminderOffsetsMinutes = setOf(0L),
                 todoQuickAddFields = emptySet(),
-                lastDestination = TopLevelDestination.TODO,
+                lastDestination = TopLevelDestination.TODAY,
             ),
             categories = emptyList(),
             todoSeries = emptyList(),

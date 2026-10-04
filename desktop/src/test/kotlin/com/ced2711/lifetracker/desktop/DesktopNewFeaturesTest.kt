@@ -96,7 +96,7 @@ class DesktopNewFeaturesTest {
         val file = root.resolve("desktop.properties")
         val defaults = DesktopConfigStore(file).read()
         assertEquals(
-            TopLevelDestination.entries.toSet() - setOf(TopLevelDestination.TODAY, TopLevelDestination.DIARY, TopLevelDestination.CONFESSIONAL),
+            TopLevelDestination.entries.toSet() - setOf(TopLevelDestination.DIARY, TopLevelDestination.CONFESSIONAL),
             defaults.visibleDestinations,
         )
         assertFalse(defaults.appLockEnabled)
@@ -112,10 +112,10 @@ class DesktopNewFeaturesTest {
         DesktopConfigStore(file).setVisibleDestinations(TopLevelDestination.entries.toSet())
         assertEquals(TopLevelDestination.entries.toSet(), DesktopConfigStore(file).read().visibleDestinations)
 
-        // A choice saved before Today existed does not list it as hidden: it still stays out.
+        // A choice saved before Today existed does not list it as hidden, so Today shows.
         file.writeText("ui.hiddenDestinations=CONFESSIONAL\n")
         assertEquals(
-            TopLevelDestination.entries.toSet() - setOf(TopLevelDestination.TODAY, TopLevelDestination.CONFESSIONAL),
+            TopLevelDestination.entries.toSet() - setOf(TopLevelDestination.CONFESSIONAL),
             DesktopConfigStore(file).read().visibleDestinations,
         )
     }

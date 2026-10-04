@@ -49,7 +49,7 @@ class DesktopAgentException(message: String) : Exception(message)
 
 /**
  * What AI assistants on this PC may do with Life Assistant: read and change todos, ledger
- * entries, notes, diary pages and categories. Vault and Confessional are never reachable.
+ * entries, notes, diary pages, the daily checklist and categories. Vault and Confessional are never reachable.
  * Dates are ISO (2026-10-02), times 24-hour (18:30), amounts in dollars ("12.50").
  */
 class DesktopAgentTools(
@@ -87,6 +87,10 @@ class DesktopAgentTools(
             "get_diary" -> getDiary(args)
             "write_diary" -> writeDiary(args)
             "get_day" -> day(args)
+            "get_checklist" -> checklist(args)
+            "check_checklist_item" -> checkChecklistItem(args)
+            "add_checklist_item" -> addChecklistItem(args)
+            "remove_checklist_item" -> removeChecklistItem(args)
             "list_categories_and_tags" -> categoriesAndTags()
             "create_category" -> createCategory(args)
             "search" -> search(args)
@@ -113,7 +117,58 @@ class DesktopAgentTools(
             put("ledger_on_date", totals(liveLedger(snapshot).filter { it.epochDay == epoch }))
             put("ledger_month_to_date", totals(liveLedger(snapshot).filter { it.epochDay in month.toEpochDay()..epoch }))
             put("diary_written", snapshot.diaryEntries.any { it.epochDay == epoch })
+            val ticked = snapshot.checklistChecks.filter { it.epochDay == epoch }.mapTo(HashSet()) { it.itemId }
+            put("daily_checklist_done", snapshot.checklistItems.count { it.id in ticked })
+            put("daily_checklist_total", snapshot.checklistItems.size)
         }
+    }
+
+    /** The daily checklist and what is ticked on a date (default today). */
+    private fun checklist(args: Args): JsonElement {
+        val snapshot = snapshot()
+        val day = args.date("date") ?: today()
+        val ticked = snapshot.checklistChecks.filter { it.epochDay == day.toEpochDay() }.mapTo(HashSet()) { it.itemId }
+        val items = snapshot.checklistItems.sortedWith(compareBy({ it.sortOrder }, { it.id }))
+        return buildJsonObject {
+            put("date", day.toString())
+            put("items", JsonArray(items.map { item -> buildJsonObject { put("id", item.id); put("title", item.title); put("done", item.id in ticked) } }))
+            put("done", items.count { it.id in ticked })
+            put("total", items.size)
+        }
+    }
+
+    private fun checklistItem(snapshot: BackupSnapshot, args: Args): com.ced2711.lifetracker.data.local.ChecklistItemEntity {
+        if (args.has("id")) {
+            val id = args.long("id")
+            return snapshot.checklistItems.firstOrNull { it.id == id } ?: throw DesktopAgentException("No checklist item with id $id")
+        }
+        val title = args.requireString("title").trim().lowercase()
+        return snapshot.checklistItems.firstOrNull { it.title.trim().lowercase() == title }
+            ?: throw DesktopAgentException("No checklist item called \"${args.requireString("title")}\"")
+    }
+
+    private suspend fun checkChecklistItem(args: Args): JsonElement {
+        val item = checklistItem(snapshot(), args)
+        val day = args.date("date") ?: today()
+        val done = args.boolean("done") ?: true
+        if (!store.setChecklistChecked(item.id, day.toEpochDay(), done)) throw DesktopAgentException("The checklist could not be saved")
+        return saved("checklist", buildJsonObject { put("id", item.id); put("title", item.title); put("date", day.toString()); put("done", done) })
+    }
+
+    private suspend fun addChecklistItem(args: Args): JsonElement {
+        val title = args.requireString("title").trim()
+        snapshot().checklistItems.firstOrNull { it.title.trim().equals(title, ignoreCase = true) }?.let { existing ->
+            return buildJsonObject { put("saved", "nothing"); put("id", existing.id); put("title", existing.title); put("note", "Already on the checklist") }
+        }
+        if (!store.addChecklistItem(title)) throw DesktopAgentException("The checklist could not be saved")
+        val added = snapshot().checklistItems.maxBy { it.id }
+        return saved("checklist", buildJsonObject { put("id", added.id); put("title", added.title) })
+    }
+
+    private suspend fun removeChecklistItem(args: Args): JsonElement {
+        val item = checklistItem(snapshot(), args)
+        if (!store.deleteChecklistItem(item.id)) throw DesktopAgentException("The checklist item could not be removed")
+        return buildJsonObject { put("deleted", true); put("id", item.id); put("title", item.title) }
     }
 
     private fun listTodos(args: Args): JsonElement {
@@ -910,6 +965,31 @@ class DesktopAgentTools(
                     prop("text", "string", "Text to write")
                     prop("mode", "string", "Default append", listOf("append", "replace"))
                 }, readOnly = false,
+            ),
+            DesktopAgentTool(
+                "get_checklist", "Daily checklist",
+                "Things done every day (brush teeth, shower) and which are ticked on a date. They are not todos; ticks count per day.",
+                schema { prop("date", "string", "$DATE; default today") }, readOnly = true,
+            ),
+            DesktopAgentTool(
+                "check_checklist_item", "Tick a checklist item", "Ticks (or unticks) a daily checklist item for a date. Name it by id or title.",
+                schema {
+                    prop("id", "integer", "Checklist item id")
+                    prop("title", "string", "Checklist item title, when no id is given")
+                    prop("done", "boolean", "Default true; false unticks")
+                    prop("date", "string", "$DATE; default today")
+                }, readOnly = false,
+            ),
+            DesktopAgentTool(
+                "add_checklist_item", "Add to the daily checklist", "Adds something done every day to the end of the daily checklist.",
+                schema(listOf("title")) { prop("title", "string", "What is done every day") }, readOnly = false,
+            ),
+            DesktopAgentTool(
+                "remove_checklist_item", "Remove from the daily checklist", "Removes an item from the daily checklist on every device. Name it by id or title.",
+                schema {
+                    prop("id", "integer", "Checklist item id")
+                    prop("title", "string", "Checklist item title, when no id is given")
+                }, readOnly = false, destructive = true,
             ),
             DesktopAgentTool("get_day", "One day", "Todos due, ledger entries and the diary page of one date.", schema { prop("date", "string", "$DATE; default today") }, readOnly = true),
             DesktopAgentTool("list_categories_and_tags", "Categories and tags", "Todo categories and tags, ledger tags and note folders.", schema {}, readOnly = true),
