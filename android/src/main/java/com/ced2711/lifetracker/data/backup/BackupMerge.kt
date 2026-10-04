@@ -1,6 +1,8 @@
 package com.ced2711.lifetracker.data.backup
 
 import com.ced2711.lifetracker.data.local.CategoryEntity
+import com.ced2711.lifetracker.data.local.ChecklistCheckEntity
+import com.ced2711.lifetracker.data.local.ChecklistItemEntity
 import com.ced2711.lifetracker.data.local.DiaryEntryEntity
 import com.ced2711.lifetracker.data.local.LedgerEntryEntity
 import com.ced2711.lifetracker.data.local.LedgerOccurrenceExceptionEntity
@@ -77,6 +79,7 @@ private class SnapshotMerger(
     private val folderIds = SideMaps()
     private val noteIds = SideMaps()
     private val diaryIds = SideMaps()
+    private val checklistIds = SideMaps()
     private val attachmentIds = SideMaps()
 
     fun merge(now: Long): SnapshotMergeResult {
@@ -263,6 +266,33 @@ private class SnapshotMerger(
             ),
         ).let(::oneDiaryPagePerDay)
 
+        val checklistItems = mergeTable(
+            Table(
+                rows = { it.checklistItems },
+                id = ChecklistItemEntity::id,
+                stamp = ChecklistItemEntity::createdAt,
+                withId = { row, id -> row.copy(id = id) },
+                maps = checklistIds,
+                remap = { row, _ -> row },
+                // "Brush teeth" added on both devices is one item.
+                naturalKey = { row -> row.title.trim().lowercase() },
+                merge = { b, l, r ->
+                    val f = fields(b, l, r, localNewer = l.updatedAt >= r.updatedAt)
+                    l.copy(
+                        title = f.v { it.title }, sortOrder = f.v { it.sortOrder },
+                        createdAt = minOf(l.createdAt, r.createdAt), updatedAt = maxOf(l.updatedAt, r.updatedAt),
+                    )
+                },
+            ),
+        )
+        val keptChecklistItems = checklistItems.mapTo(HashSet(), ChecklistItemEntity::id)
+        // A tick is a fact about one day: ticked on either device means ticked.
+        val checklistChecks = mergeSet(
+            rows = { it.checklistChecks },
+            key = { row, side -> (checklistIds.of(side)[row.itemId] ?: row.itemId) to row.epochDay },
+            build = { key, row -> row.copy(itemId = key.first) },
+        ).filter { it.itemId in keptChecklistItems }
+
         val vault = mergeVault()
 
         val subtasks = mergeChildLists(
@@ -345,6 +375,8 @@ private class SnapshotMerger(
             noteFolders = folders,
             notes = notes,
             diaryEntries = diary,
+            checklistItems = checklistItems,
+            checklistChecks = checklistChecks,
         ).validate()
         return SnapshotMergeResult(snapshot, sources, textConflicts)
     }

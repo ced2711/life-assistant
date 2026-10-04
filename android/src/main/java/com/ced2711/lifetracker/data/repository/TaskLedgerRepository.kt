@@ -5,6 +5,8 @@ import androidx.room.withTransaction
 import com.ced2711.lifetracker.data.monotonicMutationTimestamp
 import com.ced2711.lifetracker.data.persistedDeadlineTimestamp
 import com.ced2711.lifetracker.data.local.CategoryEntity
+import com.ced2711.lifetracker.data.local.ChecklistCheckEntity
+import com.ced2711.lifetracker.data.local.ChecklistItemEntity
 import com.ced2711.lifetracker.data.local.DiaryEntryEntity
 import com.ced2711.lifetracker.data.local.LedgerEntryEntity
 import com.ced2711.lifetracker.data.local.LedgerOccurrenceExceptionEntity
@@ -20,6 +22,8 @@ import com.ced2711.lifetracker.data.local.TodoSeriesEntity
 import com.ced2711.lifetracker.data.local.TodoSeriesSubtaskEntity
 import com.ced2711.lifetracker.domain.model.AttachmentOwnerType
 import com.ced2711.lifetracker.domain.model.DiaryDraft
+import com.ced2711.lifetracker.domain.model.CHECKLIST_HISTORY_DAYS
+import com.ced2711.lifetracker.domain.model.MAX_CHECKLIST_TITLE_LENGTH
 import com.ced2711.lifetracker.domain.model.MAX_DIARY_LENGTH
 import com.ced2711.lifetracker.domain.model.LedgerDraft
 import com.ced2711.lifetracker.domain.model.LedgerSaveResult
@@ -93,6 +97,8 @@ class TaskLedgerRepository(
     val noteFolders = dao.observeNoteFolders()
     val notes = dao.observeNotes()
     val diaryEntries = dao.observeDiaryEntries()
+    val checklistItems = dao.observeChecklistItems()
+    val checklistChecks = dao.observeChecklistChecks()
 
     fun activeTodosForDeadlineDay(epochDay: Long) =
         dao.observeActiveTodosForDeadlineDay(epochDay)
@@ -228,6 +234,53 @@ class TaskLedgerRepository(
             ),
         )
         dao.deleteNoteById(noteId)
+    }
+
+    /** Adds an item to the end of the daily checklist. Returns its id, or null for a blank title. */
+    suspend fun addChecklistItem(title: String): Long? = database.withTransaction {
+        val clean = title.trim().take(MAX_CHECKLIST_TITLE_LENGTH)
+        if (clean.isEmpty()) return@withTransaction null
+        val items = dao.getChecklistItems()
+        val now = monotonicMutationTimestamp(wallClockMillis())
+        dao.insertChecklistItem(
+            ChecklistItemEntity(title = clean, sortOrder = (items.maxOfOrNull { it.sortOrder } ?: -1L) + 1, createdAt = now, updatedAt = now),
+        )
+    }
+
+    /** Renames a checklist item; a blank title is ignored. */
+    suspend fun renameChecklistItem(itemId: Long, title: String) = database.withTransaction {
+        val clean = title.trim().take(MAX_CHECKLIST_TITLE_LENGTH)
+        val item = dao.getChecklistItems().firstOrNull { it.id == itemId } ?: return@withTransaction
+        if (clean.isEmpty() || clean == item.title) return@withTransaction
+        dao.updateChecklistItems(listOf(item.copy(title = clean, updatedAt = monotonicMutationTimestamp(wallClockMillis(), item.createdAt, item.updatedAt))))
+    }
+
+    /** Removes a checklist item and its ticks. */
+    suspend fun deleteChecklistItem(itemId: Long) = dao.deleteChecklistItem(itemId)
+
+    /** Puts the checklist in the order of [itemIds]; items not named keep their place at the end. */
+    suspend fun reorderChecklist(itemIds: List<Long>) = database.withTransaction {
+        val items = dao.getChecklistItems()
+        val position = itemIds.withIndex().associate { (index, id) -> id to index }
+        val ordered = items.sortedWith(compareBy<ChecklistItemEntity> { position[it.id] ?: Int.MAX_VALUE }.thenBy { it.sortOrder })
+        val changed = ordered.mapIndexedNotNull { index, item ->
+            if (item.sortOrder == index.toLong()) {
+                null
+            } else {
+                item.copy(sortOrder = index.toLong(), updatedAt = monotonicMutationTimestamp(wallClockMillis(), item.createdAt, item.updatedAt))
+            }
+        }
+        if (changed.isNotEmpty()) dao.updateChecklistItems(changed)
+    }
+
+    /** Ticks or unticks a checklist item for [epochDay]. Ticks older than a month are let go. */
+    suspend fun setChecklistChecked(itemId: Long, epochDay: Long, checked: Boolean) = database.withTransaction {
+        if (checked) {
+            dao.insertChecklistCheck(ChecklistCheckEntity(itemId, epochDay, monotonicMutationTimestamp(wallClockMillis())))
+        } else {
+            dao.deleteChecklistCheck(itemId, epochDay)
+        }
+        dao.deleteChecklistChecksBefore(epochDay - CHECKLIST_HISTORY_DAYS)
     }
 
     /** Saves the page for [DiaryDraft.epochDay]; a blank body removes it. Returns whether a page remains. */

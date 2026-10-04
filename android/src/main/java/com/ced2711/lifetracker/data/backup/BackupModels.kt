@@ -2,6 +2,8 @@ package com.ced2711.lifetracker.data.backup
 
 import com.ced2711.lifetracker.data.local.AttachmentEntity
 import com.ced2711.lifetracker.data.local.CategoryEntity
+import com.ced2711.lifetracker.data.local.ChecklistCheckEntity
+import com.ced2711.lifetracker.data.local.ChecklistItemEntity
 import com.ced2711.lifetracker.data.local.DiaryEntryEntity
 import com.ced2711.lifetracker.data.local.LedgerEntryEntity
 import com.ced2711.lifetracker.data.local.LedgerOccurrenceExceptionEntity
@@ -116,6 +118,8 @@ data class BackupSnapshot(
     val noteFolders: List<NoteFolderEntity> = emptyList(),
     val notes: List<NoteEntity> = emptyList(),
     val diaryEntries: List<DiaryEntryEntity> = emptyList(),
+    val checklistItems: List<ChecklistItemEntity> = emptyList(),
+    val checklistChecks: List<ChecklistCheckEntity> = emptyList(),
 )
 
 sealed class BackupException(message: String, cause: Throwable? = null) : Exception(message, cause)
@@ -133,7 +137,8 @@ object BackupLimits {
     const val ACCENT_COLOR_SNAPSHOT_VERSION = 3
     const val NOTES_SNAPSHOT_VERSION = 4
     const val DIARY_SNAPSHOT_VERSION = 5
-    const val SNAPSHOT_VERSION = DIARY_SNAPSHOT_VERSION
+    const val CHECKLIST_SNAPSHOT_VERSION = 6
+    const val SNAPSHOT_VERSION = CHECKLIST_SNAPSHOT_VERSION
     const val MAX_RECORDS_PER_TABLE = 100_000
     const val MAX_TOTAL_RECORDS = 300_000
     const val MAX_TEXT_UTF8_BYTES = 1024 * 1024
@@ -171,6 +176,8 @@ fun BackupSnapshot.validate(): BackupSnapshot {
         noteFolders.size,
         notes.size,
         diaryEntries.size,
+        checklistItems.size,
+        checklistChecks.size,
     )
     invalidIf(tables.any { it > BackupLimits.MAX_RECORDS_PER_TABLE }, "A table exceeds the record limit.")
     invalidIf(tables.sumOf(Int::toLong) > BackupLimits.MAX_TOTAL_RECORDS, "Snapshot has too many records.")
@@ -184,6 +191,10 @@ fun BackupSnapshot.validate(): BackupSnapshot {
     invalidIf(
         formatVersion < BackupLimits.DIARY_SNAPSHOT_VERSION && diaryEntries.isNotEmpty(),
         "This snapshot version cannot contain diary entries.",
+    )
+    invalidIf(
+        formatVersion < BackupLimits.CHECKLIST_SNAPSHOT_VERSION && (checklistItems.isNotEmpty() || checklistChecks.isNotEmpty()),
+        "This snapshot version cannot contain a daily checklist.",
     )
     val categoryIds = categories.uniquePositiveIds("category", CategoryEntity::id)
     categories.forEach { category ->
@@ -311,6 +322,19 @@ fun BackupSnapshot.validate(): BackupSnapshot {
         text(entry.body, "Diary entry")
         invalidIf(entry.body.isBlank(), "Diary entry is empty.")
         timestampOrder(entry.createdAt, entry.updatedAt, "Diary entry")
+    }
+
+    val checklistItemIds = checklistItems.uniquePositiveIds("checklist item", ChecklistItemEntity::id)
+    checklistItems.forEach { item ->
+        text(item.title, "Checklist item")
+        invalidIf(item.title.isBlank(), "Checklist item is empty.")
+        timestampOrder(item.createdAt, item.updatedAt, "Checklist item")
+    }
+    uniquePairs(checklistChecks, "checklist tick") { it.itemId to it.epochDay }
+    checklistChecks.forEach { check ->
+        invalidIf(check.itemId !in checklistItemIds, "Checklist tick has no item.")
+        epochDay(check.epochDay, "Checklist tick date")
+        timestamp(check.checkedAt, "Checklist tick time")
     }
 
     attachments.uniquePositiveIds("attachment", BackupAttachment::id)

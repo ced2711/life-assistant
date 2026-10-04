@@ -30,6 +30,8 @@ class BackupDatabaseFingerprintTest {
             noteFolders = snapshot.noteFolders,
             notes = snapshot.notes,
             diaryEntries = snapshot.diaryEntries,
+            checklistItems = snapshot.checklistItems,
+            checklistChecks = snapshot.checklistChecks,
         )
 
         assertEquals(expectedDatabaseFingerprint(snapshot, attachmentRows), semanticDatabaseFingerprint(state))

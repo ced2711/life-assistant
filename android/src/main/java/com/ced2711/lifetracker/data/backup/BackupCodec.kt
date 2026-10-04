@@ -1,6 +1,8 @@
 package com.ced2711.lifetracker.data.backup
 
 import com.ced2711.lifetracker.data.local.CategoryEntity
+import com.ced2711.lifetracker.data.local.ChecklistCheckEntity
+import com.ced2711.lifetracker.data.local.ChecklistItemEntity
 import com.ced2711.lifetracker.data.local.DiaryEntryEntity
 import com.ced2711.lifetracker.data.local.LedgerEntryEntity
 import com.ced2711.lifetracker.data.local.LedgerOccurrenceExceptionEntity
@@ -108,6 +110,13 @@ object BackupCodec {
                     writeLong(e.id); writeLong(e.epochDay); string(e.body, budget)
                     writeLong(e.createdAt); writeLong(e.updatedAt)
                 }
+            }
+            if (snapshot.formatVersion >= BackupLimits.CHECKLIST_SNAPSHOT_VERSION) {
+                out.list(snapshot.checklistItems) { e ->
+                    writeLong(e.id); string(e.title, budget); writeLong(e.sortOrder)
+                    writeLong(e.createdAt); writeLong(e.updatedAt)
+                }
+                out.list(snapshot.checklistChecks) { e -> writeLong(e.itemId); writeLong(e.epochDay); writeLong(e.checkedAt) }
             }
             out.flush()
         }
@@ -236,6 +245,18 @@ object BackupCodec {
                                 updatedAt = readLong(),
                             )
                         }
+                    } else {
+                        emptyList()
+                    },
+                    checklistItems = if (version >= BackupLimits.CHECKLIST_SNAPSHOT_VERSION) {
+                        input.list(budget) {
+                            ChecklistItemEntity(id = readLong(), title = string(budget), sortOrder = readLong(), createdAt = readLong(), updatedAt = readLong())
+                        }
+                    } else {
+                        emptyList()
+                    },
+                    checklistChecks = if (version >= BackupLimits.CHECKLIST_SNAPSHOT_VERSION) {
+                        input.list(budget) { ChecklistCheckEntity(itemId = readLong(), epochDay = readLong(), checkedAt = readLong()) }
                     } else {
                         emptyList()
                     },

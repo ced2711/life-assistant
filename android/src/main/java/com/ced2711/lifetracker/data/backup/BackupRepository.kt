@@ -220,6 +220,7 @@ class BackupRepository(
             state.noteFolders.isEmpty() &&
             state.notes.isEmpty() &&
             state.diaryEntries.isEmpty() &&
+            state.checklistItems.isEmpty() &&
             state.attachments.isEmpty() &&
             state.vaultEntries.isEmpty()
     }
@@ -675,6 +676,8 @@ internal fun BackupDatabaseState.toBackupSnapshot(
         noteFolders = noteFolders,
         notes = notes,
         diaryEntries = diaryEntries,
+        checklistItems = checklistItems,
+        checklistChecks = checklistChecks,
     ).validate()
 }
 

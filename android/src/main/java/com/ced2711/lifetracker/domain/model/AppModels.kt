@@ -203,6 +203,12 @@ data class NoteDraft(
 
 const val MAX_DIARY_LENGTH = 1_000_000
 
+/** Longest title of a daily checklist item. */
+const val MAX_CHECKLIST_TITLE_LENGTH = 200
+
+/** Ticks of the daily checklist are kept this many days; only today's are shown. */
+const val CHECKLIST_HISTORY_DAYS = 30L
+
 /** First non-blank line of a diary page, shortened for lists and calendar details. */
 fun diaryPreview(body: String, maximumLength: Int = 80): String {
     val line = body.lineSequence().map(String::trim).firstOrNull(String::isNotEmpty).orEmpty()
