@@ -90,6 +90,32 @@ class DesktopFlowTest {
     }
 
     @Test
+    fun dailyChecklistItemsAreAddedOnTodayAndTickedForToday() = app {
+        waitForText("Add to the checklist, then press Enter")
+        val field = onNodeWithText("Add to the checklist, then press Enter")
+        field.performClick()
+        field.performTextInput("Brush teeth")
+        onNode(hasText("Brush teeth")).performKeyInput { pressKey(Key.Enter) }
+        waitForText("Finish")
+        field.performTextInput("Shower")
+        onNode(hasText("Shower")).performKeyInput { pressKey(Key.Enter) }
+        waitForText("0 / 2")
+        shot("03a-checklist-edit")
+        onNodeWithText("Finish").performClick()
+        waitUntil(timeoutMillis = 15_000) { onAllNodes(hasContentDescription("Brush teeth")).fetchSemanticsNodes().isNotEmpty() }
+        assertTrue("checklist items are not todos", onAllNodesWithText("Nothing due today", substring = true).fetchSemanticsNodes().isNotEmpty())
+        onNode(hasContentDescription("Brush teeth")).performClick()
+        waitForText("1 / 2")
+        shot("03b-checklist-ticked")
+        onNode(hasContentDescription("Shower")).performClick()
+        waitForText("All done for today. It starts fresh tomorrow.")
+        shot("03c-checklist-all-done")
+        onNodeWithText("Show").performClick()
+        onNode(hasContentDescription("Shower")).performClick()
+        waitForText("1 / 2")
+    }
+
+    @Test
     fun aTodoWithDetailsIsSavedFromTheEditor() = app {
         open("Todo")
         onNodeWithText("New todo").performClick()

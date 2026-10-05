@@ -129,7 +129,11 @@ internal fun LazyListScope.dailyChecklistItems(state: DailyChecklistState, ui: D
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = {
-                        ui.newItem.trim().takeIf(String::isNotEmpty)?.let(state.onAdd)
+                        ui.newItem.trim().takeIf(String::isNotEmpty)?.let { title ->
+                            state.onAdd(title)
+                            // Adding the first item keeps the field so more can follow.
+                            ui.editing = true
+                        }
                         ui.newItem = ""
                     }),
                 )

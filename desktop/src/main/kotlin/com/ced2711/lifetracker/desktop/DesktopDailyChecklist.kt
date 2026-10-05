@@ -70,6 +70,8 @@ internal fun DailyChecklistPanel(snapshot: BackupSnapshot, store: DesktopDataSto
         val title = newItem.trim()
         if (title.isEmpty()) return
         newItem = ""
+        // Adding the first item keeps the field so more can follow.
+        editing = true
         scope.launch { store.addChecklistItem(title) }
     }
 

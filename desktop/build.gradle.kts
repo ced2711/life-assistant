@@ -169,7 +169,7 @@ compose.desktop {
             // Each format is built on its own operating system: Windows locally, Linux in GitHub Actions.
             targetFormats(TargetFormat.Exe, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "Life Assistant"
-            packageVersion = "2.0.1"
+            packageVersion = "2.0.2"
             description = "Private life planning, ledger, calendar, notes, and vault"
             vendor = "ced2711"
             copyright = "Copyright 2026 ced2711"

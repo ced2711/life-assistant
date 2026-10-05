@@ -105,21 +105,18 @@ val DefaultHiddenDestinations: Set<TopLevelDestination> =
     setOf(TopLevelDestination.DIARY, TopLevelDestination.CONFESSIONAL)
 
 /**
- * Modules that show only when the user chose them, also on a device whose saved choice is older
- * than the module. The apps save the hidden modules, so that a module added later shows up by
- * itself; a module listed here would be the exception. None is at the moment.
- */
-val OptInDestinations: Set<TopLevelDestination> = emptySet()
-
-/**
  * The modules in the menu, from what a device saved: the names of the hidden modules ([hidden],
- * null when nothing was saved yet) and of the opt-in modules the user turned on ([optedIn]).
+ * null when nothing was saved yet). The apps save the hidden modules, so a module added later shows
+ * up by itself.
+ *
+ * [legacyOptedIn] is what 2.0.1 saved next to them: Today was opt-in there and listed as hidden
+ * whenever it was not opted in, chosen or not. Today is in the menu by default again, so a choice
+ * saved by 2.0.1 does not hide it; the next choice saved drops [legacyOptedIn] and is kept as is.
  */
-fun resolveVisibleDestinations(hidden: Set<String>?, optedIn: Set<String>?): Set<TopLevelDestination> {
+fun resolveVisibleDestinations(hidden: Set<String>?, legacyOptedIn: Set<String>?): Set<TopLevelDestination> {
     val hiddenNames = hidden ?: DefaultHiddenDestinations.mapTo(mutableSetOf()) { it.name }
-    return TopLevelDestination.entries.filterTo(mutableSetOf()) { destination ->
-        destination.name !in hiddenNames && (destination !in OptInDestinations || destination.name in optedIn.orEmpty())
-    }
+    val effective = if (legacyOptedIn != null) hiddenNames - TopLevelDestination.TODAY.name else hiddenNames
+    return TopLevelDestination.entries.filterTo(mutableSetOf()) { it.name !in effective }
 }
 
 val DefaultVisibleDestinations: Set<TopLevelDestination> =

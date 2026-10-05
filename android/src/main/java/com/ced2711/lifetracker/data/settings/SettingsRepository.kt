@@ -13,7 +13,6 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.ced2711.lifetracker.domain.model.DateFormatOption
 import com.ced2711.lifetracker.domain.model.AccentColor
 import com.ced2711.lifetracker.domain.model.AppLockTimeout
-import com.ced2711.lifetracker.domain.model.OptInDestinations
 import com.ced2711.lifetracker.domain.model.resolveVisibleDestinations
 import com.ced2711.lifetracker.domain.model.DefaultVisibleDestinations
 import com.ced2711.lifetracker.domain.model.ThemeMode
@@ -124,7 +123,7 @@ class SettingsRepository internal constructor(
     suspend fun setVisibleDestinations(value: Set<TopLevelDestination>) {
         dataStore.edit { preferences ->
             preferences[Keys.hiddenDestinations] = TopLevelDestination.entries.filterNot(value::contains).mapTo(mutableSetOf()) { it.name }
-            preferences[Keys.optedInDestinations] = OptInDestinations.filter(value::contains).mapTo(mutableSetOf()) { it.name }
+            preferences.remove(Keys.optedInDestinations)
         }
     }
     suspend fun setAppLockEnabled(value: Boolean) = edit(Keys.appLockEnabled, value)
