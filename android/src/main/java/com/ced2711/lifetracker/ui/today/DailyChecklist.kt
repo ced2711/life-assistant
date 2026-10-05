@@ -58,12 +58,12 @@ internal data class DailyChecklistState(
 /**
  * The daily checklist: things done every day (brush teeth, shower, check homework). They are not
  * todos and never appear in Todo or the calendar; ticks count for today only, so every morning
- * starts with none ticked. Once everything is ticked the list folds into its heading. Adding,
- * renaming, reordering and removing items happen in Edit, so the everyday view is just ticking.
+ * starts with none ticked. Like todos, a ticked item leaves the list for a folded "Done" group
+ * under it, so the list shows only what is left today. Adding, renaming, reordering and removing
+ * items happen in Edit, so the everyday view is just ticking.
  */
 internal fun LazyListScope.dailyChecklistItems(state: DailyChecklistState, ui: DailyChecklistUi) {
     val editing = ui.editing
-    val folded = state.allDone && !editing && !ui.showDone
     item(key = "checklist-header") {
         SectionLabel(
             text = localizedText("Daily checklist"),
@@ -78,34 +78,49 @@ internal fun LazyListScope.dailyChecklistItems(state: DailyChecklistState, ui: D
                         modifier = Modifier.padding(end = Space.xs),
                     )
                 }
-                if (state.allDone && !editing) {
-                    TextButton(onClick = { ui.showDone = !ui.showDone }) { Text(localizedText(if (ui.showDone) "Hide" else "Show")) }
-                }
                 if (state.items.isNotEmpty()) {
                     TextButton(onClick = { ui.editing = !editing }) { Text(localizedText(if (editing) "Done" else "Edit")) }
                 }
             },
         )
     }
-    if (!folded) {
+    if (editing) {
         state.items.forEachIndexed { index, item ->
-            item(key = "checklist-${item.id}") {
-                if (editing) {
-                    EditingRow(item, index, state, ui)
-                } else {
-                    val checked = item.id in state.checkedToday
-                    ListRow(
-                        title = item.title,
-                        struck = checked,
-                        leading = {
-                            CheckCircle(
-                                checked = checked,
-                                onCheckedChange = { state.onToggle(item.id, it) },
-                                contentDescription = item.title,
-                            )
-                        },
-                        onClick = { state.onToggle(item.id, !checked) },
+            item(key = "checklist-${item.id}") { EditingRow(item, index, state, ui, Modifier.animateItem()) }
+        }
+    } else {
+        val (ticked, open) = state.items.partition { it.id in state.checkedToday }
+        open.forEach { item ->
+            item(key = "checklist-${item.id}") { ChecklistRow(item, checked = false, state, Modifier.animateItem()) }
+        }
+        if (state.allDone) {
+            item(key = "checklist-all-done") {
+                Text(
+                    localizedText("All done for today. It starts fresh tomorrow."),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.animateItem().padding(horizontal = Space.md + Space.md, vertical = Space.sm),
+                )
+            }
+        }
+        if (ticked.isNotEmpty()) {
+            item(key = "checklist-done") {
+                TextButton(
+                    onClick = { ui.showDone = !ui.showDone },
+                    modifier = Modifier.animateItem().padding(start = Space.sm),
+                ) {
+                    Text("${localizedText("Checked off")} ${ticked.size}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Icon(
+                        if (ui.showDone) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
+                        localizedText(if (ui.showDone) "Hide" else "Show"),
+                        Modifier.padding(start = Space.xs).size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+            }
+            if (ui.showDone) {
+                ticked.forEach { item ->
+                    item(key = "checklist-${item.id}") { ChecklistRow(item, checked = true, state, Modifier.animateItem()) }
                 }
             }
         }
@@ -143,7 +158,24 @@ internal fun LazyListScope.dailyChecklistItems(state: DailyChecklistState, ui: D
 }
 
 @Composable
-private fun EditingRow(item: ChecklistItemEntity, index: Int, state: DailyChecklistState, ui: DailyChecklistUi) {
+private fun ChecklistRow(item: ChecklistItemEntity, checked: Boolean, state: DailyChecklistState, modifier: Modifier) {
+    ListRow(
+        title = item.title,
+        modifier = modifier,
+        struck = checked,
+        leading = {
+            CheckCircle(
+                checked = checked,
+                onCheckedChange = { state.onToggle(item.id, it) },
+                contentDescription = item.title,
+            )
+        },
+        onClick = { state.onToggle(item.id, !checked) },
+    )
+}
+
+@Composable
+private fun EditingRow(item: ChecklistItemEntity, index: Int, state: DailyChecklistState, ui: DailyChecklistUi, modifier: Modifier) {
     val language = LocalUiLanguage.current
     fun move(delta: Int) {
         val ids = state.items.map { it.id }.toMutableList()
@@ -154,6 +186,7 @@ private fun EditingRow(item: ChecklistItemEntity, index: Int, state: DailyCheckl
     }
     ListRow(
         title = item.title,
+        modifier = modifier,
         supporting = localizedText("Tap to rename"),
         onClick = { ui.renaming = item.id; ui.renameText = item.title },
         trailing = {

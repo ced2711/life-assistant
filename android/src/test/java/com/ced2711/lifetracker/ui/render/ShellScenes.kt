@@ -51,7 +51,6 @@ private fun SampleToday(
         isWide = isWide,
         onToggle = { _, _, _ -> },
         subtasksByTodo = if (withData) RenderSamples.subtasksByTodo else emptyMap(),
-        onAdd = {},
         onOpenTodo = {},
         onOpenLedger = {},
         onOpenDiary = {},
@@ -67,7 +66,11 @@ internal val shellScenes: List<RenderScene> = listOf(
     RenderScene("today-empty", TopLevelDestination.TODAY) { isWide ->
         SampleToday(isWide, withData = false, checklist = checklist(emptyList(), emptySet()))
     },
-    // Everything ticked: the checklist folds into its heading.
+    // Ticked items wait in the folded group under the list; opened here.
+    RenderScene("today-checklist-checked-off", TopLevelDestination.TODAY) { isWide ->
+        SampleToday(isWide, checklistUi = remember { DailyChecklistUi().apply { showDone = true } })
+    },
+    // Everything ticked: only the all-done line and the folded group are left.
     RenderScene("today-checklist-done", TopLevelDestination.TODAY) { isWide ->
         SampleToday(isWide, checklist = checklist(checklistItems, checklistItems.mapTo(HashSet()) { it.id }))
     },

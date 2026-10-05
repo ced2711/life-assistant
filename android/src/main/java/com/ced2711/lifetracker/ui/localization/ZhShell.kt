@@ -5,6 +5,8 @@ internal val zhShell: Map<String, String> = mapOf(
     "Pick a time" to "选择时间",
     "Close" to "关闭",
     "Daily checklist" to "每日清单",
+    "Checked off" to "已完成",
+    "All done for today. It starts fresh tomorrow." to "今天都完成了，明天重新开始。",
     "Add to the checklist" to "添加到每日清单",
     "Things you do every day, like brushing your teeth. Ticks start fresh every morning." to "每天都要做的事，比如刷牙。勾选每天早上自动清空。",
     "Tap to rename" to "点按改名",

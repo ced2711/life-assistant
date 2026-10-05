@@ -30,7 +30,6 @@ private val desktopSimplifiedChinese = mapOf(
     "Daily checklist" to "每日清单",
     "Finish" to "完成",
     "Add to the checklist, then press Enter" to "添加到每日清单，按回车",
-    "All done for today. It starts fresh tomorrow." to "今天都完成了，明天重新开始。",
     "Click to rename" to "点击改名",
     "It leaves the daily checklist on every device." to "它会从所有设备的每日清单中移除。",
     "Things you do every day, like brushing your teeth. Ticks start fresh every morning." to "每天都要做的事，比如刷牙。勾选每天早上自动清空。",
