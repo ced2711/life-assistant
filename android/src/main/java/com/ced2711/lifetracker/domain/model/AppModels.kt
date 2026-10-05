@@ -102,24 +102,21 @@ enum class TopLevelDestination {
 
 /** Optional modules stay out of the menu until the user turns them on in Settings. */
 val DefaultHiddenDestinations: Set<TopLevelDestination> =
-    setOf(TopLevelDestination.TODAY, TopLevelDestination.DIARY, TopLevelDestination.CONFESSIONAL)
-
-/**
- * Modules that show only when the user chose them, also on a device whose saved choice is older
- * than the module. The apps save the hidden modules, so that a module added later shows up by
- * itself; Today is the exception and must not appear uninvited.
- */
-val OptInDestinations: Set<TopLevelDestination> = setOf(TopLevelDestination.TODAY)
+    setOf(TopLevelDestination.DIARY, TopLevelDestination.CONFESSIONAL)
 
 /**
  * The modules in the menu, from what a device saved: the names of the hidden modules ([hidden],
- * null when nothing was saved yet) and of the opt-in modules the user turned on ([optedIn]).
+ * null when nothing was saved yet). The apps save the hidden modules, so a module added later shows
+ * up by itself.
+ *
+ * [legacyOptedIn] is what 2.0.1 saved next to them: Today was opt-in there and listed as hidden
+ * whenever it was not opted in, chosen or not. Today is in the menu by default again, so a choice
+ * saved by 2.0.1 does not hide it; the next choice saved drops [legacyOptedIn] and is kept as is.
  */
-fun resolveVisibleDestinations(hidden: Set<String>?, optedIn: Set<String>?): Set<TopLevelDestination> {
+fun resolveVisibleDestinations(hidden: Set<String>?, legacyOptedIn: Set<String>?): Set<TopLevelDestination> {
     val hiddenNames = hidden ?: DefaultHiddenDestinations.mapTo(mutableSetOf()) { it.name }
-    return TopLevelDestination.entries.filterTo(mutableSetOf()) { destination ->
-        destination.name !in hiddenNames && (destination !in OptInDestinations || destination.name in optedIn.orEmpty())
-    }
+    val effective = if (legacyOptedIn != null) hiddenNames - TopLevelDestination.TODAY.name else hiddenNames
+    return TopLevelDestination.entries.filterTo(mutableSetOf()) { it.name !in effective }
 }
 
 val DefaultVisibleDestinations: Set<TopLevelDestination> =
@@ -202,6 +199,12 @@ data class NoteDraft(
 )
 
 const val MAX_DIARY_LENGTH = 1_000_000
+
+/** Longest title of a daily checklist item. */
+const val MAX_CHECKLIST_TITLE_LENGTH = 200
+
+/** Ticks of the daily checklist are kept this many days; only today's are shown. */
+const val CHECKLIST_HISTORY_DAYS = 30L
 
 /** First non-blank line of a diary page, shortened for lists and calendar details. */
 fun diaryPreview(body: String, maximumLength: Int = 80): String {

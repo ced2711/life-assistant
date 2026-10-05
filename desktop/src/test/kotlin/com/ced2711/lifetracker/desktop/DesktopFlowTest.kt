@@ -25,8 +25,6 @@ import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Image
 import org.junit.After
 import org.junit.Assert.assertEquals
-import com.ced2711.lifetracker.domain.model.DefaultVisibleDestinations
-import com.ced2711.lifetracker.domain.model.TopLevelDestination
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -46,14 +44,7 @@ class DesktopFlowTest {
         root.deleteRecursively()
     }
 
-    private fun app(
-        width: Int = 1280,
-        height: Int = 800,
-        withToday: Boolean = false,
-        block: DesktopComposeUiTest.() -> Unit,
-    ) = runDesktopComposeUiTest(width, height) {
-        // Today is not in the menu until it is switched on in Settings.
-        if (withToday) DesktopConfigStore(File(root, "desktop.properties")).setVisibleDestinations(DefaultVisibleDestinations + TopLevelDestination.TODAY)
+    private fun app(width: Int = 1280, height: Int = 800, block: DesktopComposeUiTest.() -> Unit) = runDesktopComposeUiTest(width, height) {
         val shortcuts = DesktopShortcuts()
         setContent {
             CompositionLocalProvider(LocalDesktopShortcuts provides shortcuts) {
@@ -83,16 +74,8 @@ class DesktopFlowTest {
     private fun store(): DesktopDataStore = DesktopDataStore(root)
 
     @Test
-    fun aNewPcOpensOnTodoWithoutAPasswordAndWithoutToday() = app {
+    fun aNewPcOpensOnTodayWithoutAPasswordAndTodosCanBeAddedAndTicked() = app {
         assertFalse("no password is asked on a new PC", onAllNodesWithText("Data password").fetchSemanticsNodes().isNotEmpty())
-        waitForText("Add a todo and press Enter")
-        assertFalse("Today stays out of the menu by default", onAllNodes(hasContentDescription("Today", substring = true)).fetchSemanticsNodes().isNotEmpty())
-        shot("00-new-pc")
-    }
-
-    @Test
-    fun todayCanBeSwitchedOnAndTodosCanBeAddedAndTickedThere() = app(withToday = true) {
-        open("Today")
         waitForText("Add a todo for today, then press Enter")
         shot("01-today-empty")
         val field = onNodeWithText("Add a todo for today, then press Enter")
@@ -104,6 +87,32 @@ class DesktopFlowTest {
         onNode(hasContentDescription("Buy milk")).performClick()
         waitForText("Done today")
         shot("03-today-done")
+    }
+
+    @Test
+    fun dailyChecklistItemsAreAddedOnTodayAndTickedForToday() = app {
+        waitForText("Add to the checklist, then press Enter")
+        val field = onNodeWithText("Add to the checklist, then press Enter")
+        field.performClick()
+        field.performTextInput("Brush teeth")
+        onNode(hasText("Brush teeth")).performKeyInput { pressKey(Key.Enter) }
+        waitForText("Finish")
+        field.performTextInput("Shower")
+        onNode(hasText("Shower")).performKeyInput { pressKey(Key.Enter) }
+        waitForText("0 / 2")
+        shot("03a-checklist-edit")
+        onNodeWithText("Finish").performClick()
+        waitUntil(timeoutMillis = 15_000) { onAllNodes(hasContentDescription("Brush teeth")).fetchSemanticsNodes().isNotEmpty() }
+        assertTrue("checklist items are not todos", onAllNodesWithText("Nothing due today", substring = true).fetchSemanticsNodes().isNotEmpty())
+        onNode(hasContentDescription("Brush teeth")).performClick()
+        waitForText("1 / 2")
+        shot("03b-checklist-ticked")
+        onNode(hasContentDescription("Shower")).performClick()
+        waitForText("All done for today. It starts fresh tomorrow.")
+        shot("03c-checklist-all-done")
+        onNodeWithText("Show").performClick()
+        onNode(hasContentDescription("Shower")).performClick()
+        waitForText("1 / 2")
     }
 
     @Test
@@ -173,7 +182,7 @@ class DesktopFlowTest {
     }
 
     @Test
-    fun everyPageShowsInASmallWindow() = app(width = 640, height = 480, withToday = true) {
+    fun everyPageShowsInASmallWindow() = app(width = 640, height = 480) {
         listOf("Today", "Todo", "Ledger", "Calendar", "Notes", "Vault", "Settings").forEach { module ->
             open(module)
             shot("small-$module")

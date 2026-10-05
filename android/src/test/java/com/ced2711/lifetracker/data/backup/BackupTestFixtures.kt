@@ -120,6 +120,13 @@ internal fun fullBackupSnapshot(): BackupSnapshot {
                 updatedAt = 120,
             ),
         ),
+        checklistItems = listOf(
+            com.ced2711.lifetracker.data.local.ChecklistItemEntity(id = 96, title = "刷牙 Brush teeth", sortOrder = 0, createdAt = 121, updatedAt = 122),
+            com.ced2711.lifetracker.data.local.ChecklistItemEntity(id = 97, title = "Check homework", sortOrder = 1, createdAt = 123, updatedAt = 123),
+        ),
+        checklistChecks = listOf(
+            com.ced2711.lifetracker.data.local.ChecklistCheckEntity(itemId = 96, epochDay = 20_000, checkedAt = 124),
+        ),
     )
 }
 

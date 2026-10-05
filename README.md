@@ -18,7 +18,7 @@ All versions and release notes: [Releases](https://github.com/ced2711/life-assis
 
 ## Highlights
 
-- **Today**: what is overdue and due today, the coming week, what you spent, the diary page and pinned notes on one page.
+- **Today**: what is overdue and due today, a daily checklist that starts fresh every morning (brush teeth, shower), the coming week, what you spent, the diary page and pinned notes on one page.
 - One design on the phone and the computer: calm surfaces, rows instead of cards, the same wording. See [the design notes](docs/DESIGN.md).
 - **Daily backups**: each day the apps keep a copy of the day before and delete it on the third day; restore one in Settings, with Undo.
 - **AI assistants on the computer**: switch on Settings → AI assistants and add Life Assistant to Claude Desktop or Claude Code with one click. An assistant can then read and, if allowed, change todos, ledger entries, notes, diary pages and categories through the Model Context Protocol (`Life Assistant.exe --mcp`). The Vault and the Confessional are never exposed. Off by default.
@@ -30,7 +30,7 @@ All versions and release notes: [Releases](https://github.com/ced2711/life-assis
 - Diary with one page per day, saved automatically; days with a page show a small green dot in the calendar.
 - Confessional: write something down, then burn it for good or seal it on this device only. Sealed words are encrypted with a device key (Android Keystore or Windows DPAPI) and are never backed up or synced; screenshots are blocked on Android.
 - Optional app lock, off by default: Android asks for fingerprint, face or screen lock, Windows for the data password, after the app has been in the background for a chosen time.
-- Choose which modules appear in the navigation menu. Today, Diary and Confessional start hidden; turn them on in Settings. Hidden modules keep their data.
+- Choose which modules appear in the navigation menu. Diary and Confessional start hidden; turn them on in Settings. Hidden modules keep their data.
 - Encrypted local Vault for credentials and private notes, protected by Android system authentication.
 - Password-encrypted `.tlb` backup and full-replacement restore with validation and preview.
 - Responsive Today Todo widget, including wide horizontal layouts.

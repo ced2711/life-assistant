@@ -2,7 +2,6 @@ package com.ced2711.lifetracker.desktop
 
 import com.ced2711.lifetracker.cloudsync.LocalCloudSyncState
 import com.ced2711.lifetracker.domain.model.AppLockTimeout
-import com.ced2711.lifetracker.domain.model.OptInDestinations
 import com.ced2711.lifetracker.domain.model.resolveVisibleDestinations
 import com.ced2711.lifetracker.domain.model.DefaultVisibleDestinations
 import com.ced2711.lifetracker.domain.model.TopLevelDestination
@@ -20,7 +19,7 @@ data class DesktopCloudConfig(
     val automaticSync: Boolean,
     val syncState: LocalCloudSyncState,
     val uiLanguage: UiLanguage = UiLanguage.ENGLISH,
-    val lastDestination: TopLevelDestination = TopLevelDestination.TODO,
+    val lastDestination: TopLevelDestination = TopLevelDestination.TODAY,
     val visibleDestinations: Set<TopLevelDestination> = DefaultVisibleDestinations,
     val appLockEnabled: Boolean = false,
     val appLockTimeout: AppLockTimeout = AppLockTimeout.ONE_MINUTE,
@@ -57,12 +56,12 @@ class DesktopConfigStore(
                 ?: UiLanguage.ENGLISH,
             lastDestination = properties.getProperty(KEY_LAST_DESTINATION)
                 ?.let { value -> runCatching { TopLevelDestination.valueOf(value) }.getOrNull() }
-                ?: TopLevelDestination.TODO,
+                ?: TopLevelDestination.TODAY,
             // Hidden rather than visible modules are stored so modules added later start visible;
             // opt-in modules (Today) show only when chosen. No saved choice yet means the defaults.
             visibleDestinations = resolveVisibleDestinations(
                 hidden = properties.getProperty(KEY_HIDDEN_DESTINATIONS)?.split(',')?.mapTo(mutableSetOf(), String::trim),
-                optedIn = properties.getProperty(KEY_OPTED_IN_DESTINATIONS)?.split(',')?.mapTo(mutableSetOf(), String::trim),
+                legacyOptedIn = properties.getProperty(KEY_OPTED_IN_DESTINATIONS)?.split(',')?.mapTo(mutableSetOf(), String::trim),
             ),
             appLockEnabled = properties.getProperty(KEY_APP_LOCK)?.toBooleanStrictOrNull() ?: false,
             appLockTimeout = properties.getProperty(KEY_APP_LOCK_TIMEOUT)
@@ -112,7 +111,7 @@ class DesktopConfigStore(
             KEY_HIDDEN_DESTINATIONS,
             TopLevelDestination.entries.filterNot(value::contains).joinToString(",") { it.name },
         )
-        properties.setProperty(KEY_OPTED_IN_DESTINATIONS, OptInDestinations.filter(value::contains).joinToString(",") { it.name })
+        properties.remove(KEY_OPTED_IN_DESTINATIONS)
         save(properties)
     }
 

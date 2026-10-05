@@ -498,6 +498,33 @@ interface TaskLedgerDao {
     @Query("DELETE FROM diary_entries WHERE epochDay = :epochDay")
     suspend fun deleteDiaryEntry(epochDay: Long)
 
+    @Query("SELECT * FROM daily_checklist_items ORDER BY sortOrder, id")
+    fun observeChecklistItems(): Flow<List<ChecklistItemEntity>>
+
+    @Query("SELECT * FROM daily_checklist_items ORDER BY sortOrder, id")
+    suspend fun getChecklistItems(): List<ChecklistItemEntity>
+
+    @Query("SELECT * FROM daily_checklist_checks")
+    fun observeChecklistChecks(): Flow<List<ChecklistCheckEntity>>
+
+    @Insert
+    suspend fun insertChecklistItem(item: ChecklistItemEntity): Long
+
+    @Update
+    suspend fun updateChecklistItems(items: List<ChecklistItemEntity>)
+
+    @Query("DELETE FROM daily_checklist_items WHERE id = :itemId")
+    suspend fun deleteChecklistItem(itemId: Long)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertChecklistCheck(check: ChecklistCheckEntity)
+
+    @Query("DELETE FROM daily_checklist_checks WHERE itemId = :itemId AND epochDay = :epochDay")
+    suspend fun deleteChecklistCheck(itemId: Long, epochDay: Long)
+
+    @Query("DELETE FROM daily_checklist_checks WHERE epochDay < :epochDay")
+    suspend fun deleteChecklistChecksBefore(epochDay: Long)
+
     @Query("SELECT * FROM attachments WHERE ownerType = :ownerType AND ownerId = :ownerId AND pendingDeleteAt IS NULL ORDER BY createdAt")
     fun observeAttachments(ownerType: String, ownerId: Long): Flow<List<AttachmentEntity>>
 

@@ -105,6 +105,16 @@ class TaskLedgerViewModel(private val container: AppContainer) : ViewModel() {
         SharingStarted.WhileSubscribed(5_000),
         emptyList(),
     )
+    val checklistItems = repository.checklistItems.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val checklistChecks = repository.checklistChecks.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun addChecklistItem(title: String) = launchAction { repository.addChecklistItem(title) }
+    fun renameChecklistItem(itemId: Long, title: String) = launchAction { repository.renameChecklistItem(itemId, title) }
+    fun deleteChecklistItem(itemId: Long) = launchAction { repository.deleteChecklistItem(itemId) }
+    fun reorderChecklist(itemIds: List<Long>) = launchAction { repository.reorderChecklist(itemIds) }
+    fun setChecklistChecked(itemId: Long, epochDay: Long, checked: Boolean) =
+        launchAction { repository.setChecklistChecked(itemId, epochDay, checked) }
+
     /** Subtasks by todo, so lists can show progress and offer "task and subtasks". */
     val subtasksByTodo = repository.allSubtasks
         .map { all -> all.groupBy { it.todoId } }

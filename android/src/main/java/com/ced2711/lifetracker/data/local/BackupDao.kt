@@ -31,6 +31,8 @@ interface BackupDao {
     @Query("SELECT * FROM note_folders ORDER BY id") suspend fun backupNoteFolders(): List<NoteFolderEntity>
     @Query("SELECT * FROM notes ORDER BY id") suspend fun backupNotes(): List<NoteEntity>
     @Query("SELECT * FROM diary_entries ORDER BY id") suspend fun backupDiaryEntries(): List<DiaryEntryEntity>
+    @Query("SELECT * FROM daily_checklist_items ORDER BY id") suspend fun backupChecklistItems(): List<ChecklistItemEntity>
+    @Query("SELECT * FROM daily_checklist_checks ORDER BY itemId, epochDay") suspend fun backupChecklistChecks(): List<ChecklistCheckEntity>
     @Query("SELECT * FROM attachments ORDER BY id") suspend fun backupAttachments(): List<AttachmentEntity>
     @Query("SELECT id FROM vault_entries ORDER BY id") suspend fun backupVaultIds(): List<String>
     @Query("SELECT * FROM vault_entries ORDER BY id") suspend fun backupVaultRows(): List<VaultEntryEntity>
@@ -59,6 +61,8 @@ interface BackupDao {
         noteFolders = backupNoteFolders(),
         notes = backupNotes(),
         diaryEntries = backupDiaryEntries(),
+        checklistItems = backupChecklistItems(),
+        checklistChecks = backupChecklistChecks(),
         attachments = backupAttachments(),
         vaultEntries = backupVaultRows(),
     )
@@ -138,6 +142,8 @@ interface BackupDao {
         deleteAllNotes()
         deleteAllNoteFolders()
         deleteAllDiaryEntries()
+        deleteAllChecklistChecks()
+        deleteAllChecklistItems()
         if (!keepVault) deleteAllVaultEntries()
 
         insertCategories(topologicallySortedCategories(snapshot.categories))
@@ -153,6 +159,8 @@ interface BackupDao {
         insertNoteFolders(topologicallySortedNoteFolders(snapshot.noteFolders))
         insertNotes(snapshot.notes)
         insertDiaryEntries(snapshot.diaryEntries)
+        insertChecklistItems(snapshot.checklistItems)
+        insertChecklistChecks(snapshot.checklistChecks)
         insertAttachments(attachmentRows)
         if (!keepVault) insertVaultEntries(encryptedVault)
         writeRestoreCommit(RestoreCommitEntity(restoreToken = restoreToken))
@@ -172,6 +180,8 @@ interface BackupDao {
     @Query("DELETE FROM notes") suspend fun deleteAllNotes()
     @Query("DELETE FROM note_folders") suspend fun deleteAllNoteFolders()
     @Query("DELETE FROM diary_entries") suspend fun deleteAllDiaryEntries()
+    @Query("DELETE FROM daily_checklist_checks") suspend fun deleteAllChecklistChecks()
+    @Query("DELETE FROM daily_checklist_items") suspend fun deleteAllChecklistItems()
     @Query("DELETE FROM vault_entries") suspend fun deleteAllVaultEntries()
 
     @Insert suspend fun insertCategories(values: List<CategoryEntity>)
@@ -187,6 +197,8 @@ interface BackupDao {
     @Insert suspend fun insertNoteFolders(values: List<NoteFolderEntity>)
     @Insert suspend fun insertNotes(values: List<NoteEntity>)
     @Insert suspend fun insertDiaryEntries(values: List<DiaryEntryEntity>)
+    @Insert suspend fun insertChecklistItems(values: List<ChecklistItemEntity>)
+    @Insert suspend fun insertChecklistChecks(values: List<ChecklistCheckEntity>)
     @Insert suspend fun insertAttachments(values: List<AttachmentEntity>)
     @Insert suspend fun insertVaultEntries(values: List<VaultEntryEntity>)
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -209,6 +221,8 @@ data class BackupDatabaseState(
     val noteFolders: List<NoteFolderEntity> = emptyList(),
     val notes: List<NoteEntity> = emptyList(),
     val diaryEntries: List<DiaryEntryEntity> = emptyList(),
+    val checklistItems: List<ChecklistItemEntity> = emptyList(),
+    val checklistChecks: List<ChecklistCheckEntity> = emptyList(),
 )
 
 private fun topologicallySortedCategories(values: List<CategoryEntity>): List<CategoryEntity> {

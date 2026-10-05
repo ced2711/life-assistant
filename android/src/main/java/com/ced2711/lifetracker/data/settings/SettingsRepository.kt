@@ -13,7 +13,6 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.ced2711.lifetracker.domain.model.DateFormatOption
 import com.ced2711.lifetracker.domain.model.AccentColor
 import com.ced2711.lifetracker.domain.model.AppLockTimeout
-import com.ced2711.lifetracker.domain.model.OptInDestinations
 import com.ced2711.lifetracker.domain.model.resolveVisibleDestinations
 import com.ced2711.lifetracker.domain.model.DefaultVisibleDestinations
 import com.ced2711.lifetracker.domain.model.ThemeMode
@@ -39,7 +38,7 @@ data class AppSettings(
     val defaultAllDayReminderMinute: Int = 0,
     val defaultReminderOffsetsMinutes: Set<Long> = setOf(0L),
     val todoQuickAddFields: Set<TodoQuickAddField> = emptySet(),
-    val lastDestination: TopLevelDestination = TopLevelDestination.TODO,
+    val lastDestination: TopLevelDestination = TopLevelDestination.TODAY,
     // Device-local preferences below are never written to or restored from a backup.
     val visibleDestinations: Set<TopLevelDestination> = DefaultVisibleDestinations,
     val appLockEnabled: Boolean = false,
@@ -92,7 +91,7 @@ class SettingsRepository internal constructor(
                 .orEmpty()
                 .mapNotNull { saved -> TodoQuickAddField.entries.firstOrNull { it.name == saved } }
                 .toSet(),
-            lastDestination = this[Keys.lastDestination].enumOrDefault(TopLevelDestination.TODO),
+            lastDestination = this[Keys.lastDestination].enumOrDefault(TopLevelDestination.TODAY),
             // No saved choice yet means the defaults; an empty saved set means every module is shown.
             visibleDestinations = resolveVisibleDestinations(this[Keys.hiddenDestinations], this[Keys.optedInDestinations]),
             appLockEnabled = this[Keys.appLockEnabled] ?: false,
@@ -124,7 +123,7 @@ class SettingsRepository internal constructor(
     suspend fun setVisibleDestinations(value: Set<TopLevelDestination>) {
         dataStore.edit { preferences ->
             preferences[Keys.hiddenDestinations] = TopLevelDestination.entries.filterNot(value::contains).mapTo(mutableSetOf()) { it.name }
-            preferences[Keys.optedInDestinations] = OptInDestinations.filter(value::contains).mapTo(mutableSetOf()) { it.name }
+            preferences.remove(Keys.optedInDestinations)
         }
     }
     suspend fun setAppLockEnabled(value: Boolean) = edit(Keys.appLockEnabled, value)

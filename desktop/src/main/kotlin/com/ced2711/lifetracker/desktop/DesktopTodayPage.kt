@@ -143,7 +143,7 @@ internal fun TodayPage(
     }
 
     @Composable
-    fun todoColumn() {
+    fun todoColumn(withChecklist: Boolean) {
         Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
             QuickTodoField(onAdd = { text ->
                 scope.launch {
@@ -157,6 +157,7 @@ internal fun TodayPage(
                     )
                 }
             })
+            if (withChecklist) DailyChecklistPanel(snapshot, store)
             if (overview.overdue.isNotEmpty()) {
                 Column {
                     SectionLabel(desktopText("Overdue"), count = overview.overdue.size, color = LifeTheme.colors.danger)
@@ -205,8 +206,9 @@ internal fun TodayPage(
     }
 
     @Composable
-    fun sideColumn() {
+    fun sideColumn(withChecklist: Boolean) {
         Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+            if (withChecklist) DailyChecklistPanel(snapshot, store)
             val dueTotal = overview.completedToday.size + overview.dueToday.size + overview.overdue.size
             if (dueTotal > 0) Panel(padding = PaddingValues(Space.xl)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -272,12 +274,12 @@ internal fun TodayPage(
             PageTitle(title = desktopText("Today"), subtitle = todaySubtitle(today, overview, language))
             if (twoColumns) {
                 Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                    Column(Modifier.weight(1.45f)) { todoColumn() }
-                    Column(Modifier.weight(1f).widthIn(max = 460.dp)) { sideColumn() }
+                    Column(Modifier.weight(1.45f)) { todoColumn(withChecklist = false) }
+                    Column(Modifier.weight(1f).widthIn(max = 460.dp)) { sideColumn(withChecklist = true) }
                 }
             } else {
-                todoColumn()
-                sideColumn()
+                todoColumn(withChecklist = true)
+                sideColumn(withChecklist = false)
             }
         }
     }
