@@ -12,6 +12,7 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -74,14 +75,21 @@ class DesktopFlowTest {
     private fun store(): DesktopDataStore = DesktopDataStore(root)
 
     @Test
-    fun aNewPcOpensOnTodayWithoutAPasswordAndTodosCanBeAddedAndTicked() = app {
+    fun aNewPcOpensOnTodayWithoutAPasswordAndTodosDueTodayAreTickedThere() = app {
         assertFalse("no password is asked on a new PC", onAllNodesWithText("Data password").fetchSemanticsNodes().isNotEmpty())
-        waitForText("Add a todo for today, then press Enter")
+        waitForText("Nothing due today")
+        assertTrue("todos are added in Todo, not on Today", onAllNodesWithText("Add a todo for today", substring = true).fetchSemanticsNodes().isEmpty())
         shot("01-today-empty")
-        val field = onNodeWithText("Add a todo for today, then press Enter")
-        field.performClick()
-        field.performTextInput("Buy milk")
-        onNode(hasText("Buy milk")).performKeyInput { pressKey(Key.Enter) }
+        open("Todo")
+        onNodeWithText("New todo").performClick()
+        waitForText("What needs to be done?")
+        val description = onNodeWithText("What needs to be done?")
+        description.performClick()
+        description.performTextInput("Buy milk")
+        onAllNodesWithText("Today").onLast().performClick()
+        onNodeWithText("Save (Ctrl+S)").performClick()
+        waitUntil(timeoutMillis = 15_000) { onAllNodes(hasContentDescription("Buy milk")).fetchSemanticsNodes().isNotEmpty() }
+        open("Today")
         waitUntil(timeoutMillis = 15_000) { onAllNodes(hasContentDescription("Buy milk")).fetchSemanticsNodes().isNotEmpty() }
         shot("02-today-one-todo")
         onNode(hasContentDescription("Buy milk")).performClick()
@@ -106,13 +114,20 @@ class DesktopFlowTest {
         assertTrue("checklist items are not todos", onAllNodesWithText("Nothing due today", substring = true).fetchSemanticsNodes().isNotEmpty())
         onNode(hasContentDescription("Brush teeth")).performClick()
         waitForText("1 / 2")
+        // Like a todo, a ticked item leaves the list for the folded group under it.
+        waitForText("Checked off 1")
+        assertTrue(onAllNodes(hasContentDescription("Brush teeth")).fetchSemanticsNodes().isEmpty())
         shot("03b-checklist-ticked")
         onNode(hasContentDescription("Shower")).performClick()
         waitForText("All done for today. It starts fresh tomorrow.")
+        waitForText("Checked off 2")
         shot("03c-checklist-all-done")
-        onNodeWithText("Show").performClick()
+        onNodeWithText("Checked off 2").performClick()
+        waitUntil(timeoutMillis = 15_000) { onAllNodes(hasContentDescription("Shower")).fetchSemanticsNodes().isNotEmpty() }
+        shot("03d-checklist-checked-off-shown")
         onNode(hasContentDescription("Shower")).performClick()
         waitForText("1 / 2")
+        assertTrue("an unticked item is back in the list", onAllNodes(hasContentDescription("Shower")).fetchSemanticsNodes().isNotEmpty())
     }
 
     @Test

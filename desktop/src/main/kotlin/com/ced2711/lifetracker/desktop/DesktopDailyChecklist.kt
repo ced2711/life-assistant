@@ -45,8 +45,9 @@ import kotlinx.coroutines.launch
 /**
  * The daily checklist on Today: things done every day (brush teeth, shower, check homework). They
  * are not todos and never appear in Todo or the calendar; ticks count for today only, so every
- * morning starts with none ticked. Once everything is ticked the panel folds to one line. Adding,
- * renaming, reordering and removing happen in Edit.
+ * morning starts with none ticked. Like todos, a ticked item leaves the list for a folded "Checked
+ * off" group under it, so the list shows only what is left today. Adding, renaming, reordering and
+ * removing happen in Edit.
  */
 @Composable
 internal fun DailyChecklistPanel(snapshot: BackupSnapshot, store: DesktopDataStore) {
@@ -64,7 +65,6 @@ internal fun DailyChecklistPanel(snapshot: BackupSnapshot, store: DesktopDataSto
     var newItem by remember { mutableStateOf("") }
     var renaming by remember { mutableStateOf<ChecklistItemEntity?>(null) }
     var removing by remember { mutableStateOf<ChecklistItemEntity?>(null) }
-    val folded = allDone && !editing && !showDone
 
     fun add() {
         val title = newItem.trim()
@@ -97,53 +97,49 @@ internal fun DailyChecklistPanel(snapshot: BackupSnapshot, store: DesktopDataSto
                 TextButton(onClick = { editing = !editing }) { Text(desktopText(if (editing) "Finish" else "Edit")) }
             }
         }
-        if (folded) {
-            Row(Modifier.padding(start = Space.lg, end = Space.xs), verticalAlignment = Alignment.CenterVertically) {
+        if (editing) {
+            items.forEachIndexed { index, item ->
+                ListRow(
+                    title = item.title,
+                    supporting = desktopText("Click to rename"),
+                    onClick = { renaming = item },
+                    trailing = {
+                        IconButton(onClick = { move(index, -1) }, enabled = index > 0, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Rounded.KeyboardArrowUp, desktopText("Move up"), Modifier.size(18.dp))
+                        }
+                        IconButton(onClick = { move(index, 1) }, enabled = index < items.lastIndex, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Rounded.KeyboardArrowDown, desktopText("Move down"), Modifier.size(18.dp))
+                        }
+                        IconButton(onClick = { removing = item }, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Rounded.DeleteOutline, removeLabel(item.title, language), Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    },
+                )
+            }
+        } else {
+            val (ticked, open) = items.partition { it.id in checked }
+            open.forEach { item -> ChecklistRow(item, isChecked = false) { value -> scope.launch { store.setChecklistChecked(item.id, today, value) } } }
+            if (allDone) {
                 Text(
                     desktopText("All done for today. It starts fresh tomorrow."),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.padding(horizontal = Space.lg, vertical = Space.xs),
                 )
-                TextButton(onClick = { showDone = true }) { Text(desktopText("Show")) }
             }
-        } else {
-            items.forEachIndexed { index, item ->
-                if (editing) {
-                    ListRow(
-                        title = item.title,
-                        supporting = desktopText("Click to rename"),
-                        onClick = { renaming = item },
-                        trailing = {
-                            IconButton(onClick = { move(index, -1) }, enabled = index > 0, modifier = Modifier.size(32.dp)) {
-                                Icon(Icons.Rounded.KeyboardArrowUp, desktopText("Move up"), Modifier.size(18.dp))
-                            }
-                            IconButton(onClick = { move(index, 1) }, enabled = index < items.lastIndex, modifier = Modifier.size(32.dp)) {
-                                Icon(Icons.Rounded.KeyboardArrowDown, desktopText("Move down"), Modifier.size(18.dp))
-                            }
-                            IconButton(onClick = { removing = item }, modifier = Modifier.size(32.dp)) {
-                                Icon(Icons.Rounded.DeleteOutline, removeLabel(item.title, language), Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        },
-                    )
-                } else {
-                    val isChecked = item.id in checked
-                    ListRow(
-                        title = item.title,
-                        struck = isChecked,
-                        leading = {
-                            CheckCircle(
-                                checked = isChecked,
-                                onCheckedChange = { value -> scope.launch { store.setChecklistChecked(item.id, today, value) } },
-                                contentDescription = item.title,
-                            )
-                        },
-                        onClick = { scope.launch { store.setChecklistChecked(item.id, today, !isChecked) } },
+            if (ticked.isNotEmpty()) {
+                TextButton(onClick = { showDone = !showDone }, modifier = Modifier.padding(start = Space.xs)) {
+                    Text("${desktopText("Checked off")} ${ticked.size}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Icon(
+                        if (showDone) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
+                        desktopText(if (showDone) "Hide" else "Show"),
+                        Modifier.padding(start = Space.xs).size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-            }
-            if (allDone && showDone && !editing) {
-                TextButton(onClick = { showDone = false }, modifier = Modifier.padding(start = Space.sm)) { Text(desktopText("Hide")) }
+                if (showDone) {
+                    ticked.forEach { item -> ChecklistRow(item, isChecked = true) { value -> scope.launch { store.setChecklistChecked(item.id, today, value) } } }
+                }
             }
         }
         if (items.isEmpty() || editing) {
@@ -191,6 +187,16 @@ internal fun DailyChecklistPanel(snapshot: BackupSnapshot, store: DesktopDataSto
             },
         )
     }
+}
+
+@Composable
+private fun ChecklistRow(item: ChecklistItemEntity, isChecked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    ListRow(
+        title = item.title,
+        struck = isChecked,
+        leading = { CheckCircle(checked = isChecked, onCheckedChange = onCheckedChange, contentDescription = item.title) },
+        onClick = { onCheckedChange(!isChecked) },
+    )
 }
 
 private fun removeLabel(title: String, language: UiLanguage): String = when (language) {

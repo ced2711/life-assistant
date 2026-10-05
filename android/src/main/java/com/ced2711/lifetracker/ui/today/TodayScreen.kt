@@ -14,10 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoStories
 import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material.icons.rounded.Repeat
@@ -36,7 +33,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ced2711.lifetracker.data.local.DiaryEntryEntity
@@ -45,10 +41,8 @@ import com.ced2711.lifetracker.data.local.TodoEntity
 import com.ced2711.lifetracker.data.settings.AppSettings
 import com.ced2711.lifetracker.domain.format.UserFormatting
 import com.ced2711.lifetracker.domain.model.TodayOverview
-import com.ced2711.lifetracker.domain.model.TodoDraft
 import com.ced2711.lifetracker.domain.model.UiLanguage
 import com.ced2711.lifetracker.ui.design.CheckCircle
-import com.ced2711.lifetracker.ui.design.LifeTextField
 import com.ced2711.lifetracker.ui.design.ListRow
 import com.ced2711.lifetracker.ui.design.PageTitle
 import com.ced2711.lifetracker.ui.design.Panel
@@ -109,15 +103,6 @@ fun TodayScreen(
             if (done) viewModel.completeTodo(todo.id, withSubtasks) else viewModel.restoreTodo(todo.id)
         },
         subtasksByTodo = subtasksByTodo,
-        onAdd = { text ->
-            viewModel.addQuickTodo(
-                TodoDraft(
-                    description = text,
-                    deadlineEpochDay = today.toEpochDay(),
-                    reminderOffsetsMinutes = settings.defaultReminderOffsetsMinutes.toList(),
-                ),
-            )
-        },
         onOpenTodo = onOpenTodo,
         onOpenLedger = onOpenLedger,
         onOpenDiary = onOpenDiary,
@@ -147,7 +132,6 @@ internal fun TodayContent(
     isWide: Boolean = false,
     onToggle: (TodoEntity, Boolean, Boolean) -> Unit,
     subtasksByTodo: Map<Long, List<com.ced2711.lifetracker.data.local.SubtaskEntity>>,
-    onAdd: (String) -> Unit,
     onOpenTodo: (Long) -> Unit,
     onOpenLedger: () -> Unit,
     onOpenDiary: (Long) -> Unit,
@@ -156,7 +140,6 @@ internal fun TodayContent(
     checklistUi: DailyChecklistUi = rememberDailyChecklistUi(),
 ) {
     val language = LocalUiLanguage.current
-    var quick by rememberSaveable { mutableStateOf("") }
     var showDone by rememberSaveable { mutableStateOf(false) }
     var completing by remember { mutableStateOf<TodoEntity?>(null) }
 
@@ -265,18 +248,6 @@ internal fun TodayContent(
                     Text(subtitle(overview, language), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     val total = overview.completedToday.size + overview.dueToday.size + overview.overdue.size
                     if (total > 0) ProgressLine(overview.progress)
-                    LifeTextField(
-                        value = quick,
-                        onValueChange = { quick = it },
-                        placeholder = localizedText("Add a todo for today"),
-                        leadingIcon = Icons.Rounded.Add,
-                        modifier = Modifier.fillMaxWidth(),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = {
-                            quick.trim().takeIf(String::isNotEmpty)?.let(onAdd)
-                            quick = ""
-                        }),
-                    )
                 }
             }
             dailyChecklistItems(checklist, checklistUi)

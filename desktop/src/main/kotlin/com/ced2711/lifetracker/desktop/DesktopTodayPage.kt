@@ -145,18 +145,6 @@ internal fun TodayPage(
     @Composable
     fun todoColumn(withChecklist: Boolean) {
         Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
-            QuickTodoField(onAdd = { text ->
-                scope.launch {
-                    store.saveTodo(
-                        TodoDraft(
-                            description = text,
-                            deadlineEpochDay = today.toEpochDay(),
-                            reminderOffsetsMinutes = snapshot.settings.defaultReminderOffsetsMinutes.toList(),
-                        ),
-                        SeriesEditScope.ONLY_THIS_OCCURRENCE,
-                    )
-                }
-            })
             if (withChecklist) DailyChecklistPanel(snapshot, store)
             if (overview.overdue.isNotEmpty()) {
                 Column {
@@ -168,7 +156,7 @@ internal fun TodayPage(
                 SectionLabel(desktopText("Today"), count = overview.dueToday.size)
                 if (overview.dueToday.isEmpty()) {
                     Text(
-                        desktopText(if (overview.completedToday.isEmpty()) "Nothing due today. Add something above, or enjoy the space." else "Everything due today is done."),
+                        desktopText(if (overview.completedToday.isEmpty()) "Nothing due today." else "Everything due today is done."),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = Space.md, vertical = Space.sm),
@@ -302,22 +290,6 @@ internal fun TodayPage(
             },
         )
     }
-}
-
-/** "Add a todo for today" — type and press Enter. */
-@Composable
-private fun QuickTodoField(onAdd: (String) -> Unit) {
-    var text by remember { mutableStateOf("") }
-    LifeTextField(
-        value = text,
-        onValueChange = { text = it },
-        placeholder = desktopText("Add a todo for today, then press Enter"),
-        leadingIcon = Icons.Rounded.Add,
-        modifier = Modifier.fillMaxWidth().onEnter {
-            text.trim().takeIf(String::isNotEmpty)?.let(onAdd)
-            text = ""
-        },
-    )
 }
 
 @Composable
