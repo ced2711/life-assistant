@@ -10,6 +10,12 @@
   On Linux the same switch is called **Start when you sign in** and adds an entry to
   `~/.config/autostart`.
 
+## Changed
+
+- **One click on the tray icon opens the window**, brought to the front even when it was
+  minimized or behind other windows. Before, a single click did nothing and the window opened only
+  from the right-click menu or with a double click. The right-click menu still has Open and Quit.
+
 ## Compatibility
 
 - Signed with the same key as 2.0.3: install it over 2.0.3 without uninstalling.

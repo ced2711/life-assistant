@@ -1,13 +1,16 @@
 package com.ced2711.lifetracker.desktop
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.window.Notification
-import androidx.compose.ui.window.Tray
-import androidx.compose.ui.window.rememberTrayState
+import androidx.compose.ui.graphics.toAwtImage
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -48,25 +51,36 @@ private fun runApp(startHidden: Boolean) = application {
     val windowIcon = remember { LifeTrackerWindowIcon() }
     val configStore = remember { DesktopConfigStore() }
     val shortcuts = remember { DesktopShortcuts() }
-    // The tray icon shows reminder notifications and, when chosen, keeps the app running.
-    val trayState = rememberTrayState()
-    val traySupported = remember { runCatching { java.awt.SystemTray.isSupported() }.getOrDefault(false) }
-    // Started by an AI assistant: wait in the tray. Without a tray the window has to show.
-    var windowVisible by remember { mutableStateOf(!(startHidden && traySupported)) }
-    val notifier = remember { DesktopNotifier { title, message -> trayState.sendNotification(Notification(title, message, Notification.Type.Info)) } }
-    val language = remember { configStore.read().uiLanguage }
-    if (traySupported) {
-        Tray(
-            icon = windowIcon,
-            state = trayState,
-            tooltip = desktopText(AppIdentity.NAME, language),
-            onAction = { windowVisible = true },
-            menu = {
-                Item(desktopText("Open", language), onClick = { windowVisible = true })
-                Item(desktopText("Quit", language), onClick = ::exitApplication)
-            },
-        )
+    // Started with the computer or by an AI assistant: wait in the tray.
+    var windowVisible by remember { mutableStateOf(!startHidden) }
+    // Counts requests to bring the window forward; the window reacts to each one.
+    var showRequests by remember { mutableIntStateOf(0) }
+    val openWindow: () -> Unit = {
+        windowVisible = true
+        showRequests++
     }
+    val language = remember { configStore.read().uiLanguage }
+    // The tray icon opens the window with one click, shows reminder notifications and, when
+    // chosen, keeps the app running. Without a tray the window has to show.
+    val tray = remember {
+        val icon = if (DesktopTrayIcon.isSupported) {
+            val pixels = DesktopTrayIcon.iconPixels().toFloat()
+            DesktopTrayIcon(
+                image = windowIcon.toAwtImage(Density(1f), LayoutDirection.Ltr, Size(pixels, pixels)),
+                tooltip = desktopText(AppIdentity.NAME, language),
+                openLabel = desktopText("Open", language),
+                quitLabel = desktopText("Quit", language),
+                onOpen = openWindow,
+                onQuit = ::exitApplication,
+            ).takeIf { it.install() }
+        } else {
+            null
+        }
+        if (icon == null) windowVisible = true
+        icon
+    }
+    DisposableEffect(tray) { onDispose { tray?.remove() } }
+    val traySupported = tray != null
     // Reopen where the window was left, at the size it had.
     val windowState = remember {
         val saved = runCatching { configStore.windowBounds() }.getOrNull()
@@ -99,17 +113,17 @@ private fun runApp(startHidden: Boolean) = application {
         onPreviewKeyEvent = shortcuts::handle,
     ) {
         window.minimumSize = java.awt.Dimension(640, 480)
-        CompositionLocalProvider(LocalDesktopShortcuts provides shortcuts, LocalDesktopNotifier provides notifier.takeIf { traySupported }) {
-            LifeTrackerDesktopApp(
-                onShowWindow = {
-                    java.awt.EventQueue.invokeLater {
-                        windowVisible = true
-                        if (windowState.isMinimized) windowState.isMinimized = false
-                        window.toFront()
-                        window.requestFocus()
-                    }
-                },
-            )
+        // Shown, restored and in front: also when it was already open behind other windows.
+        LaunchedEffect(showRequests) {
+            if (showRequests == 0) return@LaunchedEffect
+            if (windowState.isMinimized) windowState.isMinimized = false
+            java.awt.EventQueue.invokeLater {
+                window.toFront()
+                window.requestFocus()
+            }
+        }
+        CompositionLocalProvider(LocalDesktopShortcuts provides shortcuts, LocalDesktopNotifier provides tray) {
+            LifeTrackerDesktopApp(onShowWindow = { java.awt.EventQueue.invokeLater(openWindow) })
         }
     }
 }
