@@ -29,9 +29,12 @@ import kotlinx.serialization.json.putJsonObject
  * when it is not running it is started in the tray. See https://modelcontextprotocol.io
  */
 class DesktopMcpBridge(
-    private val appDirectory: File = DesktopPlatform.appDirectory(),
-    private val launchApp: () -> Boolean = { DesktopPlatform.launchDetached(listOf("--background")) },
-    private val forward: (String, String?) -> String? = { path, body -> DesktopAgentServer.request(appDirectory, path, body, Duration.ofSeconds(60)) },
+    /** Null: the app's folder, looked up on each call, since the app may move it when it starts. */
+    private val appDirectory: File? = null,
+    private val launchApp: () -> Boolean = { DesktopPlatform.launchDetached(listOf(DesktopAutostart.BACKGROUND_ARGUMENT)) },
+    private val forward: (String, String?) -> String? = { path, body ->
+        DesktopAgentServer.request(appDirectory ?: DesktopPlatform.appDirectory(), path, body, Duration.ofSeconds(60))
+    },
     private val waitStepMillis: Long = 500,
 ) {
     private val json = Json { encodeDefaults = true; explicitNulls = true }

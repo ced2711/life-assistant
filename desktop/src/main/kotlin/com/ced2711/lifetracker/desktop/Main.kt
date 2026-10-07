@@ -43,7 +43,10 @@ fun main(args: Array<String>) {
         if (!background) DesktopAgentServer.request(DesktopPlatform.appDirectory(), "/show", "{}")
         kotlin.system.exitProcess(0)
     }
+    // Only this copy runs now: the data folder of older versions can take the app's name.
+    DesktopPlatform.moveLegacyAppDirectory()
     runCatching { DesktopAutostart.system.refresh() }
+    Thread({ runCatching { DesktopAgentSetup.refreshRegistrations() } }, "agent-registrations").apply { isDaemon = true }.start()
     runApp(startHidden = background)
 }
 

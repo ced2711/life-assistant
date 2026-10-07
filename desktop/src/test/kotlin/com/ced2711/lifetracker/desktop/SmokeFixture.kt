@@ -10,15 +10,15 @@ import kotlinx.coroutines.runBlocking
 fun main(args: Array<String>) = runBlocking {
     require(args.size == 1) { "Pass one isolated APPDATA directory." }
     val appData = File(args.single()).absoluteFile
-    val appDirectory = File(appData, "Life Tracker")
-    require(!File(appDirectory, "life-tracker-local.tlb").exists()) {
+    val appDirectory = File(appData, DesktopPlatform.APP_FOLDER)
+    require(!File(appDirectory, DesktopDataStore.LOCAL_DATA_FILE).exists()) {
         "Refusing to replace an existing smoke fixture. Pass an empty directory."
     }
     val password = smokePassword()
     val sourceAttachment = File(appData, "fixture-attachment.txt")
     try {
         appData.mkdirs()
-        sourceAttachment.writeText("Synthetic Life Tracker desktop smoke-test attachment.")
+        sourceAttachment.writeText("Synthetic Life Assistant desktop smoke-test attachment.")
         val store = DesktopDataStore(appDirectory)
         check(store.open(password.copyOf()))
 

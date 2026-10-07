@@ -20,6 +20,15 @@
   window. They are the same settings as in Settings → Notifications; a change in one place shows
   in the other.
 
+- **The PC app's folders are called Life Assistant.** Earlier versions installed into
+  `AppData\Local\Life Tracker` and kept their data in `AppData\Roaming\Life Tracker`, after the
+  app's old name. 2.0.4 installs into `AppData\Local\Life Assistant` and replaces the old copy;
+  on its first start it moves the data folder to `AppData\Roaming\Life Assistant` and renames the
+  data file to `life-assistant-local.tlb`. Starting with Windows and AI assistants already
+  connected in Claude Desktop or Claude Code are pointed at the new place by themselves. If the
+  data folder cannot be moved (a file in it is in use), the old folder stays in use and nothing is
+  lost; the move is tried again on the next start.
+
 ## Compatibility
 
 - Signed with the same key as 2.0.3: install it over 2.0.3 without uninstalling.

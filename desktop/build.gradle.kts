@@ -182,8 +182,9 @@ compose.desktop {
                 shortcut = true
                 dirChooser = true
                 perUserInstall = true
-                // Preserve the default install location and upgrade family of Life Tracker.
-                installationPath = "Life Tracker"
+                // Versions before 2.0.4 installed into "Life Tracker", the app's old name; the
+                // upgrade family stays, so installing replaces them.
+                installationPath = "Life Assistant"
                 upgradeUuid = "4f5dcd57-85a1-4cb5-9e14-a0d5c8b8940b"
             }
             linux {

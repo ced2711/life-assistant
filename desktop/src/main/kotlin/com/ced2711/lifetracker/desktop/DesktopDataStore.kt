@@ -86,7 +86,7 @@ class DesktopDataStore(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : AutoCloseable {
     private val mutex = Mutex()
-    private val localBackup = File(appDirectory, "life-tracker-local.tlb")
+    private val localBackup = localDataFile(appDirectory)
     private val attachmentsDirectory = File(appDirectory, "attachments")
     private val workDirectory = File(appDirectory, "work")
     private val cloudRecovery = File(appDirectory, "cloud-recovery")
@@ -154,7 +154,7 @@ class DesktopDataStore(
             var loaded: LoadedSnapshot? = null
             try {
                 loaded = loadSnapshot(source, secret)
-                val replacement = File(appDirectory, "life-tracker-local.tlb.download")
+                val replacement = File(appDirectory, "${localBackup.name}.download")
                 try {
                     Files.copy(source.toPath(), replacement.toPath(), StandardCopyOption.REPLACE_EXISTING)
                     replaceFile(replacement, localBackup)
@@ -925,7 +925,7 @@ class DesktopDataStore(
             val temporary = File(cloudRecovery, ".recovery-${UUID.randomUUID()}.part")
             val recovery = File(
                 cloudRecovery,
-                "life-tracker-local-${System.currentTimeMillis()}-${UUID.randomUUID()}.tlb",
+                "life-assistant-local-${System.currentTimeMillis()}-${UUID.randomUUID()}.tlb",
             )
             try {
                 Files.copy(localBackup.toPath(), temporary.toPath(), StandardCopyOption.REPLACE_EXISTING)
@@ -1056,7 +1056,7 @@ class DesktopDataStore(
     ) {
         val secret = password?.copyOf() ?: error("Desktop data is locked")
         appDirectory.mkdirs()
-        val temporary = File(appDirectory, "life-tracker-local.tlb.part")
+        val temporary = File(appDirectory, "${localBackup.name}.part")
         try {
             temporary.outputStream().buffered().use { output ->
                 BackupCrypto.encrypt(
@@ -1183,6 +1183,22 @@ class DesktopDataStore(
     private fun BackupSnapshot.validateForDesktop(): BackupSnapshot = validate()
 
     companion object {
+        internal const val LOCAL_DATA_FILE = "life-assistant-local.tlb"
+
+        /** The name versions before 2.0.4 gave the file, after the app's old name Life Tracker. */
+        internal const val LEGACY_LOCAL_DATA_FILE = "life-tracker-local.tlb"
+
+        /**
+         * The encrypted data file in [appDirectory]. A file of the old name is renamed first; if it
+         * cannot be (another copy of the app has it open), it stays in use under its old name.
+         */
+        internal fun localDataFile(appDirectory: File): File {
+            val current = File(appDirectory, LOCAL_DATA_FILE)
+            val legacy = File(appDirectory, LEGACY_LOCAL_DATA_FILE)
+            if (current.exists() || !legacy.isFile) return current
+            return if (runCatching { Files.move(legacy.toPath(), current.toPath(), StandardCopyOption.ATOMIC_MOVE) }.isSuccess) current else legacy
+        }
+
         const val KEPT_RECOVERY_COPIES = 5
         const val DAILY_BACKUP_DIRECTORY = "daily-backups"
         /** Yesterday's and the day before's copies; a copy is removed on its third day. */
