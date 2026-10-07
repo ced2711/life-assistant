@@ -179,6 +179,8 @@ compose.desktop {
             windows {
                 iconFile.set(windowsIconFile)
                 menu = true
+                // Without a group the installer files the shortcut under "Unknown".
+                menuGroup = "Life Assistant"
                 shortcut = true
                 dirChooser = true
                 perUserInstall = true
