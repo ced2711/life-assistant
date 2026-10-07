@@ -60,6 +60,7 @@ private fun runApp(startHidden: Boolean) = application {
         showRequests++
     }
     val language = remember { configStore.read().uiLanguage }
+    val background = remember { DesktopBackgroundSettings(configStore) }
     // The tray icon opens the window with one click, shows reminder notifications and, when
     // chosen, keeps the app running. Without a tray the window has to show.
     val tray = remember {
@@ -72,6 +73,20 @@ private fun runApp(startHidden: Boolean) = application {
                 quitLabel = desktopText("Quit", language),
                 onOpen = openWindow,
                 onQuit = ::exitApplication,
+                settingsLabel = desktopText("Settings", language),
+                toggles = listOfNotNull(
+                    TrayToggle(
+                        desktopText(DesktopPlatform.text(windows = "Start with Windows", linux = "Start when you sign in"), language),
+                        isOn = { background.startsWithComputer.value },
+                        onChange = background::setStartsWithComputer,
+                    ).takeIf { background.canStartWithComputer },
+                    TrayToggle(
+                        desktopText("Keep in the tray when closed", language),
+                        isOn = { background.keepInTray.value },
+                        onChange = { enabled -> background.setKeepInTray(enabled); true },
+                    ),
+                ),
+                beforeMenu = background::reload,
             ).takeIf { it.install() }
         } else {
             null
@@ -104,7 +119,7 @@ private fun runApp(startHidden: Boolean) = application {
                     ),
                 )
             }
-            if (traySupported && configStore.keepInTray()) windowVisible = false else exitApplication()
+            if (traySupported && background.keepInTray.value) windowVisible = false else exitApplication()
         },
         visible = windowVisible,
         title = AppIdentity.NAME,
@@ -122,7 +137,11 @@ private fun runApp(startHidden: Boolean) = application {
                 window.requestFocus()
             }
         }
-        CompositionLocalProvider(LocalDesktopShortcuts provides shortcuts, LocalDesktopNotifier provides tray) {
+        CompositionLocalProvider(
+            LocalDesktopShortcuts provides shortcuts,
+            LocalDesktopNotifier provides tray,
+            LocalDesktopBackgroundSettings provides background,
+        ) {
             LifeTrackerDesktopApp(onShowWindow = { java.awt.EventQueue.invokeLater(openWindow) })
         }
     }

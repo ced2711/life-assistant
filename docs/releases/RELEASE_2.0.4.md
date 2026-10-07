@@ -14,7 +14,11 @@
 
 - **One click on the tray icon opens the window**, brought to the front even when it was
   minimized or behind other windows. Before, a single click did nothing and the window opened only
-  from the right-click menu or with a double click. The right-click menu still has Open and Quit.
+  from the right-click menu or with a double click.
+- **The tray menu has Open, Settings and Quit.** Settings holds **Start with Windows** and
+  **Keep in the tray when closed** as check marks, so both can be changed without opening the
+  window. They are the same settings as in Settings → Notifications; a change in one place shows
+  in the other.
 
 ## Compatibility
 
