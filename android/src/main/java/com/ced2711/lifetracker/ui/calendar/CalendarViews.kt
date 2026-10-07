@@ -46,6 +46,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import com.ced2711.lifetracker.ui.design.JumpToTodayButton
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.selected
@@ -101,7 +102,7 @@ internal fun CalendarHeader(
                 modifier = Modifier.weight(1f).padding(start = Space.xs).semantics { heading() },
             )
             if (view != CalendarView.AGENDA) {
-                if (showToday) TextButton(onClick = onToday) { Text(localizedText("Today"), maxLines = 1) }
+                JumpToTodayButton(shown = showToday, label = localizedText("Today"), onClick = onToday)
                 IconButton(onClick = onPrevious) { Icon(Icons.Rounded.ChevronLeft, localizedText("Previous")) }
                 IconButton(onClick = onNext) { Icon(Icons.Rounded.ChevronRight, localizedText("Next")) }
             }

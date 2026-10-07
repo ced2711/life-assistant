@@ -58,6 +58,8 @@ private fun runApp(startHidden: Boolean) = application {
     var windowVisible by remember { mutableStateOf(!startHidden) }
     // Counts requests to bring the window forward; the window reacts to each one.
     var showRequests by remember { mutableIntStateOf(0) }
+    // The title bar follows the app's theme; see TitleBarFollowsTheme.
+    var titleBarColors by remember { mutableStateOf<TitleBarColors?>(null) }
     val openWindow: () -> Unit = {
         windowVisible = true
         showRequests++
@@ -132,6 +134,13 @@ private fun runApp(startHidden: Boolean) = application {
     ) {
         window.minimumSize = java.awt.Dimension(640, 480)
         // Shown, restored and in front: also when it was already open behind other windows.
+        LaunchedEffect(titleBarColors, windowVisible) {
+            val colors = titleBarColors ?: return@LaunchedEffect
+            if (!windowVisible || !DesktopPlatform.isWindows) return@LaunchedEffect
+            java.awt.EventQueue.invokeLater {
+                com.ced2711.lifetracker.desktop.windows.WindowsTitleBar.apply(window, colors.dark, colors.caption, colors.text)
+            }
+        }
         LaunchedEffect(showRequests) {
             if (showRequests == 0) return@LaunchedEffect
             if (windowState.isMinimized) windowState.isMinimized = false
@@ -144,6 +153,7 @@ private fun runApp(startHidden: Boolean) = application {
             LocalDesktopShortcuts provides shortcuts,
             LocalDesktopNotifier provides tray,
             LocalDesktopBackgroundSettings provides background,
+            LocalDesktopTitleBar provides { colors -> titleBarColors = colors },
         ) {
             LifeTrackerDesktopApp(onShowWindow = { java.awt.EventQueue.invokeLater(openWindow) })
         }

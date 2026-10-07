@@ -29,8 +29,16 @@
   data folder cannot be moved (a file in it is in use), the old folder stays in use and nothing is
   lost; the move is tried again on the next start.
 
+- **The PC window's title bar follows the app's theme.** Windows drew it white whenever Windows
+  itself was in light mode, above a dark app. It is now dark with the dark theme, in the app's own
+  background colour on Windows 11, and light with the light theme.
+- **The calendar looks the same for today as for any other day**, on the phone and the PC. The
+  Today button that leads back to today used to appear only for other days and pushed the title
+  and the view switcher aside; it now keeps its place and is only hidden while today is shown. The
+  PC's Day view is titled with the date for today too, as on the phone.
+
 ## Compatibility
 
 - Signed with the same key as 2.0.3: install it over 2.0.3 without uninstalling.
-- The phone app has no changes besides the version number.
+- On the phone only the calendar changed.
 - The backup and sync format is the same as in 2.0.2.

@@ -67,6 +67,7 @@ import com.ced2711.lifetracker.domain.model.LedgerType
 import com.ced2711.lifetracker.domain.model.SeriesEditScope
 import com.ced2711.lifetracker.domain.model.TodoDraft
 import com.ced2711.lifetracker.domain.model.diaryPreview
+import com.ced2711.lifetracker.ui.design.JumpToTodayButton
 import com.ced2711.lifetracker.ui.design.CheckCircle
 import com.ced2711.lifetracker.ui.design.Dot
 import com.ced2711.lifetracker.ui.design.EmptyState
@@ -184,7 +185,8 @@ internal fun CalendarPage(
                             CalendarView.MONTH -> monthTitle(month, language)
                             CalendarView.WEEK -> UserFormatting.formatDate(weekStart, snapshot.settings.dateFormat, locale) + " – " +
                                 UserFormatting.formatDate(weekStart.plusDays(6), snapshot.settings.dateFormat, locale)
-                            CalendarView.DAY -> formatDeadline(selected.toEpochDay(), null, snapshot, language)
+                            // The date itself, also for today, as on the phone.
+                            CalendarView.DAY -> UserFormatting.formatDate(selected, snapshot.settings.dateFormat, locale)
                             CalendarView.AGENDA -> desktopText("Next 30 days")
                         },
                         style = MaterialTheme.typography.headlineLarge,
@@ -195,7 +197,7 @@ internal fun CalendarPage(
                         Spacer(Modifier.width(Space.sm))
                         IconButton(onClick = { page(false) }) { Icon(Icons.Rounded.ChevronLeft, desktopText("Previous")) }
                         IconButton(onClick = { page(true) }) { Icon(Icons.Rounded.ChevronRight, desktopText("Next")) }
-                        if (selected != LocalDate.now()) TextButton(onClick = { selected = LocalDate.now() }) { Text(desktopText("Today")) }
+                        JumpToTodayButton(shown = selected != LocalDate.now(), label = desktopText("Today"), onClick = { selected = LocalDate.now() })
                     }
                   }
                     Segmented(CalendarView.entries, view, { view = it }, { desktopText(it.label) })

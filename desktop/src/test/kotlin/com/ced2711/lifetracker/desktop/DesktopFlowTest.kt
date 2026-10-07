@@ -148,6 +148,31 @@ class DesktopFlowTest {
     }
 
     @Test
+    fun choosingAnotherDayInTheCalendarKeepsTheSameLayoutAsToday() = app {
+        open("Calendar")
+        waitForText("Agenda")
+        shot("09a-calendar-today")
+        val switcherWithToday = onNodeWithText("Agenda").fetchSemanticsNode().boundsInRoot
+        val titleWithToday = onNodeWithContentDescription("Previous").fetchSemanticsNode().boundsInRoot
+
+        val today = java.time.LocalDate.now()
+        val other = if (today.dayOfMonth < 15) today.plusDays(1) else today.minusDays(1)
+        onNode(hasContentDescription(other.toString(), substring = true)).performClick()
+        waitForText("Today")
+        shot("09b-calendar-other-day")
+        assertEquals("the view switcher stays where it was", switcherWithToday, onNodeWithText("Agenda").fetchSemanticsNode().boundsInRoot)
+        assertEquals("the arrows stay where they were", titleWithToday, onNodeWithContentDescription("Previous").fetchSemanticsNode().boundsInRoot)
+
+        onAllNodesWithText("Today").onLast().performClick()
+        waitUntil(timeoutMillis = 15_000) { onNodeWithText("Agenda").fetchSemanticsNode().boundsInRoot == switcherWithToday }
+
+        // The Day view is titled with the date, for today as for any other day.
+        onNodeWithText("Day").performClick()
+        waitForText(today.format(java.time.format.DateTimeFormatter.ofPattern("MM/dd/yyyy")))
+        shot("09c-calendar-day-today")
+    }
+
+    @Test
     fun aLedgerEntryIsAddedFromTheQuickRow() = app {
         open("Ledger")
         val amount = onNode(hasSetTextAction() and hasText("0.00", substring = true))

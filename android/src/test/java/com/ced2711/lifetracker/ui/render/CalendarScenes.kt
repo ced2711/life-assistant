@@ -38,7 +38,7 @@ private val calendarDiary: List<DiaryEntryEntity> = RenderSamples.diary +
     DiaryEntryEntity(id = 101, epochDay = day, body = "Sunny morning. Walked to work and had coffee with Ana.")
 
 @Composable
-private fun Calendar(isWide: Boolean, view: CalendarView, empty: Boolean = false) {
+private fun Calendar(isWide: Boolean, view: CalendarView, empty: Boolean = false, selectedOffset: Long = 0) {
     CalendarContent(
         todos = if (empty) emptyList() else calendarTodos,
         subtasksByTodo = if (empty) emptyMap() else RenderSamples.subtasksByTodo,
@@ -50,6 +50,7 @@ private fun Calendar(isWide: Boolean, view: CalendarView, empty: Boolean = false
         modifier = Modifier.fillMaxSize(),
         today = RenderSamples.today,
         initialView = view,
+        initialSelected = RenderSamples.today.plusDays(selectedOffset),
         onVisibleEndEpochDayChanged = {},
         onToggleTodo = { _, _, _ -> },
         onAddTodo = { _, _ -> },
@@ -64,6 +65,9 @@ internal val calendarScenes: List<RenderScene> = listOf(
     RenderScene("calendar-month", TopLevelDestination.CALENDAR) { isWide -> Calendar(isWide, CalendarView.MONTH) },
     RenderScene("calendar-week", TopLevelDestination.CALENDAR) { isWide -> Calendar(isWide, CalendarView.WEEK) },
     RenderScene("calendar-day", TopLevelDestination.CALENDAR) { isWide -> Calendar(isWide, CalendarView.DAY) },
+    // Another day than today: laid out exactly like today, with a way back to today.
+    RenderScene("calendar-month-other-day", TopLevelDestination.CALENDAR) { isWide -> Calendar(isWide, CalendarView.MONTH, selectedOffset = 4) },
+    RenderScene("calendar-day-other-day", TopLevelDestination.CALENDAR) { isWide -> Calendar(isWide, CalendarView.DAY, selectedOffset = 4) },
     RenderScene("calendar-agenda", TopLevelDestination.CALENDAR) { isWide -> Calendar(isWide, CalendarView.AGENDA) },
     RenderScene("calendar-month-empty", TopLevelDestination.CALENDAR) { isWide -> Calendar(isWide, CalendarView.MONTH, empty = true) },
     RenderScene("calendar-agenda-empty", TopLevelDestination.CALENDAR) { isWide -> Calendar(isWide, CalendarView.AGENDA, empty = true) },
