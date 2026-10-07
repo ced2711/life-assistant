@@ -628,6 +628,8 @@ private fun RemindersSection(settings: BackupSettings, configStore: DesktopConfi
     val change: ((BackupSettings) -> BackupSettings) -> Unit = { transform -> scope.launch { dataStore.updateSettings(transform) } }
     var onThisPc by remember { mutableStateOf(configStore.desktopReminders()) }
     var keepInTray by remember { mutableStateOf(configStore.keepInTray()) }
+    val autostart = DesktopAutostart.system
+    var startsWithComputer by remember { mutableStateOf(autostart.isAvailable && autostart.isEnabled()) }
     var allDayText by remember(settings.defaultAllDayReminderMinute) {
         mutableStateOf("%d:%02d".format(settings.defaultAllDayReminderMinute / 60, settings.defaultAllDayReminderMinute % 60))
     }
@@ -640,6 +642,24 @@ private fun RemindersSection(settings: BackupSettings, configStore: DesktopConfi
             Switch(onThisPc, { enabled -> onThisPc = enabled; configStore.setDesktopReminders(enabled) }, enabled = settings.notificationsEnabled)
         }
         RowDivider(inset = Space.xl)
+        if (autostart.isAvailable) {
+            SettingRow(
+                DesktopPlatform.text(windows = "Start with Windows", linux = "Start when you sign in"),
+                "Waits in the tray, so reminders, sync and AI assistants are ready. Click the tray icon to open the window.",
+            ) {
+                Switch(startsWithComputer, { enabled ->
+                    if (autostart.setEnabled(enabled)) {
+                        startsWithComputer = enabled
+                        // Started in the tray, it should stay there when its window is closed.
+                        if (enabled && !keepInTray) {
+                            keepInTray = true
+                            configStore.setKeepInTray(true)
+                        }
+                    }
+                })
+            }
+            RowDivider(inset = Space.xl)
+        }
         SettingRow("Keep running in the tray when closed", "Reminders, sync and AI assistants keep working after the window is closed. Quit from the tray icon.") {
             Switch(keepInTray, { enabled -> keepInTray = enabled; configStore.setKeepInTray(enabled) })
         }

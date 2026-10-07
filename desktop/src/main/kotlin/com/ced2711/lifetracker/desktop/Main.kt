@@ -34,12 +34,13 @@ fun main(args: Array<String>) {
             kotlin.system.exitProcess(0)
         }
     }
-    val background = "--background" in args
+    val background = DesktopAutostart.BACKGROUND_ARGUMENT in args
     // Already running (perhaps in the tray): bring that window forward instead of a second copy.
     if (DesktopAgentServer.request(DesktopPlatform.appDirectory(), "/status") != null) {
         if (!background) DesktopAgentServer.request(DesktopPlatform.appDirectory(), "/show", "{}")
         kotlin.system.exitProcess(0)
     }
+    runCatching { DesktopAutostart.system.refresh() }
     runApp(startHidden = background)
 }
 
