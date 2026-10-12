@@ -37,6 +37,9 @@ interface CloudBackupStore {
     suspend fun uploadRevision(source: File, revision: NewCloudRevision): CloudRevision
     suspend fun downloadRevision(revision: CloudRevision, destination: File)
     suspend fun deleteRevision(fileId: String)
+
+    /** Deletes in the given order (parents first, see prunableCloudRevisions), at once when the store can. */
+    suspend fun deleteRevisions(fileIds: List<String>) = fileIds.forEach { deleteRevision(it) }
 }
 
 class GoogleDriveBackupStore(

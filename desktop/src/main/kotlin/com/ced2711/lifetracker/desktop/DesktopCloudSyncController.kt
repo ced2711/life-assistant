@@ -19,6 +19,8 @@ import com.ced2711.lifetracker.cloudsync.cloudRevisionHeads
 import com.ced2711.lifetracker.cloudsync.decideSyncAction
 import com.ced2711.lifetracker.cloudsync.latestCloudRevision
 import com.ced2711.lifetracker.cloudsync.prunableCloudRevisions
+import com.ced2711.lifetracker.data.backup.DEFAULT_MERGE_REMOVAL_LIMIT
+import com.ced2711.lifetracker.data.backup.MergeWouldRemoveRecordsException
 import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
@@ -42,6 +44,7 @@ import kotlinx.coroutines.launch
 data class DesktopCloudUiState(
     val connected: Boolean = false,
     val automaticSync: Boolean = false,
+    val mergeRemovalLimit: Int? = DEFAULT_MERGE_REMOVAL_LIMIT,
     val syncing: Boolean = false,
     val lastSyncAt: Long? = null,
     val message: String? = null,
@@ -336,6 +339,11 @@ class DesktopCloudSyncController(
         _state.update { it.copy(automaticSync = enabled) }
     }
 
+    fun setMergeRemovalLimit(limit: Int?) {
+        configStore.setMergeRemovalLimit(limit)
+        _state.update { it.copy(mergeRemovalLimit = limit) }
+    }
+
     suspend fun synchronize(resolution: ConflictResolution? = null) {
         if (!_state.value.connected || _state.value.syncing) return
         val previousConflict = _state.value.conflict
@@ -438,7 +446,10 @@ class DesktopCloudSyncController(
                 }
                 baseFile = syncBase(configStore.read().syncState.lastRevisionId, revisions)
                 merged = try {
-                    dataStore.createMergedFile(baseFile, headFiles, localFingerprint, now())
+                    dataStore.createMergedFile(baseFile, headFiles, localFingerprint, now(), configStore.read().mergeRemovalLimit)
+                } catch (_: MergeWouldRemoveRecordsException) {
+                    _state.update { it.copy(message = "The cloud backup lacks records that this PC still has. Choose which version to keep.") }
+                    return false
                 } catch (_: Exception) {
                     return false // Nothing could be merged safely; let the user choose.
                 } ?: run {
@@ -640,7 +651,7 @@ class DesktopCloudSyncController(
             configStore.recordSync(revision.fileId, fingerprint, now())
             saveSyncBase(source, revision.fileId)
         }
-        runCatching { prunableCloudRevisions(refreshed, keepCount = KEPT_CLOUD_REVISIONS).forEach { drive.deleteRevision(it.fileId) } }
+        runCatching { drive.deleteRevisions(prunableCloudRevisions(refreshed, keepCount = KEPT_CLOUD_REVISIONS).map { it.fileId }) }
         if (successMessage != null) {
             _state.value = readState().copy(message = successMessage)
         }
@@ -694,6 +705,7 @@ class DesktopCloudSyncController(
             provider = config.provider,
             gitHubRepository = config.gitHubRepository,
             automaticSync = config.automaticSync,
+            mergeRemovalLimit = config.mergeRemovalLimit,
             lastSyncAt = config.syncState.lastSyncAt,
             needsSignIn = signInExpired,
         )

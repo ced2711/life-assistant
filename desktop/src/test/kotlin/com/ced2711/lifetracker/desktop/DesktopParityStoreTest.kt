@@ -53,6 +53,23 @@ class DesktopParityStoreTest {
     }
 
     @Test
+    fun mergeRemovalLimitDefaultsToFiveAndCanBeChangedOrTurnedOff() {
+        val root = Files.createTempDirectory("life-assistant-merge-limit-test").toFile()
+        try {
+            val config = DesktopConfigStore(root.resolve("desktop.properties"))
+            assertEquals(5, config.read().mergeRemovalLimit)
+            config.setMergeRemovalLimit(20)
+            assertEquals(20, DesktopConfigStore(root.resolve("desktop.properties")).read().mergeRemovalLimit)
+            config.setMergeRemovalLimit(0)
+            assertEquals(0, config.read().mergeRemovalLimit)
+            config.setMergeRemovalLimit(null)
+            assertNull(config.read().mergeRemovalLimit)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun configDefaultsOfflineAndDeviceLocalSettingsSurviveDisconnect() {
         val root = Files.createTempDirectory("life-tracker-desktop-config-test").toFile()
         try {

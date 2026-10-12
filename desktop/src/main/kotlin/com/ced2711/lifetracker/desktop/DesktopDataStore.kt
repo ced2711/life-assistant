@@ -6,6 +6,7 @@ import com.ced2711.lifetracker.data.backup.BackupCrypto
 import com.ced2711.lifetracker.data.backup.BackupLimits
 import com.ced2711.lifetracker.data.backup.BackupSettings
 import com.ced2711.lifetracker.data.backup.BackupSnapshot
+import com.ced2711.lifetracker.data.backup.DEFAULT_MERGE_REMOVAL_LIMIT
 import com.ced2711.lifetracker.data.backup.MergeSide
 import com.ced2711.lifetracker.data.backup.attachmentArchivePath
 import com.ced2711.lifetracker.data.backup.mergeSnapshots
@@ -957,6 +958,7 @@ class DesktopDataStore(
         remotes: List<File>,
         expectedLocalFingerprint: String,
         now: Long = System.currentTimeMillis(),
+        maxRemovals: Int? = DEFAULT_MERGE_REMOVAL_LIMIT,
     ): DesktopMergedFile? = mutex.withLock {
         withContext(ioDispatcher) {
             val secret = password?.copyOf() ?: error("Desktop data is locked")
@@ -969,7 +971,7 @@ class DesktopDataStore(
                 var textConflicts = 0
                 remotes.forEach { file ->
                     val remote = loadSnapshot(file, secret).also(loaded::add)
-                    val result = mergeSnapshots(baseLoaded?.snapshot, merged, remote.snapshot, now)
+                    val result = mergeSnapshots(baseLoaded?.snapshot, merged, remote.snapshot, now, maxRemovals)
                     val previousFiles = files
                     files = result.attachmentSources.mapValues { (id, source) ->
                         when (source.side) {

@@ -38,6 +38,41 @@ class BackupMergeTest {
         mergeSnapshots(base, local, remote, now = 50_000)
 
     @Test
+    fun anOutdatedRemoteSnapshotCannotSilentlyRemoveManyRecords() {
+        // The remote is an old snapshot from before six todos were added; the base and this device have them.
+        val old = empty.copy(todos = listOf(todo(1, "Old")))
+        val base = old.copy(todos = old.todos + (2L..7L).map { todo(it, "New $it", created = 2_000 + it) })
+        val local = base.copy(todos = base.todos.map { if (it.id == 1L) it.copy(title = "Old, edited", updatedAt = 9_000) else it })
+
+        val error = runCatching { merge(base, local, old) }.exceptionOrNull()
+        assertTrue(error is MergeWouldRemoveRecordsException)
+        assertEquals(6, (error as MergeWouldRemoveRecordsException).count)
+    }
+
+    @Test
+    fun theRemovalLimitCanBeRaisedLoweredOrTurnedOff() {
+        val old = empty.copy(todos = listOf(todo(1, "Old")))
+        val base = old.copy(todos = old.todos + (2L..7L).map { todo(it, "New $it", created = 2_000 + it) })
+        val local = base.copy(todos = base.todos.map { if (it.id == 1L) it.copy(title = "Old, edited", updatedAt = 9_000) else it })
+
+        assertEquals(1, mergeSnapshots(base, local, old, now = 50_000, maxRemovals = 10).snapshot.todos.size)
+        assertEquals(1, mergeSnapshots(base, local, old, now = 50_000, maxRemovals = null).snapshot.todos.size)
+        val oneRemoved = old.copy(todos = old.todos + (2L..6L).map { todo(it, "New $it", created = 2_000 + it) })
+        val error = runCatching { mergeSnapshots(base, local, oneRemoved, now = 50_000, maxRemovals = 0) }.exceptionOrNull()
+        assertEquals(1, (error as MergeWouldRemoveRecordsException).count)
+    }
+
+    @Test
+    fun aFewRemoteDeletionsAndAnEmptiedTrashStillMergeAutomatically() {
+        val trashed = (10L..30L).map { todo(it, "Trashed $it").copy(deletedAt = 1_500) }
+        val base = empty.copy(todos = listOf(todo(1, "Keep"), todo(2, "Gone")) + trashed)
+        val local = base.copy(todos = base.todos.map { if (it.id == 1L) it.copy(title = "Keep, edited", updatedAt = 9_000) else it })
+        val remote = empty.copy(todos = listOf(todo(1, "Keep")))
+
+        assertEquals(listOf("Keep, edited"), merge(base, local, remote).snapshot.todos.map(TodoEntity::title))
+    }
+
+    @Test
     fun changesToDifferentRecordsAreBothKept() {
         val base = empty.copy(todos = listOf(todo(1, "Buy milk"), todo(2, "Call mom")))
         val local = base.copy(todos = listOf(todo(1, "Buy oat milk", updated = 2_000), todo(2, "Call mom")))

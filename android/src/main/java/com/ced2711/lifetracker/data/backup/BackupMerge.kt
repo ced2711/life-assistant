@@ -34,6 +34,32 @@ data class SnapshotMergeResult(
 /** Put between two versions of a text that both devices edited, so neither is lost. */
 const val MERGE_TEXT_MARKER = "—— Other device · 另一台设备 ——"
 
+/** By default an automatic merge may remove at most this many records of this device that the other side lacks. */
+const val DEFAULT_MERGE_REMOVAL_LIMIT = 5
+
+/** The limits offered in Settings, from "always ask" to no check at all (null). */
+val MERGE_REMOVAL_LIMIT_CHOICES: List<Int?> = listOf(0, 5, 10, 20, 50, null)
+
+/** The English label of a limit in Settings; the screens translate it like other text. */
+fun mergeRemovalLimitLabel(limit: Int?): String = when (limit) {
+    null -> "Off"
+    0 -> "Always ask"
+    else -> "$limit records"
+}
+
+/** Shown under the limit choices on the phone and the PC. */
+const val MERGE_REMOVAL_LIMIT_TITLE = "Ask before a merge removes records"
+const val MERGE_REMOVAL_LIMIT_DESCRIPTION =
+    "When changes from both devices are merged and the other device lacks more of this device's records than this, " +
+        "sync stops and asks which version to keep instead of removing them. Off removes them without asking."
+
+/**
+ * The other side lacks [count] records that this device still has unchanged since the base. That
+ * is how a deletion looks, but also how an outdated snapshot looks, so the user decides instead.
+ */
+class MergeWouldRemoveRecordsException(val count: Int) :
+    BackupException("Merging would remove $count records from this device.")
+
 /**
  * Three-way, record-by-record merge of two snapshots that both changed since [base], the last
  * snapshot both devices agreed on.
@@ -48,11 +74,19 @@ const val MERGE_TEXT_MARKER = "—— Other device · 另一台设备 ——"
  *   fresh id and every reference to it is rewritten.
  * - Without a [base] (first connection, or history lost) nothing can be told apart as deleted, so
  *   the result is the union of both sides.
+ * - More than [maxRemovals] records removed by the remote side throw
+ *   [MergeWouldRemoveRecordsException]: an outdated remote snapshot must never silently win.
+ *   Null turns the check off.
  *
- * The result is validated; an [InvalidBackupException] means the caller should ask the user.
+ * The result is validated; a [BackupException] means the caller should ask the user.
  */
-fun mergeSnapshots(base: BackupSnapshot?, local: BackupSnapshot, remote: BackupSnapshot, now: Long): SnapshotMergeResult =
-    SnapshotMerger(base, local, remote).merge(now)
+fun mergeSnapshots(
+    base: BackupSnapshot?,
+    local: BackupSnapshot,
+    remote: BackupSnapshot,
+    now: Long,
+    maxRemovals: Int? = DEFAULT_MERGE_REMOVAL_LIMIT,
+): SnapshotMergeResult = SnapshotMerger(base, local, remote).merge(now, maxRemovals)
 
 private class SideMaps {
     val local = HashMap<Long, Long>()
@@ -70,6 +104,7 @@ private class SnapshotMerger(
     private val remote: BackupSnapshot,
 ) {
     var textConflicts = 0
+    private var removedByRemote = 0
 
     private val categoryIds = SideMaps()
     private val todoSeriesIds = SideMaps()
@@ -82,7 +117,7 @@ private class SnapshotMerger(
     private val checklistIds = SideMaps()
     private val attachmentIds = SideMaps()
 
-    fun merge(now: Long): SnapshotMergeResult {
+    fun merge(now: Long, maxRemovals: Int?): SnapshotMergeResult {
         val categories = mergeTable(
             Table(
                 rows = { it.categories },
@@ -138,6 +173,8 @@ private class SnapshotMerger(
                     )
                 },
                 naturalKey = { row -> row.seriesId?.let { it to row.occurrenceEpochDay } },
+                // Emptying the trash on the other device is not a loss.
+                guarded = { it.deletedAt == null },
                 merge = { b, l, r ->
                     val f = fields(b, l, r, localNewer = l.updatedAt >= r.updatedAt)
                     val merged = l.copy(
@@ -194,6 +231,7 @@ private class SnapshotMerger(
                 maps = ledgerIds,
                 remap = { row, side -> row.copy(seriesId = row.seriesId?.let { ledgerSeriesIds.of(side)[it] ?: it }) },
                 naturalKey = { row -> row.seriesId?.let { it to row.occurrenceEpochDay } },
+                guarded = { it.deletedAt == null },
                 merge = { b, l, r ->
                     val f = fields(b, l, r, localNewer = l.updatedAt >= r.updatedAt)
                     val merged = l.copy(
@@ -378,6 +416,7 @@ private class SnapshotMerger(
             checklistItems = checklistItems,
             checklistChecks = checklistChecks,
         ).validate()
+        if (maxRemovals != null && removedByRemote > maxRemovals) throw MergeWouldRemoveRecordsException(removedByRemote)
         return SnapshotMergeResult(snapshot, sources, textConflicts)
     }
 
@@ -395,6 +434,8 @@ private class SnapshotMerger(
         /** Records added on both sides with an equal key are the same record. */
         val naturalKey: ((T) -> Any?)? = null,
         val selfReferencing: ((T) -> Long?)? = null,
+        /** Whether removing this local record counts towards the removal limit. */
+        val guarded: (T) -> Boolean = { true },
     )
 
     private fun <T> mergeTable(table: Table<T>): List<T> {
@@ -458,7 +499,12 @@ private class SnapshotMerger(
             val merged = when {
                 l == null && r == null -> null
                 l == null -> if (bb != null && r == bb) null else r // deleted locally; kept when edited remotely
-                r == null -> if (bb != null && l == bb) null else l
+                r == null -> if (bb != null && l == bb) {
+                    if (table.guarded(l)) removedByRemote++
+                    null
+                } else {
+                    l
+                }
                 else -> table.merge(bb, l, r)
             }
             if (merged != null) result += merged
@@ -576,6 +622,7 @@ private class SnapshotMerger(
                 maps = attachmentIds,
                 remap = { row, side -> row.copy(ownerId = ownerMap(row.ownerType, side)[row.ownerId] ?: row.ownerId) },
                 naturalKey = { row -> Triple(row.ownerType, row.ownerId, row.sha256.toHex()) },
+                guarded = { false }, // They go with their owner, which is counted.
                 merge = { b, l, r ->
                     val f = fields(b, l, r, localNewer = true)
                     l.copy(originalName = f.v { it.originalName }, pendingDeleteAt = f.v { it.pendingDeleteAt })

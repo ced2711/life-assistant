@@ -88,6 +88,7 @@ private val desktopSimplifiedChinese = mapOf(
     "Merged changes from your other devices. Some texts were edited on both; both versions were kept." to "已合并你其他设备上的更改。有些文字两边都改过，两个版本都保留了。",
     "Other devices kept changing the cloud backup. Sync again in a moment." to "其他设备一直在修改云端备份，请稍后再同步。",
     "The cloud backup uses a different data password. Choose which version to keep." to "云端备份使用了不同的数据密码，请选择保留哪个版本。",
+    "The cloud backup lacks records that this PC still has. Choose which version to keep." to "云端备份缺少这台电脑上还有的记录，请选择保留哪个版本。",
     "Add a subtask and press Enter" to "添加子任务，按回车确认",
     "Add a todo and press Enter" to "添加待办，按回车确认",
     "Add a todo for this day" to "为这一天添加待办",

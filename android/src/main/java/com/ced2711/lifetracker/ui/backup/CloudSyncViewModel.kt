@@ -15,6 +15,7 @@ import com.ced2711.lifetracker.cloudsync.GitHubBackupStore
 import com.ced2711.lifetracker.cloudsync.GitHubDeviceAuthorization
 import com.ced2711.lifetracker.cloudsync.GitHubSignIn
 import com.ced2711.lifetracker.cloudsync.GitHubSignInExpiredException
+import com.ced2711.lifetracker.data.backup.DEFAULT_MERGE_REMOVAL_LIMIT
 import com.ced2711.lifetracker.data.cloud.CloudProvider
 import com.ced2711.lifetracker.data.cloud.AndroidCloudSyncEngine
 import com.ced2711.lifetracker.data.cloud.AndroidCloudSyncResult
@@ -93,6 +94,8 @@ data class CloudSyncUiState(
     val gitHubPrompt: GitHubCodePrompt? = null,
     /** Why the last sync failed, in English; shown with the attention message. */
     val lastError: String? = null,
+    /** Most records an automatic merge may remove here without asking; null = no check. */
+    val mergeRemovalLimit: Int? = DEFAULT_MERGE_REMOVAL_LIMIT,
 ) {
     val busy: Boolean get() = task != CloudSyncTask.NONE
 }
@@ -328,6 +331,11 @@ class CloudSyncViewModel internal constructor(
         _uiState.update { it.copy(automaticSync = enabled) }
     }
 
+    fun setMergeRemovalLimit(limit: Int?) {
+        preferences.setMergeRemovalLimit(limit)
+        _uiState.update { it.copy(mergeRemovalLimit = limit) }
+    }
+
     fun syncNow(resolution: ConflictResolution? = null) {
         if (!_uiState.value.connected || _uiState.value.busy) return
         val expectedRemoteRevisionId = if (resolution == null) null else {
@@ -538,6 +546,7 @@ class CloudSyncViewModel internal constructor(
             gitHubClientId = defaultGitHubClientId.ifBlank { value.gitHubClientId },
             builtInGitHub = defaultGitHubClientId.isNotBlank(),
             lastError = value.lastError,
+            mergeRemovalLimit = value.mergeRemovalLimit,
         )
     }
 

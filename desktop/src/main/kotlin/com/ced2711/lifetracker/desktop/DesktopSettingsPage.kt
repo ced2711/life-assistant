@@ -66,6 +66,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.ced2711.lifetracker.data.backup.BackupSettings
 import com.ced2711.lifetracker.data.backup.BackupSnapshot
+import com.ced2711.lifetracker.data.backup.MERGE_REMOVAL_LIMIT_CHOICES
+import com.ced2711.lifetracker.data.backup.MERGE_REMOVAL_LIMIT_DESCRIPTION
+import com.ced2711.lifetracker.data.backup.MERGE_REMOVAL_LIMIT_TITLE
+import com.ced2711.lifetracker.data.backup.mergeRemovalLimitLabel
 import com.ced2711.lifetracker.domain.format.UserFormatting
 import com.ced2711.lifetracker.domain.model.AccentColor
 import com.ced2711.lifetracker.domain.model.AppIdentity
@@ -262,6 +266,10 @@ private fun SyncSection(
             RowDivider(inset = Space.xl)
             SettingRow("Automatic sync", "A few seconds after each change, when the window is focused, and every 2 minutes while Life Assistant is open.") {
                 Switch(cloudState.automaticSync, cloud::setAutomaticSync)
+            }
+            RowDivider(inset = Space.xl)
+            SettingBlock(MERGE_REMOVAL_LIMIT_TITLE, MERGE_REMOVAL_LIMIT_DESCRIPTION) {
+                Segmented(MERGE_REMOVAL_LIMIT_CHOICES, cloudState.mergeRemovalLimit, cloud::setMergeRemovalLimit, { desktopText(mergeRemovalLimitLabel(it)) })
             }
             RowDivider(inset = Space.xl)
             SettingRow("Connection", "Reconnect signs in again and keeps everything. Disconnect stops syncing on this PC; your data stays here.") {

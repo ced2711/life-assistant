@@ -2,6 +2,7 @@ package com.ced2711.lifetracker.data.cloud
 
 import android.content.Context
 import com.ced2711.lifetracker.cloudsync.LocalCloudSyncState
+import com.ced2711.lifetracker.data.backup.DEFAULT_MERGE_REMOVAL_LIMIT
 import java.util.UUID
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -18,6 +19,8 @@ data class AndroidCloudSyncSettings(
     val gitHubRepository: String = "",
     /** Why the last sync failed, in English, so the screen can say more than "failed". */
     val lastError: String? = null,
+    /** Most records an automatic merge may remove from this device without asking; null = no check. */
+    val mergeRemovalLimit: Int? = DEFAULT_MERGE_REMOVAL_LIMIT,
 )
 
 enum class CloudProvider {
@@ -69,6 +72,7 @@ class CloudSyncPreferences(context: Context) {
             gitHubClientId = preferences.getString(KEY_GITHUB_CLIENT_ID, null).orEmpty(),
             gitHubRepository = preferences.getString(KEY_GITHUB_REPOSITORY, null).orEmpty(),
             lastError = preferences.getString(KEY_LAST_ERROR, null),
+            mergeRemovalLimit = preferences.getInt(KEY_MERGE_REMOVAL_LIMIT, DEFAULT_MERGE_REMOVAL_LIMIT).takeIf { it >= 0 },
         )
     }
 
@@ -91,6 +95,11 @@ class CloudSyncPreferences(context: Context) {
     @Synchronized
     fun setAutomaticSync(enabled: Boolean) {
         preferences.edit().putBoolean(KEY_AUTOMATIC, enabled).apply()
+    }
+
+    @Synchronized
+    fun setMergeRemovalLimit(limit: Int?) {
+        preferences.edit().putInt(KEY_MERGE_REMOVAL_LIMIT, limit ?: NO_LIMIT).apply()
     }
 
     @Synchronized
@@ -151,5 +160,7 @@ class CloudSyncPreferences(context: Context) {
         const val KEY_GITHUB_CLIENT_ID = "github_client_id"
         const val KEY_GITHUB_REPOSITORY = "github_repository"
         const val KEY_LAST_ERROR = "last_error"
+        const val KEY_MERGE_REMOVAL_LIMIT = "merge_removal_limit"
+        const val NO_LIMIT = -1
     }
 }
