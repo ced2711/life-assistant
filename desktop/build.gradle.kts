@@ -169,7 +169,7 @@ compose.desktop {
             // Each format is built on its own operating system: Windows locally, Linux in GitHub Actions.
             targetFormats(TargetFormat.Exe, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "Life Assistant"
-            packageVersion = "2.0.3"
+            packageVersion = "2.0.5"
             description = "Private life planning, ledger, calendar, notes, and vault"
             vendor = "ced2711"
             copyright = "Copyright 2026 ced2711"
@@ -179,11 +179,14 @@ compose.desktop {
             windows {
                 iconFile.set(windowsIconFile)
                 menu = true
+                // Without a group the installer files the shortcut under "Unknown".
+                menuGroup = "Life Assistant"
                 shortcut = true
                 dirChooser = true
                 perUserInstall = true
-                // Preserve the default install location and upgrade family of Life Tracker.
-                installationPath = "Life Tracker"
+                // Versions before 2.0.4 installed into "Life Tracker", the app's old name; the
+                // upgrade family stays, so installing replaces them.
+                installationPath = "Life Assistant"
                 upgradeUuid = "4f5dcd57-85a1-4cb5-9e14-a0d5c8b8940b"
             }
             linux {

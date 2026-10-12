@@ -1,5 +1,7 @@
 package com.ced2711.lifetracker.ui.design
 
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -611,4 +613,17 @@ fun LifeTextField(
             }
         },
     )
+}
+
+/**
+ * Goes back to today. It keeps its place while today is the selected day, only unseen, so choosing
+ * another day never moves the title, the arrows or the view switcher.
+ */
+@Composable
+fun JumpToTodayButton(shown: Boolean, label: String, onClick: () -> Unit) {
+    TextButton(
+        onClick = onClick,
+        enabled = shown,
+        modifier = if (shown) Modifier else Modifier.alpha(0f).clearAndSetSemantics {},
+    ) { Text(label, maxLines = 1) }
 }

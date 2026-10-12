@@ -208,6 +208,7 @@ fun LifeTrackerDesktopApp(
     val theme = (storeState as? DesktopStoreState.Open)?.snapshot?.settings?.themeMode ?: ThemeMode.DARK
     CompositionLocalProvider(LocalDesktopErrorReporter provides reportError, LocalUiLanguage provides uiLanguage, LocalDesktopSecurity provides security) {
         TaskLedgerTheme(theme, accent) {
+            TitleBarFollowsTheme()
             Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                 val unlock: (CharArray, Boolean) -> Unit = { password, rememberOnPc ->
                     scope.launch {

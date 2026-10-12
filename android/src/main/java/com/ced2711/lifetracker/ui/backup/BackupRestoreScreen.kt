@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Cloud
@@ -60,6 +61,10 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ced2711.lifetracker.cloudsync.ConflictResolution
+import com.ced2711.lifetracker.data.backup.MERGE_REMOVAL_LIMIT_CHOICES
+import com.ced2711.lifetracker.data.backup.MERGE_REMOVAL_LIMIT_DESCRIPTION
+import com.ced2711.lifetracker.data.backup.MERGE_REMOVAL_LIMIT_TITLE
+import com.ced2711.lifetracker.data.backup.mergeRemovalLimitLabel
 import com.ced2711.lifetracker.data.cloud.CloudProvider
 import com.ced2711.lifetracker.data.cloud.CloudSyncAttention
 import com.ced2711.lifetracker.domain.format.UserFormatting
@@ -68,6 +73,7 @@ import com.ced2711.lifetracker.domain.model.UiLanguage
 import com.ced2711.lifetracker.ui.components.ConfirmDialog
 import com.ced2711.lifetracker.ui.design.EmptyState
 import com.ced2711.lifetracker.ui.design.IconTile
+import com.ced2711.lifetracker.ui.design.Pill
 import com.ced2711.lifetracker.ui.design.ReadableWidth
 import com.ced2711.lifetracker.ui.design.Space
 import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
@@ -75,6 +81,7 @@ import com.ced2711.lifetracker.ui.localization.localizedText
 import com.ced2711.lifetracker.ui.localization.translateUiText
 import com.ced2711.lifetracker.ui.localization.uiLocale
 import com.ced2711.lifetracker.ui.settings.GroupColumns
+import com.ced2711.lifetracker.ui.settings.SettingBlock
 import com.ced2711.lifetracker.ui.settings.SettingDivider
 import com.ced2711.lifetracker.ui.settings.SettingRow
 import com.ced2711.lifetracker.ui.settings.SettingSwitchRow
@@ -217,6 +224,7 @@ fun BackupRestoreScreen(
             onSync = { cloudViewModel.syncNow() },
             onReconnect = cloudViewModel::reconnect,
             onAutomaticSync = cloudViewModel::setAutomaticSync,
+            onMergeRemovalLimit = cloudViewModel::setMergeRemovalLimit,
             onDisconnect = { confirmDisconnect = true },
             onExportRecovery = { name ->
                 recoveryFileName = name
@@ -413,6 +421,7 @@ internal fun BackupContent(
     onSync: () -> Unit,
     onReconnect: () -> Unit,
     onAutomaticSync: (Boolean) -> Unit,
+    onMergeRemovalLimit: (Int?) -> Unit = {},
     onDisconnect: () -> Unit,
     onExportRecovery: (String) -> Unit,
     onRestoreDaily: (DailyBackupCopy) -> Unit,
@@ -505,6 +514,26 @@ internal fun BackupContent(
                     enabled = !cloud.busy,
                     onCheckedChange = onAutomaticSync,
                 )
+                SettingDivider()
+                SettingBlock(
+                    title = localizedText(MERGE_REMOVAL_LIMIT_TITLE),
+                    supporting = localizedText(MERGE_REMOVAL_LIMIT_DESCRIPTION),
+                ) {
+                    FlowRow(
+                        Modifier.selectableGroup(),
+                        horizontalArrangement = Arrangement.spacedBy(Space.sm),
+                        verticalArrangement = Arrangement.spacedBy(Space.sm),
+                    ) {
+                        MERGE_REMOVAL_LIMIT_CHOICES.forEach { limit ->
+                            Pill(
+                                text = localizedText(mergeRemovalLimitLabel(limit)),
+                                selected = limit == cloud.mergeRemovalLimit,
+                                exclusive = true,
+                                onClick = { onMergeRemovalLimit(limit) },
+                            )
+                        }
+                    }
+                }
                 SettingDivider()
                 SettingRow(
                     title = localizedText("Last sync"),

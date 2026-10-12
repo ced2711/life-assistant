@@ -49,6 +49,8 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -64,6 +66,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.ced2711.lifetracker.data.backup.BackupSettings
 import com.ced2711.lifetracker.data.backup.BackupSnapshot
+import com.ced2711.lifetracker.data.backup.MERGE_REMOVAL_LIMIT_CHOICES
+import com.ced2711.lifetracker.data.backup.MERGE_REMOVAL_LIMIT_DESCRIPTION
+import com.ced2711.lifetracker.data.backup.MERGE_REMOVAL_LIMIT_TITLE
+import com.ced2711.lifetracker.data.backup.mergeRemovalLimitLabel
 import com.ced2711.lifetracker.domain.format.UserFormatting
 import com.ced2711.lifetracker.domain.model.AccentColor
 import com.ced2711.lifetracker.domain.model.AppIdentity
@@ -260,6 +266,10 @@ private fun SyncSection(
             RowDivider(inset = Space.xl)
             SettingRow("Automatic sync", "A few seconds after each change, when the window is focused, and every 2 minutes while Life Assistant is open.") {
                 Switch(cloudState.automaticSync, cloud::setAutomaticSync)
+            }
+            RowDivider(inset = Space.xl)
+            SettingBlock(MERGE_REMOVAL_LIMIT_TITLE, MERGE_REMOVAL_LIMIT_DESCRIPTION) {
+                Segmented(MERGE_REMOVAL_LIMIT_CHOICES, cloudState.mergeRemovalLimit, cloud::setMergeRemovalLimit, { desktopText(mergeRemovalLimitLabel(it)) })
             }
             RowDivider(inset = Space.xl)
             SettingRow("Connection", "Reconnect signs in again and keeps everything. Disconnect stops syncing on this PC; your data stays here.") {
@@ -627,7 +637,12 @@ private fun RemindersSection(settings: BackupSettings, configStore: DesktopConfi
     val language = LocalUiLanguage.current
     val change: ((BackupSettings) -> BackupSettings) -> Unit = { transform -> scope.launch { dataStore.updateSettings(transform) } }
     var onThisPc by remember { mutableStateOf(configStore.desktopReminders()) }
-    var keepInTray by remember { mutableStateOf(configStore.keepInTray()) }
+    // Shared with the tray menu, which changes the same two settings.
+    val shared = LocalDesktopBackgroundSettings.current
+    val background = remember(shared, configStore) { shared ?: DesktopBackgroundSettings(configStore) }
+    LaunchedEffect(background) { background.reload() }
+    val keepInTray by background.keepInTray.collectAsState()
+    val startsWithComputer by background.startsWithComputer.collectAsState()
     var allDayText by remember(settings.defaultAllDayReminderMinute) {
         mutableStateOf("%d:%02d".format(settings.defaultAllDayReminderMinute / 60, settings.defaultAllDayReminderMinute % 60))
     }
@@ -640,8 +655,17 @@ private fun RemindersSection(settings: BackupSettings, configStore: DesktopConfi
             Switch(onThisPc, { enabled -> onThisPc = enabled; configStore.setDesktopReminders(enabled) }, enabled = settings.notificationsEnabled)
         }
         RowDivider(inset = Space.xl)
+        if (background.canStartWithComputer) {
+            SettingRow(
+                DesktopPlatform.text(windows = "Start with Windows", linux = "Start when you sign in"),
+                "Waits in the tray, so reminders, sync and AI assistants are ready. Click the tray icon to open the window.",
+            ) {
+                Switch(startsWithComputer, { enabled -> background.setStartsWithComputer(enabled) })
+            }
+            RowDivider(inset = Space.xl)
+        }
         SettingRow("Keep running in the tray when closed", "Reminders, sync and AI assistants keep working after the window is closed. Quit from the tray icon.") {
-            Switch(keepInTray, { enabled -> keepInTray = enabled; configStore.setKeepInTray(enabled) })
+            Switch(keepInTray, { enabled -> background.setKeepInTray(enabled) })
         }
     }
     Group("Defaults for new todos") {

@@ -73,6 +73,32 @@ object DesktopAgentSetup {
         check(added.first == 0) { added.second.ifBlank { "Claude Code could not add Life Assistant." } }
     }
 
+    /**
+     * Points registrations that already exist at this launcher again, after the app was installed
+     * somewhere else (2.0.4 moved it out of the `Life Tracker` folder, the app's old name). Nothing
+     * is registered that was not before.
+     */
+    fun refreshRegistrations(
+        launcher: File? = launcher(),
+        desktopConfig: File = claudeDesktopConfig(),
+        codeConfig: File = File(System.getProperty("user.home"), ".claude.json"),
+        claudeCode: () -> File? = ::claudeCodeCommand,
+    ) {
+        launcher ?: return
+        val wanted = launcher.absolutePath
+        val desktopCommand = registeredCommand(desktopConfig)
+        if (desktopCommand != null && desktopCommand != wanted) connectClaudeDesktop(launcher, desktopConfig)
+        val codeCommand = registeredCommand(codeConfig)
+        if (codeCommand != null && codeCommand != wanted) claudeCode()?.let { connectClaudeCode(launcher, it) }
+    }
+
+    /** The command of the Life Assistant server in a config file with `mcpServers`, if any. */
+    internal fun registeredCommand(config: File): String? = runCatching {
+        if (!config.isFile) return null
+        val servers = Json.parseToJsonElement(config.readText()).jsonObject["mcpServers"] as? JsonObject
+        ((servers?.get(SERVER_NAME) as? JsonObject)?.get("command") as? JsonPrimitive)?.content
+    }.getOrNull()
+
     private fun run(command: List<String>): Pair<Int, String> {
         val process = ProcessBuilder(command).redirectErrorStream(true).start()
         process.outputStream.close()

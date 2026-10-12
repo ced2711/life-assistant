@@ -181,16 +181,21 @@ class GitHubBackupStore(
         }
     }
 
-    override suspend fun deleteRevision(fileId: String) = withToken {
-        commitWithRetry("Remove old backup") { head, index ->
-            val entry = index.revisions.firstOrNull { it.revision.fileId == fileId } ?: return@commitWithRetry null
+    override suspend fun deleteRevision(fileId: String) = deleteRevisions(listOf(fileId))
+
+    /** One commit for all of them, so no other device ever sees the history half pruned. */
+    override suspend fun deleteRevisions(fileIds: List<String>) = withToken {
+        if (fileIds.isEmpty()) return@withToken
+        val wanted = fileIds.toSet()
+        commitWithRetry(if (wanted.size == 1) "Remove old backup" else "Remove ${wanted.size} old backups") { head, index ->
+            val entries = index.revisions.filter { it.revision.fileId in wanted }
+            if (entries.isEmpty()) return@commitWithRetry null
             TreeChange(
                 baseTree = head?.treeSha,
-                files = mapOf(entry.revision.fileName to null),
-                index = index.copy(revisions = index.revisions - entry),
+                files = entries.associate { it.revision.fileName to null },
+                index = index.copy(revisions = index.revisions - entries.toSet()),
             )
         }
-        Unit
     }
 
     private data class Head(val commitSha: String, val treeSha: String)

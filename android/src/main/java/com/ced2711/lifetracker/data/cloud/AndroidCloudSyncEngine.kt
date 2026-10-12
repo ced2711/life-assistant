@@ -240,7 +240,7 @@ class AndroidCloudSyncEngine(
     /** Old revisions only cost cloud space; keep recent history and never touch competing tips. */
     private suspend fun pruneOldRevisions(revisions: List<CloudRevision>) {
         runCatching {
-            prunableCloudRevisions(revisions, keepCount = KEPT_CLOUD_REVISIONS).forEach { store.deleteRevision(it.fileId) }
+            store.deleteRevisions(prunableCloudRevisions(revisions, keepCount = KEPT_CLOUD_REVISIONS).map { it.fileId })
         }
     }
 
@@ -492,7 +492,7 @@ class AndroidCloudSyncEngine(
                 val base = syncBase(lastRevisionId, revisions)
                 if (base != null && base != syncBaseFile) downloadedBase = base
                 val textConflicts = try {
-                    mergeEncryptedBackups(local, base, headFiles, password, work, merged, now())
+                    mergeEncryptedBackups(local, base, headFiles, password, work, merged, now(), preferences.read().mergeRemovalLimit)
                 } catch (_: com.ced2711.lifetracker.data.backup.BackupException) {
                     return null // Another password, or nothing valid to merge: let the user choose.
                 }

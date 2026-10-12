@@ -1,6 +1,7 @@
 package com.ced2711.lifetracker.desktop
 
 import com.ced2711.lifetracker.cloudsync.LocalCloudSyncState
+import com.ced2711.lifetracker.data.backup.DEFAULT_MERGE_REMOVAL_LIMIT
 import com.ced2711.lifetracker.domain.model.AppLockTimeout
 import com.ced2711.lifetracker.domain.model.resolveVisibleDestinations
 import com.ced2711.lifetracker.domain.model.DefaultVisibleDestinations
@@ -26,6 +27,8 @@ data class DesktopCloudConfig(
     val provider: DesktopCloudProvider = DesktopCloudProvider.GOOGLE_DRIVE,
     val gitHubClientId: String = "",
     val gitHubRepository: String = "",
+    /** Most records an automatic merge may remove from this PC without asking; null = no check. */
+    val mergeRemovalLimit: Int? = DEFAULT_MERGE_REMOVAL_LIMIT,
 )
 
 data class DesktopWindowBounds(val width: Int, val height: Int, val x: Int?, val y: Int?, val maximized: Boolean)
@@ -73,6 +76,11 @@ class DesktopConfigStore(
             gitHubClientId = properties.getProperty(KEY_GITHUB_CLIENT_ID)
                 ?: System.getenv("LIFE_ASSISTANT_GITHUB_CLIENT_ID").orEmpty(),
             gitHubRepository = properties.getProperty(KEY_GITHUB_REPOSITORY).orEmpty(),
+            mergeRemovalLimit = when (val saved = properties.getProperty(KEY_MERGE_REMOVAL_LIMIT)) {
+                null -> DEFAULT_MERGE_REMOVAL_LIMIT
+                NO_LIMIT -> null
+                else -> saved.toIntOrNull()?.takeIf { it >= 0 } ?: DEFAULT_MERGE_REMOVAL_LIMIT
+            },
         )
     }
 
@@ -87,6 +95,13 @@ class DesktopConfigStore(
     fun setAutomaticSync(enabled: Boolean) {
         val properties = load()
         properties.setProperty(KEY_AUTOMATIC, enabled.toString())
+        save(properties)
+    }
+
+    @Synchronized
+    fun setMergeRemovalLimit(limit: Int?) {
+        val properties = load()
+        properties.setProperty(KEY_MERGE_REMOVAL_LIMIT, limit?.toString() ?: NO_LIMIT)
         save(properties)
     }
 
@@ -257,6 +272,8 @@ class DesktopConfigStore(
     private companion object {
         const val KEY_CLIENT_ID = "google.desktop.clientId"
         const val KEY_AUTOMATIC = "cloud.automatic"
+        const val KEY_MERGE_REMOVAL_LIMIT = "cloud.mergeRemovalLimit"
+        const val NO_LIMIT = "off"
         const val KEY_DEVICE_ID = "device.id"
         const val KEY_LAST_REVISION = "cloud.lastRevision"
         const val KEY_LAST_FINGERPRINT = "cloud.lastFingerprint"
