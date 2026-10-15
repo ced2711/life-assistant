@@ -4,17 +4,8 @@ Life Assistant is an open-source, offline-first personal organizer for Android, 
 
 By **ced2711** · 中文名：**生活助手** · [Source](https://github.com/ced2711/life-assistant)
 
-## Download · 下载
-
-| Platform · 平台 | Download · 下载 | Notes · 说明 |
-| --- | --- | --- |
-| **Android** 8.0+ | [LifeAssistant-android.apk](https://github.com/ced2711/life-assistant/releases/latest/download/LifeAssistant-android.apk) | Open the file on your phone and allow installing from this source. · 在手机上打开，允许安装即可。 |
-| **Windows** 10/11 | [LifeAssistant-windows-setup.exe](https://github.com/ced2711/life-assistant/releases/latest/download/LifeAssistant-windows-setup.exe) | Run the installer; no admin rights needed. · 双击安装，不需要管理员权限。 |
-| **Linux** (Debian/Ubuntu) | [LifeAssistant-linux-amd64.deb](https://github.com/ced2711/life-assistant/releases/latest/download/LifeAssistant-linux-amd64.deb) | `sudo apt install ./LifeAssistant-linux-amd64.deb` |
-| **Linux** (other) | [LifeAssistant-linux-x64.tar.gz](https://github.com/ced2711/life-assistant/releases/latest/download/LifeAssistant-linux-x64.tar.gz) | Unpack and run `bin/life-assistant`. · 解压后运行 `bin/life-assistant`。 |
-
-All versions and release notes: [Releases](https://github.com/ced2711/life-assistant/releases). Install the same version on every device before syncing.
-所有版本和更新说明见 [Releases](https://github.com/ced2711/life-assistant/releases)。同步前请把每台设备都更新到同一个版本。
+Ready-made installers are not published. To use the app, build it from this source; see [Build](#build).
+不提供安装包下载，请按 [Build](#build) 的说明从源码构建。
 
 ## Highlights
 
@@ -83,7 +74,7 @@ There are two Android distribution flavors:
 
 The personal flavor intentionally requires a local `android/src/personal/assets/personal-backup.tlb`. That encrypted user backup, its password, APK outputs, release keystore, and signing credentials are excluded from Git and must never be committed, even to a private repository.
 
-Windows installers are written to `desktop/build/compose/binaries/main-release/exe` and `msi` (ProGuard-shrunk). Use `:desktop:createReleaseDistributable` for a portable app folder. Building Windows installers requires Windows; Gradle obtains the WiX packaging tools as needed. Linux packages (`.deb` and a portable `.tar.gz`) are built on Linux by the `Linux build` GitHub Actions workflow, which also attaches them to published releases.
+Windows installers are written to `desktop/build/compose/binaries/main-release/exe` and `msi` (ProGuard-shrunk). Use `:desktop:createReleaseDistributable` for a portable app folder. Building Windows installers requires Windows; Gradle obtains the WiX packaging tools as needed. Linux packages (`.deb` and a portable `.tar.gz`) are built on Linux by the `Linux build` GitHub Actions workflow.
 
 Release Android signing is configured locally, never through committed credentials. `android/tools/setup-release-signing.ps1` creates a release key in a `life-assistant-signing` folder next to the repository folder and stores its settings in your personal Gradle properties (`$GRADLE_USER_HOME/gradle.properties`, default `~/.gradle/gradle.properties`).
 
