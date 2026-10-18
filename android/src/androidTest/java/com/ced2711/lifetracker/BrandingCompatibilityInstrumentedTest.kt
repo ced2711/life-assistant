@@ -42,9 +42,11 @@ class BrandingCompatibilityInstrumentedTest {
     }
 
     @Test
-    fun bundledLegalAssetsContainTheNotice() {
+    fun bundledLegalAssetsContainLicenseAndNotice() {
+        val license = readAsset("legal/LICENSE")
         val notice = readAsset("legal/NOTICE")
 
+        assertTrue(license.contains("is proprietary"))
         assertTrue(notice.contains("Life Assistant"))
         assertTrue(notice.contains("WITHOUT ANY WARRANTY"))
     }

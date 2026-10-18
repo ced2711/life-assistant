@@ -6,6 +6,7 @@ object AppIdentity {
     const val VERSION = "2.0.6"
     const val AUTHOR = "ced2711"
     const val COPYRIGHT = "Copyright 2026 ced2711"
-    const val LICENSE_LABEL = "All rights reserved"
+    const val LICENSE_LABEL = "Proprietary · All rights reserved"
+    const val LICENSE_RESOURCE = "legal/LICENSE"
     const val NOTICE_RESOURCE = "legal/NOTICE"
 }

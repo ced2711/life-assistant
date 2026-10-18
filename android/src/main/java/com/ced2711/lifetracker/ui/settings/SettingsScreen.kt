@@ -215,6 +215,7 @@ fun SettingsScreen(
         )
 
         SettingsDialog.License -> LicenseDialog(
+            licenseText = remember(context) { readBundledLegalText(context, AppIdentity.LICENSE_RESOURCE) },
             noticeText = remember(context) { readBundledLegalText(context, AppIdentity.NOTICE_RESOURCE) },
             onDismiss = { dialog = null },
         )
@@ -600,9 +601,10 @@ internal fun AllDayReminderTimeDialog(
     )
 }
 
-/** The copyright and the notices of the third-party parts. */
+/** The license and the notices of the third-party parts. */
 @Composable
 internal fun LicenseDialog(
+    licenseText: String,
     noticeText: String,
     onDismiss: () -> Unit,
 ) {
@@ -617,6 +619,7 @@ internal fun LicenseDialog(
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Text(localizedText("This software is provided as-is, without warranty of any kind. Use it at your own risk."))
+                LegalText(localizedText("License"), licenseText)
                 LegalText(localizedText("Notices"), noticeText)
             }
         },

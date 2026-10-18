@@ -8,6 +8,6 @@ class AppIdentityTest {
         assertEquals("Life Assistant", AppIdentity.NAME)
         assertEquals("2.0.6", AppIdentity.VERSION)
         assertEquals("ced2711", AppIdentity.AUTHOR)
-        assertEquals("All rights reserved", AppIdentity.LICENSE_LABEL)
+        assertEquals("Proprietary · All rights reserved", AppIdentity.LICENSE_LABEL)
     }
 }

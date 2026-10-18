@@ -106,4 +106,4 @@ Application data stays on the device unless the user exports it or enables Googl
 
 Copyright 2026 ced2711. All rights reserved.
 
-This repository is private and is not licensed for use, copying, modification or distribution. Versions published earlier under Apache License 2.0 or AGPL-3.0 keep those licenses; those grants are not revoked. Third-party components keep their own terms, listed in [NOTICE](NOTICE). This software comes without warranty.
+Life Assistant is proprietary software under the [Life Assistant License](LICENSE): this repository is private, and no right to use, copy, modify or distribute its source is granted. Versions published earlier under Apache License 2.0 or AGPL-3.0 keep those licenses; those grants are not revoked. Third-party components keep their own terms, listed in [NOTICE](NOTICE). This software comes without warranty.

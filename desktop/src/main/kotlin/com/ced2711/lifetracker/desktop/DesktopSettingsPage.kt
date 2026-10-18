@@ -944,6 +944,7 @@ private fun AboutSection() {
     }
     Text(desktopAppVersion(language), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = Space.xs))
     if (showLicense) {
+        val legalText = remember { loadLegalResource(AppIdentity.LICENSE_RESOURCE) }
         val noticeText = remember { loadLegalResource(AppIdentity.NOTICE_RESOURCE) }
         AlertDialog(
             onDismissRequest = { showLicense = false },
@@ -951,6 +952,7 @@ private fun AboutSection() {
             text = {
                 Column(Modifier.widthIn(max = 760.dp).heightIn(max = 540.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Text(AppIdentity.LICENSE_LABEL, style = MaterialTheme.typography.titleMedium)
+                    Text(legalText, style = MaterialTheme.typography.bodySmall)
                     Text(noticeText, style = MaterialTheme.typography.bodySmall)
                 }
             },

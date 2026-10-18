@@ -1,0 +1,55 @@
+Life Assistant License
+
+Copyright (c) 2026 ced2711. All rights reserved.
+
+Life Assistant, including its source code, compiled programs,
+installers, designs, artwork, text and documentation (together, the
+"Software"), is proprietary. It is not open source, and this file does not
+grant any open-source license.
+
+1. Ownership. The Software is owned by ced2711 and is protected by copyright
+   and other laws. It is licensed, not sold.
+
+2. Permitted use. If you received a compiled copy of the Software (an app or
+   installer) directly from ced2711 or with ced2711's permission, you may
+   install and use it for your own personal, non-commercial purposes.
+
+3. Restrictions. Except as allowed in section 2 or with ced2711's prior
+   written permission, you may not:
+   a. copy, modify, translate or create derivative works of the Software;
+   b. distribute, publish, sell, rent, lend, sublicense or otherwise make the
+      Software available to anyone else;
+   c. reverse engineer, decompile or disassemble the Software, except where
+      applicable law expressly permits it despite this restriction;
+   d. remove or change any copyright, license or attribution notice; or
+   e. use the Software, its source code or any part of it to build or train
+      another product or service.
+
+4. Source code. Access to the source code, for example in a private
+   repository, does not grant any right to use, copy or distribute it.
+
+5. Third-party components. The Software includes third-party components that
+   remain under their own licenses, listed in the accompanying NOTICE file.
+   Nothing in this license limits your rights under those licenses for those
+   components.
+
+6. Earlier versions. Versions of the Software that ced2711 previously
+   published under the Apache License 2.0 or the GNU Affero General Public
+   License version 3 remain available under those licenses for those versions
+   only. This license applies to version 2.0.6 and later, and to all
+   unpublished work.
+
+7. No warranty. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY
+   KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+
+8. Limitation of liability. TO THE FULLEST EXTENT PERMITTED BY LAW, IN NO EVENT
+   SHALL ced2711 BE LIABLE FOR ANY CLAIM, DAMAGES (INCLUDING LOSS OF DATA) OR
+   OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+   ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR ITS USE.
+
+9. Termination. Your permission under section 2 ends automatically if you
+   break this license. You must then stop using and delete your copies.
+
+For permission beyond this license, contact ced2711 on GitHub
+(https://github.com/ced2711).

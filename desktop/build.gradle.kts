@@ -69,7 +69,7 @@ dependencies {
 }
 
 val prepareLegalResources = tasks.register<Sync>("prepareLegalResources") {
-    from(rootProject.file("NOTICE"))
+    from(rootProject.file("LICENSE"), rootProject.file("NOTICE"))
     into(layout.buildDirectory.dir("generated/legal-resources/legal"))
 }
 // Built-in cloud sign-in clients, so people only press "Connect". The values come from the
@@ -173,6 +173,7 @@ compose.desktop {
             description = "Private life planning, ledger, calendar, notes, and vault"
             vendor = "ced2711"
             copyright = "Copyright 2026 ced2711"
+            licenseFile.set(rootProject.file("LICENSE"))
             // jdk.httpserver receives the Google sign-in redirect; networking itself uses OkHttp.
             modules("jdk.httpserver")
             windows {
