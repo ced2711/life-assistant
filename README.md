@@ -4,9 +4,6 @@ Life Assistant is an open-source, offline-first personal organizer for Android, 
 
 By **ced2711** · 中文名：**生活助手** · [Source](https://github.com/ced2711/life-assistant)
 
-Ready-made installers are not published. To use the app, build it from this source; see [Build](#build).
-不提供安装包下载，请按 [Build](#build) 的说明从源码构建。
-
 ## Highlights
 
 - Nested Todo categories, subtasks, priorities, tags, search, reminders, attachments, recurring tasks, and completion momentum.
