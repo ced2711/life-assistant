@@ -31,6 +31,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ced2711.lifetracker.data.local.DiaryEntryEntity
@@ -42,14 +43,19 @@ import com.ced2711.lifetracker.domain.format.UserFormatting
 import com.ced2711.lifetracker.domain.model.TodoDraft
 import com.ced2711.lifetracker.ui.TaskLedgerViewModel
 import com.ced2711.lifetracker.ui.adaptive.HingeSafeAlertDialog
+import com.ced2711.lifetracker.ui.design.CalendarPager
 import com.ced2711.lifetracker.ui.design.ReadableWidth
+import com.ced2711.lifetracker.ui.design.dayPage
+import com.ced2711.lifetracker.ui.design.monthOfPage
+import com.ced2711.lifetracker.ui.design.monthPage
+import com.ced2711.lifetracker.ui.design.weekPage
+import com.ced2711.lifetracker.ui.design.weekStartOfPage
 import com.ced2711.lifetracker.ui.design.Space
 import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
 import com.ced2711.lifetracker.ui.localization.localizedText
 import com.ced2711.lifetracker.ui.localization.uiLocale
 import com.ced2711.lifetracker.ui.theme.LifeTheme
 import java.time.LocalDate
-import java.time.YearMonth
 
 /** What the Calendar's parts draw from: every day's contents and how to word dates and times. */
 internal class CalendarData(
@@ -192,6 +198,20 @@ internal fun CalendarContent(
         )
     }
     val weekStart = selected.previousOrSame(firstDayOfWeek)
+    val selectDay: (LocalDate) -> Unit = { selectedEpochDay = it.toEpochDay() }
+    // Swipes turn the pages; the arrows, Today and choosing a date slide them over.
+    val monthPager: @Composable (Dp) -> Unit = { minHeight ->
+        CalendarPager(
+            page = monthPage(selected),
+            onPageChange = { shown -> selectedEpochDay = selected.moveMonth((shown - monthPage(selected)).toLong()).toEpochDay() },
+        ) { shown -> MonthGrid(monthOfPage(shown), selected, data, firstDayOfWeek, onSelect = selectDay, minHeight = minHeight) }
+    }
+    val weekPager: @Composable ((LocalDate) -> Unit) -> Unit = { onSelect ->
+        CalendarPager(
+            page = weekPage(weekStart),
+            onPageChange = { shown -> selectedEpochDay = selected.plusWeeks((shown - weekPage(weekStart)).toLong()).toEpochDay() },
+        ) { shown -> WeekList(weekStartOfPage(shown, firstDayOfWeek), selected, data, onSelect = onSelect) }
+    }
 
     if (twoPanes) {
         // The calendar on the left, the selected day on the right.
@@ -202,11 +222,7 @@ internal fun CalendarContent(
                 BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
                     val room = maxHeight - Space.lg
                     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = Space.lg)) {
-                        if (view == CalendarView.MONTH) {
-                            MonthGrid(YearMonth.from(selected), selected, data, firstDayOfWeek, onSelect = { selectedEpochDay = it.toEpochDay() }, onPage = page, minHeight = room)
-                        } else {
-                            WeekList(weekStart, selected, data, onSelect = { selectedEpochDay = it.toEpochDay() }, onPage = page)
-                        }
+                        if (view == CalendarView.MONTH) monthPager(room) else weekPager(selectDay)
                     }
                 }
             }
@@ -236,23 +252,21 @@ internal fun CalendarContent(
                 }
                 when (view) {
                     CalendarView.MONTH -> {
-                        item(key = "month") {
-                            MonthGrid(YearMonth.from(selected), selected, data, firstDayOfWeek, onSelect = { selectedEpochDay = it.toEpochDay() }, onPage = page)
-                        }
+                        item(key = "month") { monthPager(0.dp) }
                         item(key = "details") { DayDetails(selected, data, actions, Modifier.padding(top = Space.lg)) }
                     }
                     CalendarView.WEEK -> item(key = "week") {
                         // Without room for the day beside the week, choosing a day opens it.
-                        WeekList(
-                            weekStart, selected, data,
-                            onSelect = {
-                                selectedEpochDay = it.toEpochDay()
-                                viewName = CalendarView.DAY.name
-                            },
-                            onPage = page,
-                        )
+                        weekPager {
+                            selectedEpochDay = it.toEpochDay()
+                            viewName = CalendarView.DAY.name
+                        }
                     }
-                    CalendarView.DAY -> item(key = "day") { DayDetails(selected, data, actions, Modifier.padding(top = Space.sm), showDate = false) }
+                    CalendarView.DAY -> item(key = "day") {
+                        CalendarPager(page = dayPage(selected), onPageChange = { shown -> selectedEpochDay = shown.toLong() }) { shown ->
+                            DayDetails(LocalDate.ofEpochDay(shown.toLong()), data, actions, Modifier.padding(top = Space.sm), showDate = false)
+                        }
+                    }
                     CalendarView.AGENDA -> agendaItems(data, actions)
                 }
             }

@@ -104,6 +104,26 @@ class DesktopChecklistTest {
         call("check_checklist_item") { put("id", homework["id"]!!.jsonPrimitive.content.toLong()); put("done", false) }
         assertEquals(0, call("get_checklist")["done"]!!.jsonPrimitive.int)
 
+        // Renamed in place: same id, same place, today's tick kept.
+        call("check_checklist_item") { put("title", "Check homework") }
+        val before = items().map { it.id }
+        val renamed = call("rename_checklist_item") { put("title", "check homework"); put("new_title", "  Check homework and planner ") }
+        assertEquals("Check homework and planner", renamed["title"]!!.jsonPrimitive.content)
+        assertEquals("Check homework", renamed["old_title"]!!.jsonPrimitive.content)
+        assertEquals(before, items().map { it.id })
+        assertEquals(1, call("get_checklist")["done"]!!.jsonPrimitive.int)
+        try {
+            call("rename_checklist_item") { put("title", "Check homework and planner"); put("new_title", "brush TEETH") }
+            fail("Two items with one name would be confusing")
+        } catch (expected: DesktopAgentException) {
+            assertTrue(expected.message!!.contains("already called"))
+        }
+        assertFalse(DesktopAgentTools.TOOLS.single { it.name == "rename_checklist_item" }.readOnly)
+        assertFalse(DesktopAgentTools.TOOLS.single { it.name == "rename_checklist_item" }.destructive)
+        call("check_checklist_item") { put("title", "Check homework and planner"); put("done", false) }
+        assertEquals(listOf("Brush teeth", "Check homework and planner"), items().map { it.title })
+        call("rename_checklist_item") { put("title", "Check homework and planner"); put("new_title", "Check homework") }
+
         call("remove_checklist_item") { put("title", "Brush teeth") }
         assertEquals(listOf("Check homework"), items().map { it.title })
         assertFalse(DesktopAgentTools.TOOLS.single { it.name == "remove_checklist_item" }.readOnly)

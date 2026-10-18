@@ -31,8 +31,8 @@ android {
         applicationId = "com.ced2711.lifetracker"
         minSdk = 26
         targetSdk = 36
-        versionCode = 23
-        versionName = "2.0.5"
+        versionCode = 24
+        versionName = "2.0.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Public GitHub OAuth App client ID for the built-in GitHub sign-in; not a secret.
@@ -109,7 +109,7 @@ android {
     }
 }
 
-// Copies the root legal files into each variant's assets under legal/, where the in-app license
+// Copies the root NOTICE into each variant's assets under legal/, where the in-app license
 // viewer reads them.
 abstract class PrepareLegalAssets : DefaultTask() {
     @get:InputFiles
@@ -133,11 +133,7 @@ androidComponents {
         val prepareLegalAssets = tasks.register<PrepareLegalAssets>(
             "prepare${variant.name.replaceFirstChar(Char::uppercase)}LegalAssets",
         ) {
-            legalFiles.from(
-                rootProject.file("LICENSE"),
-                rootProject.file("ADDITIONAL_PERMISSIONS.md"),
-                rootProject.file("NOTICE"),
-            )
+            legalFiles.from(rootProject.file("NOTICE"))
         }
         variant.sources.assets?.addGeneratedSourceDirectory(prepareLegalAssets, PrepareLegalAssets::outputDirectory)
     }

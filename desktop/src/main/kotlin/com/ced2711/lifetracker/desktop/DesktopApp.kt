@@ -171,6 +171,8 @@ fun LifeTrackerDesktopApp(
     DisposableEffect(Unit) {
         onDispose { dataStore.close() }
     }
+    // True until the data has been opened by itself (or could not be, and a password is needed).
+    var starting by remember { mutableStateOf(true) }
     // AI assistants (through `--mcp`) and a second start of the app reach this window here.
     val agentLocked by rememberUpdatedState(appLockEnabled && appLocked)
     val agentServer = remember {
@@ -181,14 +183,15 @@ fun LifeTrackerDesktopApp(
             changesAllowed = config::agentChanges,
             locked = { agentLocked || dataStore.currentSnapshot() == null },
             onShowWindow = onShowWindow,
+            opening = { starting },
         )
     }
     DisposableEffect(agentServer) {
         runCatching { agentServer.start() }
+            .onFailure { DesktopLog.write(dataStore.appDirectory, "The AI assistants' door did not open", it) }
         onDispose { agentServer.stop() }
     }
     // Nothing is asked at start: the remembered password, or a new PC's own random one, opens the data.
-    var starting by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) {
         if (DesktopLocalKey.openWithoutAsking(dataStore, credentials, config)) {
             appLocked = appLockEnabled

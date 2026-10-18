@@ -38,16 +38,43 @@ fun main(args: Array<String>) {
         }
     }
     val background = DesktopAutostart.BACKGROUND_ARGUMENT in args
-    // Already running (perhaps in the tray): bring that window forward instead of a second copy.
-    if (DesktopAgentServer.request(DesktopPlatform.appDirectory(), "/status") != null) {
-        if (!background) DesktopAgentServer.request(DesktopPlatform.appDirectory(), "/show", "{}")
-        kotlin.system.exitProcess(0)
+    // Started by a Microsoft Store app (an AI client, or a tool it ran) that redirects AppData:
+    // this copy would see an old private copy of the data, so it starts again outside and ends.
+    if (DesktopPlatform.RELAUNCHED_ARGUMENT !in args) {
+        DesktopPlatform.appDataRedirectedBy()?.let { redirectedBy ->
+            if (DesktopPlatform.relaunchOutsideRedirection(args.toList())) kotlin.system.exitProcess(0)
+            DesktopLog.write(DesktopPlatform.appDirectory(), "AppData is redirected by $redirectedBy and the app could not start again outside it")
+        }
     }
+    // Already running (perhaps in the tray, perhaps still starting): no second copy. Once the
+    // running one answers, its window is brought forward when this start was the user's.
+    if (!instanceLock.acquire() && handOverToRunningCopy(showWindow = !background)) kotlin.system.exitProcess(0)
     // Only this copy runs now: the data folder of older versions can take the app's name.
     DesktopPlatform.moveLegacyAppDirectory()
     runCatching { DesktopAutostart.system.refresh() }
     Thread({ runCatching { DesktopAgentSetup.refreshRegistrations() } }, "agent-registrations").apply { isDaemon = true }.start()
     runApp(startHidden = background)
+}
+
+/** Held for as long as this copy runs; see DesktopInstanceLock. */
+private val instanceLock = DesktopInstanceLock()
+
+/**
+ * Another copy holds the lock. Waits up to half a minute until it answers (then shows its window
+ * if asked, and returns true: this copy ends) or until the lock comes free because that copy has
+ * ended, as after a crash (then returns false: this copy runs).
+ */
+private fun handOverToRunningCopy(showWindow: Boolean): Boolean {
+    val deadline = System.currentTimeMillis() + 30_000
+    while (System.currentTimeMillis() < deadline) {
+        if (DesktopAgentServer.request(DesktopPlatform.appDirectory(), "/status") != null) {
+            if (showWindow) DesktopAgentServer.request(DesktopPlatform.appDirectory(), "/show", "{}")
+            return true
+        }
+        if (instanceLock.acquire()) return false
+        Thread.sleep(250)
+    }
+    return true
 }
 
 private fun runApp(startHidden: Boolean) = application {

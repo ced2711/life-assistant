@@ -5,7 +5,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -37,12 +36,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -162,27 +159,10 @@ private fun ViewSwitch(view: CalendarView, onView: (CalendarView) -> Unit, modif
     }
 }
 
-/** Calls [onPage] with -1 or 1 after a clear swipe to the right or left. */
-@Composable
-private fun Modifier.swipeToPage(onPage: (Int) -> Unit): Modifier {
-    val page by rememberUpdatedState(onPage)
-    return pointerInput(Unit) {
-        val threshold = 56.dp.toPx()
-        var total = 0f
-        detectHorizontalDragGestures(
-            onDragStart = { total = 0f },
-            onHorizontalDrag = { _, amount -> total += amount },
-            onDragEnd = {
-                if (total > threshold) page(-1) else if (total < -threshold) page(1)
-            },
-        )
-    }
-}
-
 /**
  * The month as a grid with hairlines. Narrow cells (phones) show the number, the net amount and
  * a mark per todo; roomy cells show todo titles. [minHeight] lets the grid fill a tall pane.
- * Swiping left or right changes the month.
+ * It is one page of a CalendarPager, which turns the months.
  */
 @Composable
 internal fun MonthGrid(
@@ -191,7 +171,6 @@ internal fun MonthGrid(
     data: CalendarData,
     firstDayOfWeek: DayOfWeek,
     onSelect: (LocalDate) -> Unit,
-    onPage: (Int) -> Unit,
     modifier: Modifier = Modifier,
     minHeight: Dp = 0.dp,
 ) {
@@ -206,7 +185,7 @@ internal fun MonthGrid(
         val roomy = (maxWidth - 8.dp) / 7 >= MONTH_CELL_TITLES_MIN_WIDTH
         val weekdayRow = 28.dp * fontScale.coerceAtLeast(1f)
         val rowHeight = maxOf(monthGridRowHeight(fontScale, roomy), (minHeight - weekdayRow) / weeks - 1.dp)
-        Column(Modifier.swipeToPage(onPage)) {
+        Column {
             Row(Modifier.fillMaxWidth().height(weekdayRow), verticalAlignment = Alignment.CenterVertically) {
                 repeat(7) { index ->
                     Text(
@@ -405,7 +384,7 @@ private fun CellTodo(todo: TodoEntity, dimmed: Boolean, height: Dp) {
 
 /**
  * The week as seven rows: weekday and number, the day's todos by title, and its net. Tapping a
- * day selects it. Swiping left or right changes the week.
+ * day selects it. It is one page of a CalendarPager, which turns the weeks.
  */
 @Composable
 internal fun WeekList(
@@ -413,14 +392,13 @@ internal fun WeekList(
     selected: LocalDate,
     data: CalendarData,
     onSelect: (LocalDate) -> Unit,
-    onPage: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val language = LocalUiLanguage.current
     val locale = uiLocale(language)
     val scale = LocalDensity.current.fontScale.coerceAtLeast(1f)
     val selectLabel = localizedText("Select date")
-    Column(modifier.fillMaxWidth().swipeToPage(onPage)) {
+    Column(modifier.fillMaxWidth()) {
         repeat(7) { offset ->
             val date = weekStart.plusDays(offset.toLong())
             val day = date.toEpochDay()

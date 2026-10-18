@@ -91,6 +91,7 @@ class DesktopAgentTools(
             "check_checklist_item" -> checkChecklistItem(args)
             "add_checklist_item" -> addChecklistItem(args)
             "remove_checklist_item" -> removeChecklistItem(args)
+            "rename_checklist_item" -> renameChecklistItem(args)
             "list_categories_and_tags" -> categoriesAndTags()
             "create_category" -> createCategory(args)
             "search" -> search(args)
@@ -163,6 +164,20 @@ class DesktopAgentTools(
         if (!store.addChecklistItem(title)) throw DesktopAgentException("The checklist could not be saved")
         val added = snapshot().checklistItems.maxBy { it.id }
         return saved("checklist", buildJsonObject { put("id", added.id); put("title", added.title) })
+    }
+
+    /** Renames an item in place: its spot in the list and today's tick stay. */
+    private suspend fun renameChecklistItem(args: Args): JsonElement {
+        val snapshot = snapshot()
+        val item = checklistItem(snapshot, args)
+        val title = args.requireString("new_title").trim()
+        if (title.isEmpty()) throw DesktopAgentException("The new title is empty")
+        snapshot.checklistItems.firstOrNull { it.id != item.id && it.title.trim().equals(title, ignoreCase = true) }?.let { other ->
+            throw DesktopAgentException("Another checklist item is already called \"${other.title}\"")
+        }
+        if (!store.renameChecklistItem(item.id, title)) throw DesktopAgentException("The checklist could not be saved")
+        val renamed = snapshot().checklistItems.first { it.id == item.id }
+        return saved("checklist", buildJsonObject { put("id", renamed.id); put("old_title", item.title); put("title", renamed.title) })
     }
 
     private suspend fun removeChecklistItem(args: Args): JsonElement {
@@ -983,6 +998,15 @@ class DesktopAgentTools(
             DesktopAgentTool(
                 "add_checklist_item", "Add to the daily checklist", "Adds something done every day to the end of the daily checklist.",
                 schema(listOf("title")) { prop("title", "string", "What is done every day") }, readOnly = false,
+            ),
+            DesktopAgentTool(
+                "rename_checklist_item", "Rename a checklist item",
+                "Changes the title of a daily checklist item; its place in the list and today's tick stay. Name it by id or title.",
+                schema(listOf("new_title")) {
+                    prop("id", "integer", "Checklist item id")
+                    prop("title", "string", "Current title, when no id is given")
+                    prop("new_title", "string", "The new title")
+                }, readOnly = false,
             ),
             DesktopAgentTool(
                 "remove_checklist_item", "Remove from the daily checklist", "Removes an item from the daily checklist on every device. Name it by id or title.",

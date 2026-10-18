@@ -166,6 +166,21 @@ class DesktopFlowTest {
         onAllNodesWithText("Today").onLast().performClick()
         waitUntil(timeoutMillis = 15_000) { onNodeWithText("Agenda").fetchSemanticsNode().boundsInRoot == switcherWithToday }
 
+        // The next month slides in: halfway through, both months are on screen.
+        val nextMonth = java.time.YearMonth.from(today).plusMonths(1)
+        mainClock.autoAdvance = false
+        onNodeWithContentDescription("Next").performClick()
+        mainClock.advanceTimeBy(160)
+        shot("09d-calendar-sliding")
+        val bothShown = onAllNodes(hasContentDescription(today.toString(), substring = true)).fetchSemanticsNodes().isNotEmpty() &&
+            onAllNodes(hasContentDescription(nextMonth.atDay(15).toString(), substring = true)).fetchSemanticsNodes().isNotEmpty()
+        mainClock.autoAdvance = true
+        assertTrue("the months slide rather than jump", bothShown)
+        waitForIdle()
+        waitForText(nextMonth.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.ENGLISH))
+        onAllNodesWithText("Today").onLast().performClick()
+        waitForIdle()
+
         // The Day view is titled with the date, for today as for any other day.
         onNodeWithText("Day").performClick()
         waitForText(today.format(java.time.format.DateTimeFormatter.ofPattern("MM/dd/yyyy")))

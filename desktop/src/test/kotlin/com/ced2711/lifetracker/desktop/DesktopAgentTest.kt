@@ -160,6 +160,37 @@ class DesktopAgentTest {
         }
         assertFalse(DesktopAgentEndpoint.file(root).exists())
     }
+
+    @Test
+    fun aCallJustAfterTheAppStartedWaitsForTheDataInsteadOfFindingItLocked() {
+        // Started by the bridge a moment ago: the data opens by itself a little later.
+        val opening = java.util.concurrent.atomic.AtomicBoolean(true)
+        val open = java.util.concurrent.atomic.AtomicBoolean(false)
+        val server = DesktopAgentServer(
+            root, tools, accessEnabled = { true }, changesAllowed = { true },
+            locked = { !open.get() }, onShowWindow = {}, opening = { opening.get() },
+        )
+        server.start()
+        try {
+            Thread {
+                Thread.sleep(700)
+                open.set(true)
+                opening.set(false)
+            }.start()
+            val bridge = DesktopMcpBridge(appDirectory = root, launchApp = { false })
+            val reply = bridge.handle("""{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_todos","arguments":{}}}""")!!
+            assertFalse(Json.parseToJsonElement(reply).jsonObject["result"]!!.jsonObject["isError"]!!.jsonPrimitive.boolean)
+
+            // Really locked (a password is needed, or the app lock is on): said so straight away.
+            open.set(false)
+            val locked = bridge.handle("""{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"list_todos","arguments":{}}}""")!!
+            val result = Json.parseToJsonElement(locked).jsonObject["result"]!!.jsonObject
+            assertTrue(result["isError"]!!.jsonPrimitive.boolean)
+            assertTrue((result["content"] as JsonArray).single().jsonObject["text"]!!.jsonPrimitive.content.contains("locked"))
+        } finally {
+            server.stop()
+        }
+    }
 }
 
 class DesktopAgentSetupTest {

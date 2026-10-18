@@ -72,6 +72,59 @@ object DesktopPlatform {
             ?: File(System.getProperty("user.home"), "AppData/Roaming").absolutePath,
     )
 
+    private fun packagesDirectory(): File = File(
+        System.getenv("LOCALAPPDATA")?.takeIf(String::isNotBlank)
+            ?: File(System.getProperty("user.home"), "AppData/Local").absolutePath,
+        "Packages",
+    )
+
+    /** Marks a start of the app that has already left a redirected AppData; see [appDataRedirectedBy]. */
+    const val RELAUNCHED_ARGUMENT = "--relaunched"
+
+    /**
+     * The Microsoft Store app (its package folder) whose private copy of AppData this process
+     * sees, or null. Store apps such as Claude Desktop run the programs they start, and whatever
+     * those start, with new files in AppData redirected into the Store app's own package folder,
+     * where they then hide the real ones. A copy of Life Assistant started that way would open
+     * and change an old private copy of the data and publish its endpoint where only programs
+     * started by that Store app can see it.
+     */
+    fun appDataRedirectedBy(): String? =
+        if (isWindows) appDataRedirectedBy(roamingDirectory(), packagesDirectory(), appDirectory()) else null
+
+    /** Writes a probe into [appDirectory] and looks for it in each package's private AppData. */
+    internal fun appDataRedirectedBy(
+        roaming: File,
+        packages: File,
+        appDirectory: File,
+        probeName: String = ".redirect-probe-${java.util.UUID.randomUUID()}",
+    ): String? {
+        val relative = appDirectory.absoluteFile.toRelativeStringOrNull(roaming.absoluteFile) ?: return null
+        val probe = File(appDirectory, probeName)
+        val created = runCatching { appDirectory.mkdirs(); probe.createNewFile() }.getOrDefault(false)
+        if (!created) return null
+        return try {
+            packages.listFiles()?.firstOrNull { File(it, "LocalCache/Roaming/$relative/$probeName").exists() }?.name
+        } finally {
+            probe.delete()
+        }
+    }
+
+    private fun File.toRelativeStringOrNull(base: File): String? =
+        relativeToOrNull(base)?.path?.takeIf { it.isNotEmpty() && !it.startsWith("..") }
+
+    /**
+     * Starts this app again, with [arguments], outside any redirected AppData: through Windows
+     * Management Instrumentation, so it runs as the computer's own child process rather than this
+     * one's. False when that did not work.
+     */
+    fun relaunchOutsideRedirection(arguments: List<String>): Boolean {
+        if (!isWindows) return false
+        val launcher = launcher() ?: return false
+        val commandLine = (listOf(launcher.absolutePath) + arguments + RELAUNCHED_ARGUMENT).joinToString(" ") { "\"$it\"" }
+        return com.ced2711.lifetracker.desktop.windows.WindowsDetachedLauncher.launchThroughWmi(commandLine, launcher.parentFile)
+    }
+
     /** Picks the wording for text that names the operating system. */
     fun text(windows: String, linux: String): String = if (isWindows) windows else linux
 

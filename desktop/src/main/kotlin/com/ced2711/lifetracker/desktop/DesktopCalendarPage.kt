@@ -67,7 +67,13 @@ import com.ced2711.lifetracker.domain.model.LedgerType
 import com.ced2711.lifetracker.domain.model.SeriesEditScope
 import com.ced2711.lifetracker.domain.model.TodoDraft
 import com.ced2711.lifetracker.domain.model.diaryPreview
+import com.ced2711.lifetracker.ui.design.CalendarPager
 import com.ced2711.lifetracker.ui.design.JumpToTodayButton
+import com.ced2711.lifetracker.ui.design.dayPage
+import com.ced2711.lifetracker.ui.design.monthOfPage
+import com.ced2711.lifetracker.ui.design.monthPage
+import com.ced2711.lifetracker.ui.design.weekPage
+import com.ced2711.lifetracker.ui.design.weekStartOfPage
 import com.ced2711.lifetracker.ui.design.CheckCircle
 import com.ced2711.lifetracker.ui.design.Dot
 import com.ced2711.lifetracker.ui.design.EmptyState
@@ -173,48 +179,76 @@ internal fun CalendarPage(
                     }
                     .focusable(),
             ) {
-                androidx.compose.foundation.layout.FlowRow(
-                    Modifier.fillMaxWidth().padding(start = PagePadding, end = PagePadding, top = 28.dp, bottom = Space.lg),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalArrangement = Arrangement.spacedBy(Space.sm),
-                    itemVerticalAlignment = Alignment.CenterVertically,
-                ) {
-                  Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        when (view) {
-                            CalendarView.MONTH -> monthTitle(month, language)
-                            CalendarView.WEEK -> UserFormatting.formatDate(weekStart, snapshot.settings.dateFormat, locale) + " – " +
-                                UserFormatting.formatDate(weekStart.plusDays(6), snapshot.settings.dateFormat, locale)
-                            // The date itself, also for today, as on the phone.
-                            CalendarView.DAY -> UserFormatting.formatDate(selected, snapshot.settings.dateFormat, locale)
-                            CalendarView.AGENDA -> desktopText("Next 30 days")
-                        },
-                        style = MaterialTheme.typography.headlineLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (view != CalendarView.AGENDA) {
-                        Spacer(Modifier.width(Space.sm))
-                        IconButton(onClick = { page(false) }) { Icon(Icons.Rounded.ChevronLeft, desktopText("Previous")) }
-                        IconButton(onClick = { page(true) }) { Icon(Icons.Rounded.ChevronRight, desktopText("Next")) }
-                        JumpToTodayButton(shown = selected != LocalDate.now(), label = desktopText("Today"), onClick = { selected = LocalDate.now() })
+                // One line when there is room, else the view switcher on a line of its own. Which one
+                // depends on the width only, so turning to a month with a longer name moves nothing;
+                // the arrows sit at the right end of the title's line for the same reason.
+                BoxWithConstraints(Modifier.fillMaxWidth().padding(start = PagePadding, end = PagePadding, top = 28.dp, bottom = Space.lg)) {
+                    val oneLine = maxWidth >= 720.dp
+                    val titleLine: @Composable (Modifier) -> Unit = { lineModifier ->
+                        Row(lineModifier, verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                when (view) {
+                                    CalendarView.MONTH -> monthTitle(month, language)
+                                    CalendarView.WEEK -> UserFormatting.formatDate(weekStart, snapshot.settings.dateFormat, locale) + " – " +
+                                        UserFormatting.formatDate(weekStart.plusDays(6), snapshot.settings.dateFormat, locale)
+                                    // The date itself, also for today, as on the phone.
+                                    CalendarView.DAY -> UserFormatting.formatDate(selected, snapshot.settings.dateFormat, locale)
+                                    CalendarView.AGENDA -> desktopText("Next 30 days")
+                                },
+                                style = MaterialTheme.typography.headlineLarge,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            if (view != CalendarView.AGENDA) {
+                                JumpToTodayButton(shown = selected != LocalDate.now(), label = desktopText("Today"), onClick = { selected = LocalDate.now() })
+                                IconButton(onClick = { page(false) }) { Icon(Icons.Rounded.ChevronLeft, desktopText("Previous")) }
+                                IconButton(onClick = { page(true) }) { Icon(Icons.Rounded.ChevronRight, desktopText("Next")) }
+                            }
+                        }
                     }
-                  }
-                    Segmented(CalendarView.entries, view, { view = it }, { desktopText(it.label) })
+                    if (oneLine) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            titleLine(Modifier.weight(1f))
+                            Spacer(Modifier.width(Space.md))
+                            Segmented(CalendarView.entries, view, { view = it }, { desktopText(it.label) })
+                        }
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+                            titleLine(Modifier.fillMaxWidth())
+                            Segmented(CalendarView.entries, view, { view = it }, { desktopText(it.label) })
+                        }
+                    }
                 }
+                // The arrows, the keys and Today slide the pages over; a touchpad swipe turns them.
+                val pages = Modifier.weight(1f).fillMaxWidth()
                 when (view) {
-                    CalendarView.MONTH -> MonthGrid(contents, month, weekDays, selected, showDiary, onSelect = select, onOpenTodo = { editingTodo = it })
-                    CalendarView.WEEK -> WeekColumns(snapshot, contents, weekStart, selected, onSelect = select, onOpenTodo = { editingTodo = it })
-                    CalendarView.DAY -> DayPanel(
-                        snapshot, store, contents, selected, showDiary,
-                        onOpenTodo = { editingTodo = it },
-                        onNewTodo = { editingTodo = -1L },
-                        onOpenLedger = { editingLedger = it },
-                        onNewLedger = { addingLedgerOn = selected.toEpochDay() },
-                        onOpenDiary = onOpenDiary,
-                        showDate = false,
-                        modifier = Modifier.fillMaxSize().widthIn(max = 760.dp),
-                    )
+                    CalendarView.MONTH -> CalendarPager(
+                        page = monthPage(selected),
+                        onPageChange = { shown -> selected = selected.plusMonths((shown - monthPage(selected)).toLong()) },
+                        modifier = pages,
+                    ) { shown -> MonthGrid(contents, monthOfPage(shown), weekDays, selected, showDiary, onSelect = select, onOpenTodo = { editingTodo = it }) }
+                    CalendarView.WEEK -> CalendarPager(
+                        page = weekPage(weekStart),
+                        onPageChange = { shown -> selected = selected.plusWeeks((shown - weekPage(weekStart)).toLong()) },
+                        modifier = pages,
+                    ) { shown -> WeekColumns(snapshot, contents, weekStartOfPage(shown, weekDays.first()), selected, onSelect = select, onOpenTodo = { editingTodo = it }) }
+                    CalendarView.DAY -> CalendarPager(
+                        page = dayPage(selected),
+                        onPageChange = { shown -> selected = LocalDate.ofEpochDay(shown.toLong()) },
+                        modifier = pages,
+                    ) { shown ->
+                        DayPanel(
+                            snapshot, store, contents, LocalDate.ofEpochDay(shown.toLong()), showDiary,
+                            onOpenTodo = { editingTodo = it },
+                            onNewTodo = { editingTodo = -1L },
+                            onOpenLedger = { editingLedger = it },
+                            onNewLedger = { addingLedgerOn = shown.toLong() },
+                            onOpenDiary = onOpenDiary,
+                            showDate = false,
+                            modifier = Modifier.fillMaxSize().widthIn(max = 760.dp),
+                        )
+                    }
                     CalendarView.AGENDA -> Agenda(snapshot, contents, onOpenTodo = { editingTodo = it }, onOpenLedger = { editingLedger = it })
                 }
             }

@@ -19,6 +19,6 @@ Backup format constants, Vault AAD strings, the application ID, Room schema hist
 
 ## Reporting a vulnerability
 
-Please use [GitHub's private vulnerability reporting](https://github.com/ced2711/life-assistant/security/advisories/new). Include the affected version, reproduction steps, impact, and any suggested mitigation.
+Please use [GitHub's private vulnerability reporting](https://github.com/ced2711/life-assistant-dev/security/advisories/new). Include the affected version, reproduction steps, impact, and any suggested mitigation.
 
 Do not open a public issue for an unpatched vulnerability and do not include real user data, backups, passwords, or signing credentials in a report. If private reporting is temporarily unavailable, contact the repository owner without disclosing the issue publicly.

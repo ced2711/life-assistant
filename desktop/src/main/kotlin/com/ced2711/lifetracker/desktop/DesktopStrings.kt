@@ -34,6 +34,7 @@ private val desktopSimplifiedChinese = mapOf(
     "It leaves the daily checklist on every device." to "它会从所有设备的每日清单中移除。",
     "Things you do every day, like brushing your teeth. Ticks start fresh every morning." to "每天都要做的事，比如刷牙。勾选每天早上自动清空。",
     "Tick a checklist item" to "勾选清单项",
+    "Rename a checklist item" to "重命名清单项",
     "Add to the daily checklist" to "添加到每日清单",
     "Attachments" to "附件",
     "Everything on this PC is replaced by the backup. Export the current data first if you may need it later." to "这台电脑上的所有数据都会被备份替换。如果以后可能还需要，请先导出当前数据。",
