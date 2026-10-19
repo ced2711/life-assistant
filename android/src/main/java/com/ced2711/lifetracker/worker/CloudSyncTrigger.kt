@@ -85,6 +85,7 @@ class CloudSyncTrigger(
             "categories", "todo_series", "todo_series_subtasks", "todo_occurrence_exceptions",
             "todos", "subtasks", "todo_reminders", "ledger_series", "ledger_occurrence_exceptions",
             "ledger_entries", "attachments", "note_folders", "notes", "vault_entries", "diary_entries",
+            "daily_checklist_items", "daily_checklist_checks",
         )
     }
 }

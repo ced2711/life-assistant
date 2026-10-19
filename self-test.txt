@@ -1,0 +1,6 @@
+OK   device protection
+OK   encrypted data file
+OK   ui thread
+OK   merge
+OK   ai assistant bridge
+OK   github connection

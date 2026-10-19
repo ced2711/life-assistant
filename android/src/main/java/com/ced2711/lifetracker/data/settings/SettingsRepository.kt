@@ -13,7 +13,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.ced2711.lifetracker.domain.model.DateFormatOption
 import com.ced2711.lifetracker.domain.model.AccentColor
 import com.ced2711.lifetracker.domain.model.AppLockTimeout
-import com.ced2711.lifetracker.domain.model.DefaultHiddenDestinations
+import com.ced2711.lifetracker.domain.model.resolveVisibleDestinations
 import com.ced2711.lifetracker.domain.model.DefaultVisibleDestinations
 import com.ced2711.lifetracker.domain.model.ThemeMode
 import com.ced2711.lifetracker.domain.model.TimeFormatOption
@@ -38,11 +38,13 @@ data class AppSettings(
     val defaultAllDayReminderMinute: Int = 0,
     val defaultReminderOffsetsMinutes: Set<Long> = setOf(0L),
     val todoQuickAddFields: Set<TodoQuickAddField> = emptySet(),
-    val lastDestination: TopLevelDestination = TopLevelDestination.TODO,
+    val lastDestination: TopLevelDestination = TopLevelDestination.TODAY,
     // Device-local preferences below are never written to or restored from a backup.
     val visibleDestinations: Set<TopLevelDestination> = DefaultVisibleDestinations,
     val appLockEnabled: Boolean = false,
     val appLockTimeout: AppLockTimeout = AppLockTimeout.ONE_MINUTE,
+    /** Lets Pocket AI read todos, ledger, notes and diary through ReadOnlyDataProvider. */
+    val pocketAiReadAccess: Boolean = false,
 )
 
 class SettingsRepository internal constructor(
@@ -64,8 +66,10 @@ class SettingsRepository internal constructor(
         val lastDestination = stringPreferencesKey("last_destination")
         // Hidden rather than visible modules are stored so modules added later start visible.
         val hiddenDestinations = stringSetPreferencesKey("hidden_destinations")
+        val optedInDestinations = stringSetPreferencesKey("opted_in_destinations")
         val appLockEnabled = booleanPreferencesKey("app_lock_enabled")
         val appLockTimeout = stringPreferencesKey("app_lock_timeout")
+        val pocketAiReadAccess = booleanPreferencesKey("pocket_ai_read_access")
     }
 
     val settings: Flow<AppSettings> = dataStore.data.map { preferences -> preferences.toAppSettings() }
@@ -90,13 +94,12 @@ class SettingsRepository internal constructor(
                 .orEmpty()
                 .mapNotNull { saved -> TodoQuickAddField.entries.firstOrNull { it.name == saved } }
                 .toSet(),
-            lastDestination = this[Keys.lastDestination].enumOrDefault(TopLevelDestination.TODO),
+            lastDestination = this[Keys.lastDestination].enumOrDefault(TopLevelDestination.TODAY),
             // No saved choice yet means the defaults; an empty saved set means every module is shown.
-            visibleDestinations = (this[Keys.hiddenDestinations] ?: DefaultHiddenDestinations.mapTo(mutableSetOf()) { it.name }).let { hidden ->
-                TopLevelDestination.entries.filterNot { it.name in hidden }.toSet()
-            },
+            visibleDestinations = resolveVisibleDestinations(this[Keys.hiddenDestinations], this[Keys.optedInDestinations]),
             appLockEnabled = this[Keys.appLockEnabled] ?: false,
             appLockTimeout = this[Keys.appLockTimeout].enumOrDefault(AppLockTimeout.ONE_MINUTE),
+            pocketAiReadAccess = this[Keys.pocketAiReadAccess] ?: false,
         )
 
     suspend fun setTheme(value: ThemeMode) = edit(Keys.theme, value.name)
@@ -121,12 +124,15 @@ class SettingsRepository internal constructor(
         value.mapTo(mutableSetOf()) { it.name },
     )
     suspend fun setLastDestination(value: TopLevelDestination) = edit(Keys.lastDestination, value.name)
-    suspend fun setVisibleDestinations(value: Set<TopLevelDestination>) = edit(
-        Keys.hiddenDestinations,
-        TopLevelDestination.entries.filterNot(value::contains).mapTo(mutableSetOf()) { it.name },
-    )
+    suspend fun setVisibleDestinations(value: Set<TopLevelDestination>) {
+        dataStore.edit { preferences ->
+            preferences[Keys.hiddenDestinations] = TopLevelDestination.entries.filterNot(value::contains).mapTo(mutableSetOf()) { it.name }
+            preferences.remove(Keys.optedInDestinations)
+        }
+    }
     suspend fun setAppLockEnabled(value: Boolean) = edit(Keys.appLockEnabled, value)
     suspend fun setAppLockTimeout(value: AppLockTimeout) = edit(Keys.appLockTimeout, value.name)
+    suspend fun setPocketAiReadAccess(value: Boolean) = edit(Keys.pocketAiReadAccess, value)
 
     /** Returns one normalized, complete settings value suitable for an encrypted backup. */
     suspend fun snapshot(): AppSettings = settings.first()
@@ -182,6 +188,7 @@ private fun AppSettings.sameRestorableSettings(other: AppSettings): Boolean = co
     visibleDestinations = other.visibleDestinations,
     appLockEnabled = other.appLockEnabled,
     appLockTimeout = other.appLockTimeout,
+    pocketAiReadAccess = other.pocketAiReadAccess,
 ) == other
 
 private inline fun <reified T : Enum<T>> String?.enumOrDefault(default: T): T =

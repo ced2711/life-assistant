@@ -1,11 +1,14 @@
 package com.ced2711.lifetracker.ui.todo
 
 import com.ced2711.lifetracker.domain.date.SmartDateParser
+import com.ced2711.lifetracker.domain.model.DateFormatOption
 import com.ced2711.lifetracker.domain.model.RecurrenceUnit
 import com.ced2711.lifetracker.domain.model.SeriesEditScope
 import com.ced2711.lifetracker.domain.model.TodoDraft
 import com.ced2711.lifetracker.domain.model.TodoPriority
 import com.ced2711.lifetracker.domain.model.TodoQuickAddField
+import java.time.LocalDate
+import java.util.Locale
 
 internal enum class QuickTodoDraftError {
     DESCRIPTION_REQUIRED,
@@ -26,6 +29,8 @@ internal fun buildQuickTodoDraft(
     tagsText: String,
     todayEpochDay: Long,
     defaultReminderOffsets: Set<Long>,
+    dateFormat: DateFormatOption = DateFormatOption.MONTH_DAY_YEAR,
+    locale: Locale = Locale.getDefault(),
 ): QuickTodoDraftResult {
     val cleanDescription = description.trim()
     if (cleanDescription.isEmpty()) {
@@ -33,7 +38,7 @@ internal fun buildQuickTodoDraft(
     }
 
     val deadline = if (TodoQuickAddField.DEADLINE in enabledFields && deadlineText.isNotBlank()) {
-        SmartDateParser.parse(deadlineText, todayEpochDay)
+        SmartDateParser.parse(deadlineText, LocalDate.ofEpochDay(todayEpochDay), dateFormat, locale)?.toEpochDay()
             ?: return QuickTodoDraftResult(error = QuickTodoDraftError.INVALID_DEADLINE)
     } else {
         null

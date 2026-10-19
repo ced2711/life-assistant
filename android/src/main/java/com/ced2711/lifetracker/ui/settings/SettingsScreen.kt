@@ -1,7 +1,6 @@
 package com.ced2711.lifetracker.ui.settings
 
 import android.Manifest
-import android.app.TimePickerDialog
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -11,40 +10,37 @@ import android.os.Build
 import android.text.format.DateFormat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.CloudDone
+import androidx.compose.material.icons.rounded.CloudOff
+import androidx.compose.material.icons.rounded.CloudUpload
+import androidx.compose.material.icons.rounded.Key
+import androidx.compose.material.icons.rounded.Sync
+import androidx.compose.material.icons.rounded.SyncProblem
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import com.ced2711.lifetracker.ui.localization.localizedText
-import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
-import com.ced2711.lifetracker.ui.localization.translateUiText
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -59,42 +55,66 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ced2711.lifetracker.BuildConfig
-import com.ced2711.lifetracker.domain.model.AppIdentity
+import com.ced2711.lifetracker.data.cloud.CloudSyncIndicator
+import com.ced2711.lifetracker.data.cloud.CloudSyncIndicatorState
+import com.ced2711.lifetracker.data.settings.AppSettings
 import com.ced2711.lifetracker.domain.format.UserFormatting
 import com.ced2711.lifetracker.domain.model.AccentColor
+import com.ced2711.lifetracker.domain.model.AppIdentity
+import com.ced2711.lifetracker.domain.model.AppLockTimeout
 import com.ced2711.lifetracker.domain.model.DateFormatOption
 import com.ced2711.lifetracker.domain.model.ReminderOffsetPreset
 import com.ced2711.lifetracker.domain.model.ThemeMode
 import com.ced2711.lifetracker.domain.model.TimeFormatOption
 import com.ced2711.lifetracker.domain.model.TodoQuickAddField
+import com.ced2711.lifetracker.domain.model.TopLevelDestination
 import com.ced2711.lifetracker.domain.model.UiLanguage
 import com.ced2711.lifetracker.domain.model.WeekStart
+import com.ced2711.lifetracker.domain.model.normalizeVisibleDestinations
 import com.ced2711.lifetracker.ui.TaskLedgerViewModel
-import com.ced2711.lifetracker.domain.model.AppLockTimeout
-import com.ced2711.lifetracker.domain.model.TopLevelDestination
+import com.ced2711.lifetracker.ui.adaptive.HingeSafeAlertDialog
+import com.ced2711.lifetracker.ui.adaptive.LocalTopBarSyncStatus
 import com.ced2711.lifetracker.ui.adaptive.label
+import com.ced2711.lifetracker.ui.components.CustomReminderOffsetInput
+import com.ced2711.lifetracker.ui.components.TimePickerButton
+import com.ced2711.lifetracker.ui.components.formatReminderOffset
+import com.ced2711.lifetracker.ui.design.IconTile
+import com.ced2711.lifetracker.ui.design.LifeTextField
+import com.ced2711.lifetracker.ui.design.Pill
+import com.ced2711.lifetracker.ui.design.ReadableWidth
+import com.ced2711.lifetracker.ui.design.Segmented
+import com.ced2711.lifetracker.ui.design.Space
+import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
+import com.ced2711.lifetracker.ui.localization.localizedText
+import com.ced2711.lifetracker.ui.localization.translateUiText
+import com.ced2711.lifetracker.ui.localization.uiLocale
 import com.ced2711.lifetracker.ui.lock.AppLockController
 import com.ced2711.lifetracker.ui.lock.authenticateWithDevice
 import com.ced2711.lifetracker.ui.lock.findHostActivity
 import com.ced2711.lifetracker.ui.lock.isDeviceSecure
-import com.ced2711.lifetracker.ui.adaptive.HingeSafeAlertDialog
-import com.ced2711.lifetracker.ui.adaptive.rememberHingeSafePlatformDialogLauncher
-import com.ced2711.lifetracker.ui.components.CustomReminderOffsetInput
-import com.ced2711.lifetracker.ui.components.formatReminderOffset
-import kotlinx.coroutines.launch
+import com.ced2711.lifetracker.ui.theme.LifeTheme
+import com.ced2711.lifetracker.ui.theme.accentOf
+import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 import java.util.Locale
+import kotlinx.coroutines.launch
 
+/**
+ * Settings: one scrolling page of groups. This part talks to Android (notification permission,
+ * device authentication, the browser) and owns the dialogs; [SettingsContent] draws the page.
+ */
 @Composable
 fun SettingsScreen(
     viewModel: TaskLedgerViewModel,
@@ -107,13 +127,11 @@ fun SettingsScreen(
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val platformDialogLauncher = rememberHingeSafePlatformDialogLauncher()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val uiLanguage = LocalUiLanguage.current
-    var choiceDialog by rememberSettingsDialogState()
-    val noBrowserMessage = localizedText("No browser is available to open the source link.")
-    val sourceLinkErrorMessage = localizedText("The source link could not be opened.")
+    var dialog by rememberSettingsDialogState()
+    val systemUses24Hour = DateFormat.is24HourFormat(context)
 
     fun showMessage(text: String) {
         scope.launch { snackbarHostState.showSnackbar(translateUiText(text, uiLanguage)) }
@@ -141,370 +159,509 @@ fun SettingsScreen(
         }
     }
 
+    fun openSource() {
+        try {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(AppIdentity.SOURCE_URL)))
+        } catch (_: ActivityNotFoundException) {
+            showMessage("No browser is available to open the source link.")
+        } catch (_: SecurityException) {
+            showMessage("The source link could not be opened.")
+        }
+    }
+
     LaunchedEffect(viewModel, uiLanguage) {
         viewModel.errors.collect { message ->
             snackbarHostState.showSnackbar(translateUiText(message, uiLanguage))
         }
     }
 
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted ->
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         viewModel.setNotificationsEnabled(granted)
-        if (!granted) {
-            scope.launch {
-                snackbarHostState.showSnackbar(
-                    translateUiText(
-                        "Notification permission was denied. Notifications remain off.",
-                        uiLanguage,
-                    ),
-                )
-            }
-        }
+        if (!granted) showMessage("Notification permission was denied. Notifications remain off.")
     }
 
-    Scaffold(
-        modifier = modifier.fillMaxSize(),
-        contentWindowInsets = WindowInsets.safeDrawing,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-    ) { contentPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(contentPadding),
-            contentAlignment = Alignment.TopCenter,
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = 720.dp)
-                    .verticalScroll(rememberScrollState())
-                    .padding(
-                        start = if (isWide) 32.dp else 16.dp,
-                        end = if (isWide) 32.dp else 16.dp,
-                        bottom = 32.dp,
-                    ),
-            ) {
-                SettingsSectionTitle("Security")
-                SettingsValueRow(
-                    title = "Password vault",
-                    value = "Encrypted on this device",
-                    onClick = onOpenVault,
-                )
-                HorizontalDivider()
-                SettingsSwitchRow(
-                    title = "App lock",
-                    supportingText = "Ask for fingerprint, face or screen lock when opening the app",
-                    checked = settings.appLockEnabled,
-                    onCheckedChange = ::changeAppLock,
-                )
-                if (settings.appLockEnabled) {
-                    HorizontalDivider()
-                    SettingsValueRow(
-                        title = "Lock after leaving the app",
-                        value = settings.appLockTimeout.label,
-                        onClick = { choiceDialog = SettingsDialog.AppLockTimeout },
-                    )
-                }
-
-                SettingsSectionTitle("Menu")
-                SettingsValueRow(
-                    title = "Modules in menu",
-                    value = visibleModulesSummary(settings.visibleDestinations),
-                    onClick = { choiceDialog = SettingsDialog.VisibleModules },
-                )
-
-                SettingsSectionTitle("Data")
-                SettingsValueRow(
-                    title = "Backup & sync",
-                    value = "Local .tlb, Google Drive or GitHub",
-                    onClick = onOpenBackup,
-                )
-
-                SettingsSectionTitle("Appearance")
-                SettingsValueRow(
-                    title = "Theme",
-                    value = settings.themeMode.label,
-                    onClick = { choiceDialog = SettingsDialog.Theme },
-                )
-                HorizontalDivider()
-                SettingsValueRow(
-                    title = "Accent color",
-                    value = settings.accentColor.label,
-                    onClick = { choiceDialog = SettingsDialog.AccentColor },
-                )
-                HorizontalDivider()
-                SettingsValueRow(
-                    title = "UI language",
-                    value = settings.uiLanguage.label,
-                    onClick = { choiceDialog = SettingsDialog.UiLanguage },
-                )
-
-                SettingsSectionTitle("Regional preferences")
-                SettingsValueRow(
-                    title = "Week starts on",
-                    value = settings.weekStart.label,
-                    onClick = { choiceDialog = SettingsDialog.WeekStart },
-                )
-                HorizontalDivider()
-                SettingsValueRow(
-                    title = "Time format",
-                    value = settings.timeFormat.label,
-                    onClick = { choiceDialog = SettingsDialog.TimeFormat },
-                )
-                HorizontalDivider()
-                SettingsValueRow(
-                    title = "Date format",
-                    value = settings.dateFormat.label,
-                    onClick = { choiceDialog = SettingsDialog.DateFormat },
-                )
-
-                SettingsSectionTitle("Todo")
-                SettingsValueRow(
-                    title = "Quick add fields",
-                    value = quickAddFieldsSummary(settings.todoQuickAddFields),
-                    onClick = { choiceDialog = SettingsDialog.TodoQuickAddFields },
-                )
-
-                SettingsSectionTitle("Notifications")
-                SettingsSwitchRow(
-                    title = "Notifications",
-                    supportingText = "Allow reminders and due-date notifications",
-                    checked = settings.notificationsEnabled,
-                    onCheckedChange = { enabled ->
-                        if (!enabled) {
-                            viewModel.setNotificationsEnabled(false)
-                        } else if (
-                            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-                            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
-                            PackageManager.PERMISSION_GRANTED
-                        ) {
-                            viewModel.setNotificationsEnabled(true)
-                        } else {
-                            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        }
-                    },
-                )
-                HorizontalDivider()
-                SettingsValueRow(
-                    title = "Default reminders",
-                    value = defaultReminderSummary(settings.defaultReminderOffsetsMinutes),
-                    onClick = { choiceDialog = SettingsDialog.DefaultReminders },
-                )
-                HorizontalDivider()
-                SettingsValueRow(
-                    title = "All-day reminder time",
-                    value = UserFormatting.formatMinuteOfDay(
-                        minuteOfDay = settings.defaultAllDayReminderMinute,
-                        option = settings.timeFormat,
-                        systemUses24Hour = DateFormat.is24HourFormat(context),
-                        locale = Locale.US,
-                    ),
-                    onClick = { choiceDialog = SettingsDialog.AllDayReminderTime },
-                )
-
-                SettingsSectionTitle("About")
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { choiceDialog = SettingsDialog.About }
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
+    Box(modifier.fillMaxSize()) {
+        SettingsContent(
+            settings = settings,
+            sync = LocalTopBarSyncStatus.current?.indicator,
+            versionName = BuildConfig.VERSION_NAME,
+            systemUses24Hour = systemUses24Hour,
+            isWide = isWide,
+            onOpenBackup = onOpenBackup,
+            onTheme = viewModel::setTheme,
+            onAccent = viewModel::setAccentColor,
+            onLanguage = viewModel::setUiLanguage,
+            onVisibleDestinations = viewModel::setVisibleDestinations,
+            onWeekStart = viewModel::setWeekStart,
+            onTimeFormat = viewModel::setTimeFormat,
+            onDateFormat = viewModel::setDateFormat,
+            onQuickAddFields = viewModel::setTodoQuickAddFields,
+            onNotifications = { enabled ->
+                // Android 13 and later ask the user before the first notification.
+                if (!enabled) {
+                    viewModel.setNotificationsEnabled(false)
+                } else if (
+                    Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                    context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
                 ) {
-                    Text(
-                        localizedText("${AppIdentity.NAME} by ${AppIdentity.AUTHOR}"),
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                    Text(
-                        text = localizedText("Version ${BuildConfig.VERSION_NAME} • Private and offline"),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        text = localizedText("View license, notices, and source"),
-                        color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-            }
-        }
-    }
-
-    when (choiceDialog) {
-        SettingsDialog.Theme -> ChoiceDialog(
-            title = "Theme",
-            choices = ThemeMode.entries.map { Choice(it.label, it) },
-            selected = settings.themeMode,
-            onSelect = viewModel::setTheme,
-            onDismiss = { choiceDialog = null },
-        )
-
-        SettingsDialog.AccentColor -> AccentColorDialog(
-            selected = settings.accentColor,
-            onSelect = viewModel::setAccentColor,
-            onDismiss = { choiceDialog = null },
-        )
-
-        SettingsDialog.UiLanguage -> ChoiceDialog(
-            title = "UI language",
-            choices = UiLanguage.entries.map { Choice(it.label, it) },
-            selected = settings.uiLanguage,
-            onSelect = viewModel::setUiLanguage,
-            onDismiss = { choiceDialog = null },
-        )
-
-        SettingsDialog.WeekStart -> ChoiceDialog(
-            title = "Week starts on",
-            choices = WeekStart.entries.map { Choice(it.label, it) },
-            selected = settings.weekStart,
-            onSelect = viewModel::setWeekStart,
-            onDismiss = { choiceDialog = null },
-        )
-
-        SettingsDialog.TimeFormat -> ChoiceDialog(
-            title = "Time format",
-            choices = TimeFormatOption.entries.map { Choice(it.label, it) },
-            selected = settings.timeFormat,
-            onSelect = viewModel::setTimeFormat,
-            onDismiss = { choiceDialog = null },
-        )
-
-        SettingsDialog.DateFormat -> ChoiceDialog(
-            title = "Date format",
-            choices = DateFormatOption.entries.map { Choice(it.label, it) },
-            selected = settings.dateFormat,
-            onSelect = viewModel::setDateFormat,
-            onDismiss = { choiceDialog = null },
-        )
-
-        SettingsDialog.DefaultReminders -> DefaultRemindersDialog(
-            selected = settings.defaultReminderOffsetsMinutes,
-            onSave = onDefaultReminderOffsetsChange,
-            onDismiss = { choiceDialog = null },
-        )
-
-        SettingsDialog.AppLockTimeout -> ChoiceDialog(
-            title = "Lock after leaving the app",
-            choices = AppLockTimeout.entries.map { Choice(it.label, it) },
-            selected = settings.appLockTimeout,
-            onSelect = viewModel::setAppLockTimeout,
-            onDismiss = { choiceDialog = null },
-        )
-
-        SettingsDialog.VisibleModules -> VisibleModulesDialog(
-            selected = settings.visibleDestinations,
-            onSave = viewModel::setVisibleDestinations,
-            onDismiss = { choiceDialog = null },
-        )
-
-        SettingsDialog.TodoQuickAddFields -> TodoQuickAddFieldsDialog(
-            selected = settings.todoQuickAddFields,
-            onSave = viewModel::setTodoQuickAddFields,
-            onDismiss = { choiceDialog = null },
-        )
-
-        SettingsDialog.AllDayReminderTime -> {
-            val uses24Hour = when (settings.timeFormat) {
-                TimeFormatOption.SYSTEM -> DateFormat.is24HourFormat(context)
-                TimeFormatOption.HOUR_12 -> false
-                TimeFormatOption.HOUR_24 -> true
-            }
-            AllDayReminderTimeDialog(
-                initialMinute = settings.defaultAllDayReminderMinute,
-                uses24Hour = uses24Hour,
-                onSave = viewModel::setAllDayReminderMinute,
-                onOpenSystemPicker = {
-                    val currentMinute = settings.defaultAllDayReminderMinute
-                    platformDialogLauncher(
-                        TimePickerDialog(
-                            context,
-                            { _, hour, minute ->
-                                viewModel.setAllDayReminderMinute(hour * 60 + minute)
-                                choiceDialog = null
-                            },
-                            currentMinute / 60,
-                            currentMinute % 60,
-                            uses24Hour,
-                        ),
-                    )
-                },
-                onDismiss = { choiceDialog = null },
-            )
-        }
-
-        SettingsDialog.About -> AboutDialog(
-            onDismiss = { choiceDialog = null },
-            onOpenSource = {
-                try {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(AppIdentity.SOURCE_URL)))
-                } catch (_: ActivityNotFoundException) {
-                    scope.launch {
-                        snackbarHostState.showSnackbar(noBrowserMessage)
-                    }
-                } catch (_: SecurityException) {
-                    scope.launch {
-                        snackbarHostState.showSnackbar(sourceLinkErrorMessage)
-                    }
+                    viewModel.setNotificationsEnabled(true)
+                } else {
+                    permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                 }
             },
+            onDefaultReminders = onDefaultReminderOffsetsChange,
+            onEditAllDayTime = { dialog = SettingsDialog.AllDayReminderTime },
+            onOpenVault = onOpenVault,
+            onAppLock = ::changeAppLock,
+            onAppLockTimeout = viewModel::setAppLockTimeout,
+            onOpenLicense = { dialog = SettingsDialog.License },
+            onOpenSource = ::openSource,
+        )
+        SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter))
+    }
+
+    when (dialog) {
+        SettingsDialog.AllDayReminderTime -> AllDayReminderTimeDialog(
+            initialMinute = settings.defaultAllDayReminderMinute,
+            uses24Hour = UserFormatting.uses24HourClock(settings.timeFormat, systemUses24Hour),
+            onSave = viewModel::setAllDayReminderMinute,
+            onDismiss = { dialog = null },
+        )
+
+        SettingsDialog.License -> LicenseDialog(
+            licenseText = remember(context) { readBundledLegalText(context, AppIdentity.LICENSE_RESOURCE) },
+            permissionText = remember(context) { readBundledLegalText(context, AppIdentity.PERMISSION_RESOURCE) },
+            noticeText = remember(context) { readBundledLegalText(context, AppIdentity.NOTICE_RESOURCE) },
+            onDismiss = { dialog = null },
+            onOpenSource = ::openSource,
         )
 
         null -> Unit
     }
 }
 
+/** The settings page itself, without any Android service: groups of rows, top to bottom. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AboutDialog(
+internal fun SettingsContent(
+    settings: AppSettings,
+    sync: CloudSyncIndicator?,
+    versionName: String,
+    systemUses24Hour: Boolean,
+    isWide: Boolean,
+    modifier: Modifier = Modifier,
+    today: LocalDate = LocalDate.now(),
+    scrollState: ScrollState = rememberScrollState(),
+    onOpenBackup: () -> Unit,
+    onTheme: (ThemeMode) -> Unit,
+    onAccent: (AccentColor) -> Unit,
+    onLanguage: (UiLanguage) -> Unit,
+    onVisibleDestinations: (Set<TopLevelDestination>) -> Unit,
+    onWeekStart: (WeekStart) -> Unit,
+    onTimeFormat: (TimeFormatOption) -> Unit,
+    onDateFormat: (DateFormatOption) -> Unit,
+    onQuickAddFields: (Set<TodoQuickAddField>) -> Unit,
+    onNotifications: (Boolean) -> Unit,
+    onDefaultReminders: (Set<Long>) -> Unit,
+    onEditAllDayTime: () -> Unit,
+    onOpenVault: () -> Unit,
+    onAppLock: (Boolean) -> Unit,
+    onAppLockTimeout: (AppLockTimeout) -> Unit,
+    onOpenLicense: () -> Unit,
+    onOpenSource: () -> Unit,
+) {
+    val language = LocalUiLanguage.current
+    val locale = uiLocale(language)
+    val pillSpacing = Arrangement.spacedBy(Space.sm)
+
+    @Composable
+    fun syncGroup() {
+        SettingsGroup(localizedText("Sync & backup")) {
+            val attention = sync?.state == CloudSyncIndicatorState.NEEDS_ATTENTION
+            val state = localizedText(
+                when (sync?.state) {
+                    null -> "Sync is off"
+                    CloudSyncIndicatorState.SYNCING -> "Syncing…"
+                    CloudSyncIndicatorState.NEEDS_ATTENTION -> "Sync needs attention"
+                    CloudSyncIndicatorState.PENDING -> "Changes not synced yet"
+                    CloudSyncIndicatorState.UP_TO_DATE -> "Up to date"
+                },
+            )
+            val lastSynced = localizedText("Last synced")
+            val detail = when {
+                sync == null -> localizedText("Daily backups are kept on this device")
+                sync.lastSyncAt != null -> "$lastSynced ${formatSyncTime(sync.lastSyncAt)}"
+                else -> localizedText("Never synced")
+            }
+            SettingRow(
+                title = localizedText("Backup & sync"),
+                supporting = "$state · $detail",
+                supportingColor = if (attention) LifeTheme.colors.danger else MaterialTheme.colorScheme.onSurfaceVariant,
+                leading = {
+                    IconTile(
+                        icon = when (sync?.state) {
+                            null -> Icons.Rounded.CloudOff
+                            CloudSyncIndicatorState.SYNCING -> Icons.Rounded.Sync
+                            CloudSyncIndicatorState.NEEDS_ATTENTION -> Icons.Rounded.SyncProblem
+                            CloudSyncIndicatorState.PENDING -> Icons.Rounded.CloudUpload
+                            CloudSyncIndicatorState.UP_TO_DATE -> Icons.Rounded.CloudDone
+                        },
+                        tint = when {
+                            attention -> LifeTheme.colors.danger
+                            sync == null -> MaterialTheme.colorScheme.onSurfaceVariant
+                            else -> MaterialTheme.colorScheme.primary
+                        },
+                    )
+                },
+                onClick = onOpenBackup,
+            ) { RowChevron() }
+        }
+    }
+
+    @Composable
+    fun appearanceGroup() {
+        SettingsGroup(localizedText("Appearance")) {
+            SettingRow(localizedText("Theme")) {
+                Segmented(ThemeMode.entries, settings.themeMode, onTheme, { localizedText(it.label) })
+            }
+            SettingDivider()
+            SettingRow(localizedText("Accent color")) {
+                FlowRow(Modifier.selectableGroup()) {
+                    AccentColor.entries.forEach { accent ->
+                        AccentSwatch(accent, selected = accent == settings.accentColor, onClick = { onAccent(accent) })
+                    }
+                }
+            }
+            SettingDivider()
+            SettingRow(localizedText("Language")) {
+                Segmented(UiLanguage.entries, settings.uiLanguage, onLanguage, { if (it == UiLanguage.ENGLISH) "English" else "简体中文" })
+            }
+            SettingDivider()
+            val visible = normalizeVisibleDestinations(settings.visibleDestinations).toSet()
+            SettingBlock(
+                title = localizedText("Modules in menu"),
+                supporting = localizedText("Hidden modules keep their data. At least one stays visible."),
+            ) {
+                FlowRow(horizontalArrangement = pillSpacing, verticalArrangement = pillSpacing) {
+                    TopLevelDestination.entries.forEach { module ->
+                        val shown = module in visible
+                        Pill(
+                            text = localizedText(module.label),
+                            selected = shown,
+                            // The last visible module cannot be hidden.
+                            enabled = !shown || visible.size > 1,
+                            onClick = { onVisibleDestinations(if (shown) visible - module else visible + module) },
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    fun datesGroup() {
+        SettingsGroup(localizedText("Dates and times")) {
+            SettingRow(localizedText("Week starts on")) {
+                Segmented(WeekStart.entries, settings.weekStart, onWeekStart, { localizedText(it.label) })
+            }
+            SettingDivider()
+            SettingRow(localizedText("Time format")) {
+                Segmented(TimeFormatOption.entries, settings.timeFormat, onTimeFormat, { localizedText(it.label) })
+            }
+            SettingDivider()
+            SettingBlock(
+                title = localizedText("Date format"),
+                supporting = localizedText("Also the order dates are read in when you type them."),
+            ) {
+                val system = localizedText("System")
+                FlowRow(Modifier.selectableGroup(), horizontalArrangement = pillSpacing, verticalArrangement = pillSpacing) {
+                    DateFormatOption.entries.forEach { option ->
+                        Pill(
+                            // An example date says more than the name of a format.
+                            text = if (option == DateFormatOption.SYSTEM) system else UserFormatting.formatDate(today, option, locale),
+                            selected = option == settings.dateFormat,
+                            exclusive = true,
+                            onClick = { onDateFormat(option) },
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    fun todoGroup() {
+        SettingsGroup(localizedText("Todo")) {
+            SettingBlock(
+                title = localizedText("Quick add fields"),
+                supporting = localizedText("Optional fields shown below the quick add description."),
+            ) {
+                FlowRow(horizontalArrangement = pillSpacing, verticalArrangement = pillSpacing) {
+                    TodoQuickAddField.entries.forEach { field ->
+                        val on = field in settings.todoQuickAddFields
+                        Pill(
+                            text = localizedText(field.label),
+                            selected = on,
+                            onClick = { onQuickAddFields(if (on) settings.todoQuickAddFields - field else settings.todoQuickAddFields + field) },
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    fun remindersGroup() {
+        SettingsGroup(localizedText("Reminders")) {
+            SettingSwitchRow(
+                title = localizedText("Notifications"),
+                supporting = localizedText("Allow reminders and due-date notifications"),
+                checked = settings.notificationsEnabled,
+                onCheckedChange = onNotifications,
+            )
+            SettingDivider()
+            val offsets = settings.defaultReminderOffsetsMinutes.filterTo(sortedSetOf()) { it >= 0 }
+            val presets = ReminderOffsetPreset.entries.map { it.minutesBeforeDue }
+            SettingBlock(
+                title = localizedText("Default reminders"),
+                supporting = localizedText("Added automatically to new todos that have a date."),
+            ) {
+                FlowRow(horizontalArrangement = pillSpacing, verticalArrangement = pillSpacing) {
+                    (presets + offsets.filterNot(presets::contains)).forEach { offset ->
+                        val on = offset in offsets
+                        Pill(
+                            text = localizedText(formatReminderOffset(offset)),
+                            selected = on,
+                            onClick = { onDefaultReminders(if (on) offsets - offset else offsets + offset) },
+                        )
+                    }
+                    CustomReminderOffsetInput(existingOffsets = offsets, onAdd = { onDefaultReminders(offsets + it) })
+                }
+            }
+            SettingDivider()
+            SettingRow(
+                title = localizedText("All-day reminder time"),
+                supporting = localizedText("For todos with a date but no time."),
+                onClick = onEditAllDayTime,
+            ) {
+                Text(
+                    UserFormatting.formatMinuteOfDay(settings.defaultAllDayReminderMinute, settings.timeFormat, systemUses24Hour, locale),
+                    style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    modifier = Modifier
+                        .clip(MaterialTheme.shapes.small)
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                        .padding(horizontal = Space.md, vertical = Space.sm),
+                )
+            }
+        }
+    }
+
+    @Composable
+    fun securityGroup() {
+        SettingsGroup(localizedText("Security")) {
+            SettingRow(
+                title = localizedText("Password vault"),
+                supporting = localizedText("Encrypted on this device"),
+                leading = { IconTile(Icons.Rounded.Key) },
+                onClick = onOpenVault,
+            ) { RowChevron() }
+            SettingDivider()
+            SettingSwitchRow(
+                title = localizedText("App lock"),
+                supporting = localizedText("Ask for fingerprint, face or screen lock when opening the app"),
+                checked = settings.appLockEnabled,
+                onCheckedChange = onAppLock,
+            )
+            if (settings.appLockEnabled) {
+                SettingDivider()
+                SettingBlock(localizedText("Lock after leaving the app")) {
+                    FlowRow(Modifier.selectableGroup(), horizontalArrangement = pillSpacing, verticalArrangement = pillSpacing) {
+                        AppLockTimeout.entries.forEach { timeout ->
+                            Pill(
+                                text = localizedText(timeout.label),
+                                selected = timeout == settings.appLockTimeout,
+                                exclusive = true,
+                                onClick = { onAppLockTimeout(timeout) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    fun aboutGroup() {
+        SettingsGroup(localizedText("About")) {
+            SettingRow(
+                title = localizedText(AppIdentity.NAME) + " " + versionName,
+                supporting = AppIdentity.COPYRIGHT,
+            )
+            SettingDivider()
+            SettingRow(
+                title = localizedText("Private and offline"),
+                supporting = localizedText("Your data stays on this device unless you turn on cloud sync, and then it is encrypted before it leaves."),
+            )
+            SettingDivider()
+            SettingRow(
+                title = localizedText("License and notices"),
+                supporting = AppIdentity.LICENSE_LABEL,
+                onClick = onOpenLicense,
+            ) { RowChevron() }
+            SettingDivider()
+            SettingRow(
+                title = localizedText("View source"),
+                supporting = AppIdentity.SOURCE_URL.removePrefix("https://"),
+                onClick = onOpenSource,
+            ) {
+                Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+
+    Box(modifier.fillMaxSize().verticalScroll(scrollState)) {
+        ReadableWidth(maxWidth = if (isWide) 1120.dp else 760.dp) {
+            GroupColumns(
+                twoColumns = isWide,
+                modifier = Modifier.padding(horizontal = if (isWide) Space.xxl else Space.lg).padding(top = Space.xs, bottom = Space.xxxl),
+                first = {
+                    syncGroup()
+                    appearanceGroup()
+                    datesGroup()
+                    todoGroup()
+                },
+                second = {
+                    remindersGroup()
+                    securityGroup()
+                    aboutGroup()
+                },
+            )
+        }
+    }
+}
+
+/** One accent colour to pick: a filled circle, ringed and ticked when it is the current one. */
+@Composable
+private fun AccentSwatch(accent: AccentColor, selected: Boolean, onClick: () -> Unit) {
+    val name = localizedText(accent.label)
+    Box(
+        Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+            .semantics { contentDescription = name },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            Modifier
+                .size(32.dp)
+                .then(if (selected) Modifier.border(2.dp, MaterialTheme.colorScheme.onSurface, CircleShape) else Modifier)
+                .padding(4.dp)
+                .clip(CircleShape)
+                .background(accentOf(accent, LifeTheme.colors.dark)),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (selected) Icon(Icons.Rounded.Check, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onPrimary)
+        }
+    }
+}
+
+/** The time for reminders of todos without a time: typed, or chosen with the clock. */
+@Composable
+internal fun AllDayReminderTimeDialog(
+    initialMinute: Int,
+    uses24Hour: Boolean,
+    onSave: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var input by rememberAllDayReminderInput(initialMinute, uses24Hour)
+    val parsedMinute = parseMinuteOfDay(input)
+    val invalid = input.isNotBlank() && parsedMinute == null
+
+    HingeSafeAlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(localizedText("All-day reminder time")) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+                Text(
+                    localizedText("Todos with a date but no time remind you at this time."),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                LifeTextField(
+                    value = input,
+                    onValueChange = { input = it },
+                    placeholder = localizedText("9:30 AM or 21:30"),
+                    isError = invalid,
+                    background = MaterialTheme.colorScheme.surfaceContainerLowest,
+                    trailing = {
+                        TimePickerButton(
+                            initialMinute = parsedMinute ?: initialMinute.coerceIn(0, 1_439),
+                            is24Hour = uses24Hour,
+                            onPicked = { input = formatAllDayReminderInput(it, uses24Hour) },
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (invalid) {
+                    Text(
+                        localizedText("Enter a valid time such as 9:30 AM or 21:30."),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = LifeTheme.colors.danger,
+                    )
+                }
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(localizedText("Cancel")) } },
+        confirmButton = {
+            TextButton(
+                enabled = parsedMinute != null,
+                onClick = {
+                    parsedMinute?.let(onSave)
+                    onDismiss()
+                },
+            ) { Text(localizedText("Save"), fontWeight = FontWeight.SemiBold) }
+        },
+    )
+}
+
+/** The licence, the additional permissions and the notices, with the link to the source. */
+@Composable
+internal fun LicenseDialog(
+    licenseText: String,
+    permissionText: String,
+    noticeText: String,
     onDismiss: () -> Unit,
     onOpenSource: () -> Unit,
 ) {
-    val context = LocalContext.current
-    val licenseText = remember(context) {
-        readBundledLegalText(context, AppIdentity.LICENSE_RESOURCE)
-    }
-    val permissionText = remember(context) {
-        readBundledLegalText(context, AppIdentity.PERMISSION_RESOURCE)
-    }
-    val noticeText = remember(context) {
-        readBundledLegalText(context, AppIdentity.NOTICE_RESOURCE)
-    }
     HingeSafeAlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(localizedText("About ${AppIdentity.NAME}")) },
+        title = { Text(localizedText("License and notices")) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Space.md)) {
                 Text(
-                    text = "${AppIdentity.COPYRIGHT} • v${AppIdentity.VERSION}",
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                Text(
-                    text = AppIdentity.LICENSE_LABEL,
+                    "${AppIdentity.COPYRIGHT} · v${AppIdentity.VERSION}\n${AppIdentity.LICENSE_LABEL}",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall,
                 )
-                Text(
-                    text = localizedText(
-                        "This software is provided as-is, without warranty of any kind. Use it at your own risk.",
-                    ),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                // Keep the source offer visible without scrolling through the full license first.
-                TextButton(onClick = onOpenSource) { Text(localizedText("View source")) }
-                Text(localizedText("License"), style = MaterialTheme.typography.titleSmall)
-                Text(licenseText, style = MaterialTheme.typography.bodySmall)
-                Text(localizedText("Additional permissions"), style = MaterialTheme.typography.titleSmall)
-                Text(permissionText, style = MaterialTheme.typography.bodySmall)
-                Text(localizedText("Notices"), style = MaterialTheme.typography.titleSmall)
-                Text(noticeText, style = MaterialTheme.typography.bodySmall)
+                Text(localizedText("This software is provided as-is, without warranty of any kind. Use it at your own risk."))
+                LegalText(localizedText("License"), licenseText)
+                LegalText(localizedText("Additional permissions"), permissionText)
+                LegalText(localizedText("Notices"), noticeText)
             }
         },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(localizedText("Close")) }
-        },
-        confirmButton = {
-            TextButton(onClick = onOpenSource) { Text(localizedText("View source")) }
-        },
+        dismissButton = { TextButton(onClick = onOpenSource) { Text(localizedText("View source")) } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(localizedText("Close"), fontWeight = FontWeight.SemiBold) } },
     )
+}
+
+@Composable
+private fun LegalText(title: String, body: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+        Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+        Text(body, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
 }
 
 private fun readBundledLegalText(context: Context, path: String): String =
@@ -514,367 +671,10 @@ private fun readBundledLegalText(context: Context, path: String): String =
         "${AppIdentity.NAME}: this legal document is unavailable in this build."
     }
 
-@Composable
-private fun SettingsSectionTitle(title: String) {
-    Text(
-        text = localizedText(title),
-        color = MaterialTheme.colorScheme.primary,
-        style = MaterialTheme.typography.titleSmall,
-        modifier = Modifier.padding(start = 16.dp, top = 24.dp, end = 16.dp, bottom = 8.dp),
-    )
-}
-
-@Composable
-private fun SettingsValueRow(
-    title: String,
-    value: String,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        horizontalArrangement = Arrangement.spacedBy(24.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = localizedText(title),
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.weight(1f),
-        )
-        Text(
-            text = localizedText(value),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.End,
-            modifier = Modifier.weight(1f),
-        )
-    }
-}
-
-@Composable
-private fun SettingsSwitchRow(
-    title: String,
-    supportingText: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .toggleable(
-                value = checked,
-                role = Role.Switch,
-                onValueChange = onCheckedChange,
-            )
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = localizedText(title), style = MaterialTheme.typography.bodyLarge)
-            Text(
-                text = localizedText(supportingText),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-        Switch(checked = checked, onCheckedChange = null)
-    }
-}
-
-@Composable
-private fun <T> ChoiceDialog(
-    title: String,
-    choices: List<Choice<T>>,
-    selected: T,
-    onSelect: (T) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    HingeSafeAlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(localizedText(title)) },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .selectableGroup(),
-            ) {
-                choices.forEach { choice ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .selectable(
-                                selected = choice.value == selected,
-                                role = Role.RadioButton,
-                                onClick = {
-                                    onSelect(choice.value)
-                                    onDismiss()
-                                },
-                            )
-                            .padding(vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(
-                            selected = choice.value == selected,
-                            onClick = null,
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(localizedText(choice.label), style = MaterialTheme.typography.bodyLarge)
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text(localizedText("Cancel")) }
-        },
-    )
-}
-
-@Composable
-private fun AccentColorDialog(
-    selected: AccentColor,
-    onSelect: (AccentColor) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    HingeSafeAlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(localizedText("Accent color")) },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth().selectableGroup(),
-            ) {
-                AccentColor.entries.forEach { accent ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .selectable(
-                                selected = accent == selected,
-                                role = Role.RadioButton,
-                                onClick = {
-                                    onSelect(accent)
-                                    onDismiss()
-                                },
-                            )
-                            .padding(vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(selected = accent == selected, onClick = null)
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Box(
-                            modifier = Modifier
-                                .size(24.dp)
-                                .clip(CircleShape)
-                                .background(accent.previewColor)
-                                .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(localizedText(accent.label), style = MaterialTheme.typography.bodyLarge)
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text(localizedText("Cancel")) }
-        },
-    )
-}
-
-@Composable
-private fun DefaultRemindersDialog(
-    selected: Set<Long>,
-    onSave: (Set<Long>) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var draft by rememberReminderOffsetsDraft(selected)
-
-    HingeSafeAlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(localizedText("Default reminders")) },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    text = localizedText("Automatically add these to new todos that have a deadline."),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(bottom = 8.dp),
-                )
-                ReminderOffsetPreset.entries.forEach { preset ->
-                    val offset = preset.minutesBeforeDue
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .toggleable(
-                                value = offset in draft,
-                                role = Role.Checkbox,
-                                onValueChange = { checked ->
-                                    draft = if (checked) draft + offset else draft - offset
-                                },
-                            )
-                            .padding(vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Checkbox(
-                            checked = offset in draft,
-                            onCheckedChange = null,
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(localizedText(preset.label), style = MaterialTheme.typography.bodyLarge)
-                    }
-                }
-                val presetOffsets = ReminderOffsetPreset.entries
-                    .mapTo(mutableSetOf(), ReminderOffsetPreset::minutesBeforeDue)
-                draft
-                    .filterNot(presetOffsets::contains)
-                    .sorted()
-                    .forEach { offset ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .toggleable(
-                                    value = true,
-                                    role = Role.Checkbox,
-                                    onValueChange = { checked ->
-                                        if (!checked) draft = draft - offset
-                                    },
-                                )
-                                .padding(vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Checkbox(checked = true, onCheckedChange = null)
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(localizedText(formatReminderOffset(offset)), style = MaterialTheme.typography.bodyLarge)
-                        }
-                    }
-                CustomReminderOffsetInput(
-                    existingOffsets = draft,
-                    onAdd = { offset -> draft = draft + offset },
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    onSave(draft)
-                    onDismiss()
-                },
-            ) { Text(localizedText("Save")) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(localizedText("Cancel")) }
-        },
-    )
-}
-
-@Composable
-private fun TodoQuickAddFieldsDialog(
-    selected: Set<TodoQuickAddField>,
-    onSave: (Set<TodoQuickAddField>) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var draft by rememberSaveable(selected, stateSaver = TodoQuickAddFieldSetSaver) {
-        mutableStateOf(selected)
-    }
-
-    HingeSafeAlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(localizedText("Quick add fields")) },
-        text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = localizedText("Choose optional fields shown below the quick add description."),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(bottom = 8.dp),
-                )
-                TodoQuickAddField.entries.forEach { field ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .toggleable(
-                                value = field in draft,
-                                role = Role.Checkbox,
-                                onValueChange = { checked ->
-                                    draft = if (checked) draft + field else draft - field
-                                },
-                            )
-                            .padding(vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Checkbox(checked = field in draft, onCheckedChange = null)
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(localizedText(field.label), style = MaterialTheme.typography.bodyLarge)
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    onSave(draft)
-                    onDismiss()
-                },
-            ) { Text(localizedText("Save")) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(localizedText("Cancel")) }
-        },
-    )
-}
-
-@Composable
-private fun AllDayReminderTimeDialog(
-    initialMinute: Int,
-    uses24Hour: Boolean,
-    onSave: (Int) -> Unit,
-    onOpenSystemPicker: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var input by rememberAllDayReminderInput(initialMinute, uses24Hour)
-    val parsedMinute = parseMinuteOfDay(input)
-
-    HingeSafeAlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(localizedText("All-day reminder time")) },
-        text = {
-            OutlinedTextField(
-                value = input,
-                onValueChange = { input = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text(localizedText("Time")) },
-                placeholder = { Text(localizedText("9:30 AM or 21:30")) },
-                supportingText = {
-                    Text(
-                        if (parsedMinute == null) {
-                            "Enter a valid time such as 9:30 AM or 21:30."
-                        } else {
-                            "The system picker is also available below."
-                        },
-                    )
-                },
-                isError = input.isNotBlank() && parsedMinute == null,
-                singleLine = true,
-            )
-        },
-        confirmButton = {
-            TextButton(
-                enabled = parsedMinute != null,
-                onClick = {
-                    parsedMinute?.let(onSave)
-                    onDismiss()
-                },
-            ) { Text(localizedText("Save")) }
-        },
-        dismissButton = {
-            Row {
-                TextButton(onClick = onDismiss) { Text(localizedText("Cancel")) }
-                TextButton(onClick = onOpenSystemPicker) { Text(localizedText("System picker")) }
-            }
-        },
-    )
+private fun formatSyncTime(epochMillis: Long): String {
+    val time = Instant.ofEpochMilli(epochMillis).atZone(ZoneId.systemDefault())
+    val pattern = if (time.toLocalDate() == LocalDate.now()) "HH:mm" else "MM-dd HH:mm"
+    return time.format(DateTimeFormatter.ofPattern(pattern))
 }
 
 private fun parseMinuteOfDay(input: String): Int? {
@@ -894,46 +694,21 @@ private fun parseMinuteOfDay(input: String): Int? {
     }
 }
 
-private data class Choice<T>(val label: String, val value: T)
-
-internal enum class SettingsDialog {
-    Theme,
-    AccentColor,
-    UiLanguage,
-    WeekStart,
-    TimeFormat,
-    DateFormat,
-    TodoQuickAddFields,
-    AppLockTimeout,
-    VisibleModules,
-    DefaultReminders,
-    AllDayReminderTime,
-    About,
+private fun formatAllDayReminderInput(minute: Int, uses24Hour: Boolean): String {
+    val safeMinute = minute.coerceIn(0, 1_439)
+    return LocalTime.of(safeMinute / 60, safeMinute % 60)
+        .format(DateTimeFormatter.ofPattern(if (uses24Hour) "HH:mm" else "h:mm a", Locale.US))
 }
 
-private val UiLanguage.label: String
-    get() = when (this) {
-        UiLanguage.ENGLISH -> "English"
-        UiLanguage.SIMPLIFIED_CHINESE -> "Simplified Chinese"
-    }
+/** The dialogs of the settings page; saved, so an open dialog survives rotation. */
+internal enum class SettingsDialog {
+    AllDayReminderTime,
+    License,
+}
 
 private val SettingsDialogSaver = Saver<SettingsDialog?, String>(
     save = { dialog -> dialog?.name },
     restore = { name -> SettingsDialog.entries.firstOrNull { it.name == name } },
-)
-
-private val ReminderOffsetSetSaver = Saver<Set<Long>, LongArray>(
-    save = { offsets -> offsets.sorted().toLongArray() },
-    restore = { offsets -> offsets.toSet() },
-)
-
-private val TodoQuickAddFieldSetSaver = Saver<Set<TodoQuickAddField>, ArrayList<String>>(
-    save = { fields -> ArrayList(fields.map { it.name }) },
-    restore = { saved ->
-        saved.mapNotNullTo(mutableSetOf()) { name ->
-            TodoQuickAddField.entries.firstOrNull { it.name == name }
-        }
-    },
 )
 
 @Composable
@@ -943,28 +718,18 @@ internal fun rememberSettingsDialogState(): MutableState<SettingsDialog?> = reme
     mutableStateOf(null)
 }
 
-@Composable
-internal fun rememberReminderOffsetsDraft(selected: Set<Long>): MutableState<Set<Long>> =
-    rememberSaveable(stateSaver = ReminderOffsetSetSaver) {
-        mutableStateOf(selected.filter { it >= 0 }.toSet())
-    }
-
+/** The typed all-day reminder time; saved, so a half-typed time survives rotation. */
 @Composable
 internal fun rememberAllDayReminderInput(
     initialMinute: Int,
     uses24Hour: Boolean,
 ): MutableState<String> = rememberSaveable {
-    val safeMinute = initialMinute.coerceIn(0, 1_439)
-    mutableStateOf(
-        LocalTime.of(safeMinute / 60, safeMinute % 60).format(
-            DateTimeFormatter.ofPattern(if (uses24Hour) "HH:mm" else "h:mm a", Locale.US),
-        ),
-    )
+    mutableStateOf(formatAllDayReminderInput(initialMinute, uses24Hour))
 }
 
 private val ThemeMode.label: String
     get() = when (this) {
-        ThemeMode.SYSTEM -> "System default"
+        ThemeMode.SYSTEM -> "System"
         ThemeMode.LIGHT -> "Light"
         ThemeMode.DARK -> "Dark"
     }
@@ -979,45 +744,18 @@ private val AccentColor.label: String
         AccentColor.GREEN -> "Green"
     }
 
-private val AccentColor.previewColor: Color
-    get() = when (this) {
-        AccentColor.TEAL -> Color(0xFF00A896)
-        AccentColor.BLUE -> Color(0xFF4D8ED1)
-        AccentColor.VIOLET -> Color(0xFF8367C7)
-        AccentColor.ROSE -> Color(0xFFC8587E)
-        AccentColor.ORANGE -> Color(0xFFD77A11)
-        AccentColor.GREEN -> Color(0xFF3A9B58)
-    }
-
 private val WeekStart.label: String
     get() = when (this) {
-        WeekStart.SYSTEM -> "System default"
+        WeekStart.SYSTEM -> "System"
         WeekStart.SUNDAY -> "Sunday"
         WeekStart.MONDAY -> "Monday"
     }
 
 private val TimeFormatOption.label: String
     get() = when (this) {
-        TimeFormatOption.SYSTEM -> "System default"
+        TimeFormatOption.SYSTEM -> "System"
         TimeFormatOption.HOUR_12 -> "12-hour"
         TimeFormatOption.HOUR_24 -> "24-hour"
-    }
-
-private val DateFormatOption.label: String
-    get() = when (this) {
-        DateFormatOption.SYSTEM -> "System default"
-        DateFormatOption.MONTH_DAY_YEAR -> "MM/DD/YYYY"
-        DateFormatOption.DAY_MONTH_YEAR -> "DD/MM/YYYY"
-        DateFormatOption.YEAR_MONTH_DAY -> "YYYY-MM-DD"
-    }
-
-private val ReminderOffsetPreset.label: String
-    get() = when (this) {
-        ReminderOffsetPreset.AT_DUE -> "At due time"
-        ReminderOffsetPreset.ONE_HOUR -> "1 hour before"
-        ReminderOffsetPreset.ONE_DAY -> "1 day before"
-        ReminderOffsetPreset.THREE_DAYS -> "3 days before"
-        ReminderOffsetPreset.ONE_WEEK -> "1 week before"
     }
 
 private val TodoQuickAddField.label: String
@@ -1028,100 +766,9 @@ private val TodoQuickAddField.label: String
         TodoQuickAddField.TAGS -> "Tags"
     }
 
-private fun quickAddFieldsSummary(fields: Set<TodoQuickAddField>): String = when (fields.size) {
-    0 -> "Description only"
-    TodoQuickAddField.entries.size -> "All optional fields"
-    else -> TodoQuickAddField.entries.filter(fields::contains).joinToString { it.label }
-}
-
-private fun defaultReminderSummary(offsets: Set<Long>): String = when (offsets.size) {
-    0 -> "None"
-    1 -> ReminderOffsetPreset.entries
-        .firstOrNull { it.minutesBeforeDue == offsets.first() }
-        ?.label
-        ?: formatReminderOffset(offsets.first())
-    else -> "${offsets.size} reminders"
-}
-
 private val AppLockTimeout.label: String
     get() = when (this) {
         AppLockTimeout.IMMEDIATELY -> "Immediately"
-        AppLockTimeout.ONE_MINUTE -> "After 1 minute"
-        AppLockTimeout.FIVE_MINUTES -> "After 5 minutes"
+        AppLockTimeout.ONE_MINUTE -> "1 minute"
+        AppLockTimeout.FIVE_MINUTES -> "5 minutes"
     }
-
-private fun visibleModulesSummary(visible: Set<TopLevelDestination>): String {
-    val total = TopLevelDestination.entries.size
-    val shown = TopLevelDestination.entries.count { it in visible }.takeIf { it > 0 } ?: total
-    return if (shown == total) "All modules" else "$shown of $total modules shown"
-}
-
-private val DestinationSetSaver = Saver<Set<TopLevelDestination>, ArrayList<String>>(
-    save = { destinations -> ArrayList(destinations.map { it.name }) },
-    restore = { saved ->
-        saved.mapNotNullTo(mutableSetOf()) { name ->
-            TopLevelDestination.entries.firstOrNull { it.name == name }
-        }
-    },
-)
-
-@Composable
-private fun VisibleModulesDialog(
-    selected: Set<TopLevelDestination>,
-    onSave: (Set<TopLevelDestination>) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var draft by rememberSaveable(selected, stateSaver = DestinationSetSaver) {
-        mutableStateOf(selected)
-    }
-
-    HingeSafeAlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(localizedText("Modules in menu")) },
-        text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = localizedText("Hidden modules keep their data. At least one module stays visible."),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(bottom = 8.dp),
-                )
-                TopLevelDestination.entries.forEach { destination ->
-                    val checked = destination in draft
-                    // The last visible module cannot be unchecked.
-                    val canToggle = !checked || draft.size > 1
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .toggleable(
-                                value = checked,
-                                enabled = canToggle,
-                                role = Role.Checkbox,
-                                onValueChange = { isChecked ->
-                                    draft = if (isChecked) draft + destination else draft - destination
-                                },
-                            )
-                            .padding(vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Checkbox(checked = checked, onCheckedChange = null, enabled = canToggle)
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(localizedText(destination.label), style = MaterialTheme.typography.bodyLarge)
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    onSave(draft)
-                    onDismiss()
-                },
-                enabled = draft.isNotEmpty(),
-            ) { Text(localizedText("Save")) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(localizedText("Cancel")) }
-        },
-    )
-}

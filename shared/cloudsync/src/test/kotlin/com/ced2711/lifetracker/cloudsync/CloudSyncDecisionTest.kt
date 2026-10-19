@@ -136,4 +136,28 @@ class CloudSyncDecisionTest {
         assertEquals(setOf("first", "second"), cloudRevisionHeadIds(listOf(first, second, base)))
         assertEquals(emptySet<String>(), cloudRevisionHeadIds(emptyList()))
     }
+
+    @Test fun `pruning stopped after any deletion never turns an old revision back into a head`() {
+        // Newest first, as stores list them; r9 merged r8 and r7 from two devices.
+        val chain = (0..8).map { i -> revision("r$i").copy(baseRevisionId = if (i == 0) null else "r${i - 1}") } +
+            revision("r9").copy(baseRevisionId = "r8", mergedRevisionIds = listOf("r8", "r7"))
+        val revisions = chain.reversed()
+        val pruned = prunableCloudRevisions(revisions, keepCount = 3).map(CloudRevision::fileId)
+        assertEquals(listOf("r0", "r1", "r2", "r3", "r4", "r5", "r6"), pruned)
+        for (done in 0..pruned.size) {
+            val left = revisions.filterNot { it.fileId in pruned.take(done) }
+            assertEquals("after $done deletions", setOf("r9"), cloudRevisionHeadIds(left))
+        }
+    }
+
+    @Test fun `a revision whose parent is kept is kept too`() {
+        // Clocks differ between devices, so a parent can be listed among the newest.
+        val parent = revision("parent").copy(baseRevisionId = "root")
+        val child = revision("child").copy(baseRevisionId = "parent")
+        val head = revision("head").copy(baseRevisionId = "child")
+        val root = revision("root")
+        val pruned = prunableCloudRevisions(listOf(head, parent, child, root), keepCount = 2)
+        assertEquals(listOf(root), pruned)
+        assertEquals(setOf("head"), cloudRevisionHeadIds(listOf(head, parent, child)))
+    }
 }

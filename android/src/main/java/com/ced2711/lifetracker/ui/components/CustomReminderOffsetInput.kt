@@ -1,27 +1,41 @@
 package com.ced2711.lifetracker.ui.components
 
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import com.ced2711.lifetracker.ui.localization.localizedText
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.ced2711.lifetracker.ui.design.LifeTextField
+import com.ced2711.lifetracker.ui.design.Pill
+import com.ced2711.lifetracker.ui.design.Space
+import com.ced2711.lifetracker.ui.localization.localizedText
+import com.ced2711.lifetracker.ui.theme.LifeTheme
 
 internal const val MAX_REMINDER_OFFSET_MINUTES = 366L * 24L * 60L
 
@@ -34,7 +48,11 @@ internal enum class ReminderOffsetUnit(
     WEEKS("Weeks", 7L * 24L * 60L),
 }
 
-/** Compact, optional editor for a positive reminder offset up to 366 days. */
+/**
+ * Adds a reminder of one's own, up to 366 days before the deadline. It starts as a pill next to
+ * the other reminders and opens into a number, a unit and Add.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun CustomReminderOffsetInput(
     existingOffsets: Collection<Long>,
@@ -52,73 +70,76 @@ internal fun CustomReminderOffsetInput(
     val isInvalid = valueText.isNotBlank() && offset == null
 
     if (!expanded) {
-        TextButton(
-            onClick = { expanded = true },
+        Pill(
+            text = localizedText("Custom reminder"),
+            selected = false,
             enabled = enabled,
+            onClick = { expanded = true },
+            leading = { Icon(Icons.Rounded.Add, null, Modifier.size(16.dp)) },
             modifier = modifier,
-        ) {
-            Text(localizedText("+ Custom reminder"))
-        }
+        )
         return
     }
 
+    fun add() {
+        if (!enabled || offset == null || isDuplicate) return
+        onAdd(offset)
+        valueText = ""
+        expanded = false
+    }
+
     Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f))
+            .padding(Space.md),
+        verticalArrangement = Arrangement.spacedBy(Space.sm),
     ) {
-        OutlinedTextField(
-            value = valueText,
-            onValueChange = { candidate -> valueText = candidate.filter(Char::isDigit).take(6) },
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text(localizedText("Reminder value")) },
-            supportingText = {
-                val maxValue = MAX_REMINDER_OFFSET_MINUTES / unit.minutes
-                Text(
-                    localizedText(when {
-                        isDuplicate -> "This reminder is already selected."
-                        isInvalid -> "Enter a whole number from 1 to $maxValue ${unit.label.lowercase()}."
-                        else -> "Maximum: $maxValue ${unit.label.lowercase()} before the deadline."
-                    }),
-                )
-            },
-            isError = isInvalid || isDuplicate,
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-        )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(Space.sm),
+            verticalArrangement = Arrangement.spacedBy(Space.sm),
+            itemVerticalAlignment = Alignment.CenterVertically,
         ) {
-            ReminderOffsetUnit.entries.forEach { option ->
-                FilterChip(
-                    selected = option == unit,
-                    onClick = { unitName = option.name },
-                    label = { Text(localizedText(option.label)) },
-                )
+            LifeTextField(
+                value = valueText,
+                onValueChange = { candidate -> valueText = candidate.filter(Char::isDigit).take(6) },
+                placeholder = localizedText("Reminder value"),
+                isError = isInvalid || isDuplicate,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { add() }),
+                background = MaterialTheme.colorScheme.surfaceContainerHighest,
+                modifier = Modifier.width(140.dp),
+            )
+            Row(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                ReminderOffsetUnit.entries.forEach { option ->
+                    Pill(
+                        text = localizedText(option.label),
+                        selected = option == unit,
+                        exclusive = true,
+                        onClick = { unitName = option.name },
+                    )
+                }
             }
         }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 2.dp),
-            horizontalArrangement = Arrangement.End,
-        ) {
+        val maxValue = MAX_REMINDER_OFFSET_MINUTES / unit.minutes
+        Text(
+            localizedText(when {
+                isDuplicate -> "This reminder is already selected."
+                isInvalid -> "Enter a whole number from 1 to $maxValue ${unit.label.lowercase()}."
+                else -> "Maximum: $maxValue ${unit.label.lowercase()} before the deadline."
+            }),
+            style = MaterialTheme.typography.bodySmall,
+            color = if (isInvalid || isDuplicate) LifeTheme.colors.danger else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
             TextButton(
                 onClick = {
                     expanded = false
                     valueText = ""
                 },
             ) { Text(localizedText("Cancel")) }
-            Button(
-                enabled = enabled && offset != null && !isDuplicate,
-                onClick = {
-                    offset?.let(onAdd)
-                    valueText = ""
-                    expanded = false
-                },
-            ) { Text(localizedText("Add")) }
+            Button(enabled = enabled && offset != null && !isDuplicate, onClick = ::add) { Text(localizedText("Add")) }
         }
     }
 }

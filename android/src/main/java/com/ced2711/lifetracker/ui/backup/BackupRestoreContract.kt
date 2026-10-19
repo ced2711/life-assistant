@@ -1,7 +1,11 @@
 package com.ced2711.lifetracker.ui.backup
 
 import android.net.Uri
+import com.ced2711.lifetracker.domain.model.DateFormatOption
+import java.time.LocalDate
 import java.util.Locale
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 const val TASK_LEDGER_BACKUP_MIME_TYPE = "application/vnd.taskledger.backup"
 const val MINIMUM_BACKUP_PASSWORD_LENGTH = 8
@@ -52,7 +56,23 @@ enum class BackupRestoreNotice(val message: String) {
     BACKUP_TOO_LARGE("This backup is too large to process safely."),
     EXPORT_FAILED("The encrypted backup could not be saved."),
     RESTORE_FAILED("Nothing was changed because the backup could not be restored."),
+    DAILY_RESTORE_COMPLETE("Restored. You can undo this below."),
+    DAILY_RESTORE_FAILED("The copy could not be restored."),
+    DAILY_UNDO_COMPLETE("Restore undone."),
+    DAILY_UNDO_FAILED("The restore could not be undone."),
 }
+
+/** One daily copy on this device: the data as it was at the end of [day]. */
+data class DailyBackupCopy(val day: LocalDate, val sizeBytes: Long)
+
+/** The daily copies kept on this device, newest first, and whether the last restore can be undone. */
+data class DailyBackupsUiState(
+    val copies: List<DailyBackupCopy> = emptyList(),
+    val canUndo: Boolean = false,
+    val dateFormat: DateFormatOption = DateFormatOption.SYSTEM,
+)
+
+private val NoDailyBackups: StateFlow<DailyBackupsUiState> = MutableStateFlow(DailyBackupsUiState())
 
 data class BackupRestoreUiState(
     val task: BackupRestoreTask = BackupRestoreTask.NONE,
@@ -93,6 +113,18 @@ interface BackupRestoreActions {
     fun discardPreparedRestore()
 
     fun acknowledgeNotice()
+
+    /** The daily copies kept on this device; empty where the app keeps none. */
+    val dailyBackups: StateFlow<DailyBackupsUiState> get() = NoDailyBackups
+
+    /** Reads the list of daily copies again. */
+    fun refreshDailyBackups() = Unit
+
+    /** Replaces everything except the Vault with the copy of [day]; the current data is kept for undo. */
+    fun restoreDailyBackup(day: LocalDate) = Unit
+
+    /** Puts back the data from right before the last restore of a daily copy. */
+    fun undoDailyRestore() = Unit
 }
 
 enum class BackupPasswordIssue(val message: String) {

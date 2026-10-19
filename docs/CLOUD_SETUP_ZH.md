@@ -76,7 +76,7 @@
    - Name：`Life Assistant Windows`
    - 点「创建」。
    - 弹出的窗口里**马上点「下载 JSON / Download JSON」**。密钥只在这时显示一次，关掉就再也看不到了。
-   - 把下载的文件放到 `C:\Users\cedri\claude\life-assistant-signing\`（**不要**放进代码仓库）。
+   - 把下载的文件放到 仓库文件夹旁边的 `life-assistant-signing\` 文件夹（**不要**放进代码仓库）。
 
 ## 第三步：告诉 Claude
 

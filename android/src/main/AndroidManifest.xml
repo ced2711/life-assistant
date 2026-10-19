@@ -6,6 +6,13 @@
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <uses-permission android:name="android.permission.USE_FINGERPRINT" />
 
+    <!-- Lets the user's own Pocket AI app (signed with the same key) read data through ReadOnlyDataProvider. -->
+    <permission
+        android:name="com.ced2711.lifetracker.permission.READ_DATA"
+        android:description="@string/read_data_permission_description"
+        android:label="@string/read_data_permission_label"
+        android:protectionLevel="signature" />
+
     <application
         android:name=".TaskLedgerApplication"
         android:allowBackup="false"
@@ -86,5 +93,12 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/attachment_paths" />
         </provider>
+        <provider
+            android:name=".data.share.ReadOnlyDataProvider"
+            android:authorities="com.ced2711.lifetracker.readonly"
+            android:exported="true"
+            android:grantUriPermissions="false"
+            android:readPermission="com.ced2711.lifetracker.permission.READ_DATA"
+            android:writePermission="com.ced2711.lifetracker.permission.READ_DATA" />
     </application>
 </manifest>

@@ -13,7 +13,10 @@ import com.ced2711.lifetracker.data.backup.BackupExportResult
 import com.ced2711.lifetracker.data.backup.BackupPreview
 import com.ced2711.lifetracker.data.backup.BackupRepository
 import com.ced2711.lifetracker.data.backup.BackupRestoreResult
+import com.ced2711.lifetracker.data.backup.DailyBackups
 import com.ced2711.lifetracker.data.backup.InvalidBackupException
+import com.ced2711.lifetracker.domain.model.DateFormatOption
+import java.time.LocalDate
 import com.ced2711.lifetracker.data.backup.PreparedBackupRestore
 import com.ced2711.lifetracker.data.backup.UnsupportedBackupException
 import com.ced2711.lifetracker.data.settings.SettingsRepository
@@ -115,6 +118,33 @@ private class RepositoryPreparedRestore(
     override fun close() = prepared.close()
 }
 
+/** The daily copies kept on this device, as the Backup & sync screen needs them. */
+internal interface DailyBackupAccess {
+    fun list(): List<DailyBackupCopy>
+    fun canUndo(): Boolean
+    suspend fun restore(day: LocalDate)
+    suspend fun undoRestore()
+}
+
+private class RepositoryDailyBackupAccess(
+    private val backups: DailyBackups,
+) : DailyBackupAccess {
+    override fun list(): List<DailyBackupCopy> = backups.list().map { DailyBackupCopy(it.day, it.sizeBytes) }
+
+    override fun canUndo(): Boolean = backups.beforeRestoreFile.isFile
+
+    override suspend fun restore(day: LocalDate) {
+        val backup = backups.list().firstOrNull { it.day == day } ?: throw FileNotFoundException()
+        backups.restore(backup)
+    }
+
+    override suspend fun undoRestore() {
+        backups.undoRestore()
+        // The data is back; a second undo would only repeat it.
+        backups.beforeRestoreFile.delete()
+    }
+}
+
 private class ResolverBackupDocumentAccess(
     private val resolver: ContentResolver,
 ) : BackupDocumentAccess {
@@ -141,12 +171,16 @@ class BackupRestoreViewModel internal constructor(
     private val rebuildAfterRestore: suspend () -> Unit,
     private val openIncludedBackup: (() -> InputStream?)? = null,
     dispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val dailyBackupAccess: DailyBackupAccess? = null,
+    private val dailyDateFormat: suspend () -> DateFormatOption = { DateFormatOption.SYSTEM },
 ) : ViewModel(), BackupRestoreActions {
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
     private val nonceSource = AtomicLong(System.nanoTime())
     private val stateLock = Any()
     private val _uiState = MutableStateFlow(BackupRestoreUiState())
     val uiState: StateFlow<BackupRestoreUiState> = _uiState.asStateFlow()
+    private val _dailyBackups = MutableStateFlow(DailyBackupsUiState())
+    override val dailyBackups: StateFlow<DailyBackupsUiState> = _dailyBackups.asStateFlow()
     private val _authenticationRequest = MutableStateFlow<BackupAuthenticationRequest?>(null)
     val authenticationRequest: StateFlow<BackupAuthenticationRequest?> =
         _authenticationRequest.asStateFlow()
@@ -275,6 +309,52 @@ class BackupRestoreViewModel internal constructor(
 
     override fun acknowledgeNotice() {
         _uiState.update { it.copy(notice = null) }
+    }
+
+    override fun refreshDailyBackups() {
+        scope.launch { publishDailyBackups() }
+    }
+
+    override fun restoreDailyBackup(day: LocalDate) = replaceFromDailyBackup(
+        done = BackupRestoreNotice.DAILY_RESTORE_COMPLETE,
+        failed = BackupRestoreNotice.DAILY_RESTORE_FAILED,
+    ) { it.restore(day) }
+
+    override fun undoDailyRestore() = replaceFromDailyBackup(
+        done = BackupRestoreNotice.DAILY_UNDO_COMPLETE,
+        failed = BackupRestoreNotice.DAILY_UNDO_FAILED,
+    ) { it.undoRestore() }
+
+    /** Replaces the data from a daily copy; like a restore it blocks the screen until it is done. */
+    private fun replaceFromDailyBackup(
+        done: BackupRestoreNotice,
+        failed: BackupRestoreNotice,
+        work: suspend (DailyBackupAccess) -> Unit,
+    ) {
+        val access = dailyBackupAccess ?: return
+        synchronized(stateLock) {
+            if (!canStartOperationLocked() || preparedRestore != null) return
+            _uiState.value = BackupRestoreUiState(task = BackupRestoreTask.COMMITTING_RESTORE)
+            scope.launch {
+                val notice = try {
+                    work(access)
+                    runCatching { rebuildAfterRestore() }
+                    done
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Throwable) {
+                    failed
+                }
+                publishDailyBackups()
+                publishIdle(notice)
+            }
+        }
+    }
+
+    private suspend fun publishDailyBackups() {
+        val access = dailyBackupAccess ?: return
+        runCatching { DailyBackupsUiState(access.list(), access.canUndo(), dailyDateFormat()) }
+            .onSuccess { _dailyBackups.value = it }
     }
 
     /** Returns true once for a nonce, including across host recreation. */
@@ -497,6 +577,8 @@ class BackupRestoreViewModel internal constructor(
                 } else {
                     null
                 },
+                dailyBackupAccess = RepositoryDailyBackupAccess(container.dailyBackups),
+                dailyDateFormat = { container.settingsRepository.snapshot().dateFormat },
             ) as T
         }
     }

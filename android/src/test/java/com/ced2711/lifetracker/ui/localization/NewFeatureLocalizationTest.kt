@@ -11,7 +11,7 @@ class NewFeatureLocalizationTest {
     fun `new modules and settings are translated`() {
         assertEquals("日记", translateUiText("Diary", chinese))
         assertEquals("告解室", translateUiText("Confessional", chinese))
-        assertEquals("软件锁", translateUiText("App lock", chinese))
+        assertEquals("应用锁", translateUiText("App lock", chinese))
         assertEquals("菜单显示的功能", translateUiText("Modules in menu", chinese))
         assertEquals("焚烧", translateUiText("Burn", chinese))
     }

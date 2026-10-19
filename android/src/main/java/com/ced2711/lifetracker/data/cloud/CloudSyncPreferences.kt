@@ -2,6 +2,7 @@ package com.ced2711.lifetracker.data.cloud
 
 import android.content.Context
 import com.ced2711.lifetracker.cloudsync.LocalCloudSyncState
+import com.ced2711.lifetracker.data.backup.DEFAULT_MERGE_REMOVAL_LIMIT
 import java.util.UUID
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -16,6 +17,10 @@ data class AndroidCloudSyncSettings(
     val gitHubClientId: String = "",
     // owner/name of the private repository used when [provider] is GitHub.
     val gitHubRepository: String = "",
+    /** Why the last sync failed, in English, so the screen can say more than "failed". */
+    val lastError: String? = null,
+    /** Most records an automatic merge may remove from this device without asking; null = no check. */
+    val mergeRemovalLimit: Int? = DEFAULT_MERGE_REMOVAL_LIMIT,
 )
 
 enum class CloudProvider {
@@ -27,6 +32,7 @@ enum class CloudSyncAttention {
     CONFLICT,
     VAULT_UNLOCK,
     GOOGLE_CONSENT,
+    GITHUB_SIGN_IN,
     FAILED,
 }
 
@@ -65,6 +71,8 @@ class CloudSyncPreferences(context: Context) {
                 ?: CloudProvider.GOOGLE_DRIVE,
             gitHubClientId = preferences.getString(KEY_GITHUB_CLIENT_ID, null).orEmpty(),
             gitHubRepository = preferences.getString(KEY_GITHUB_REPOSITORY, null).orEmpty(),
+            lastError = preferences.getString(KEY_LAST_ERROR, null),
+            mergeRemovalLimit = preferences.getInt(KEY_MERGE_REMOVAL_LIMIT, DEFAULT_MERGE_REMOVAL_LIMIT).takeIf { it >= 0 },
         )
     }
 
@@ -90,19 +98,26 @@ class CloudSyncPreferences(context: Context) {
     }
 
     @Synchronized
+    fun setMergeRemovalLimit(limit: Int?) {
+        preferences.edit().putInt(KEY_MERGE_REMOVAL_LIMIT, limit ?: NO_LIMIT).apply()
+    }
+
+    @Synchronized
     fun recordSuccessfulSync(revisionId: String, fingerprint: String, syncedAt: Long) {
         preferences.edit()
             .putString(KEY_LAST_REVISION, revisionId)
             .putString(KEY_LAST_FINGERPRINT, fingerprint)
             .putLong(KEY_LAST_SYNC_AT, syncedAt)
             .remove(KEY_ATTENTION)
+            .remove(KEY_LAST_ERROR)
             .apply()
     }
 
     @Synchronized
-    fun setAttention(attention: CloudSyncAttention?) {
+    fun setAttention(attention: CloudSyncAttention?, error: String? = null) {
         preferences.edit().apply {
             if (attention == null) remove(KEY_ATTENTION) else putString(KEY_ATTENTION, attention.name)
+            if (error == null) remove(KEY_LAST_ERROR) else putString(KEY_LAST_ERROR, error)
         }.apply()
     }
 
@@ -115,6 +130,7 @@ class CloudSyncPreferences(context: Context) {
                 .remove(KEY_LAST_FINGERPRINT)
                 .remove(KEY_LAST_SYNC_AT)
                 .remove(KEY_ATTENTION)
+                .remove(KEY_LAST_ERROR)
                 .commit(),
         ) { "Could not reset cloud sync lineage." }
     }
@@ -127,6 +143,7 @@ class CloudSyncPreferences(context: Context) {
             .remove(KEY_LAST_FINGERPRINT)
             .remove(KEY_LAST_SYNC_AT)
             .remove(KEY_ATTENTION)
+            .remove(KEY_LAST_ERROR)
             .apply()
     }
 
@@ -142,5 +159,8 @@ class CloudSyncPreferences(context: Context) {
         const val KEY_PROVIDER = "provider"
         const val KEY_GITHUB_CLIENT_ID = "github_client_id"
         const val KEY_GITHUB_REPOSITORY = "github_repository"
+        const val KEY_LAST_ERROR = "last_error"
+        const val KEY_MERGE_REMOVAL_LIMIT = "merge_removal_limit"
+        const val NO_LIMIT = -1
     }
 }

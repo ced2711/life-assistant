@@ -25,6 +25,7 @@ play-services-auth = "22.0.0"
 coroutines-play-services = "1.11.0"
 coroutines-swing = "1.11.0"
 jna = "5.19.1"
+robolectric = "4.16.1"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "core-ktx" }
@@ -58,6 +59,7 @@ androidx-biometric = { module = "androidx.biometric:biometric", version.ref = "b
 androidx-fragment = { module = "androidx.fragment:fragment", version.ref = "fragment" }
 androidx-glance-appwidget = { module = "androidx.glance:glance-appwidget", version.ref = "glance" }
 androidx-room-testing = { module = "androidx.room:room-testing", version.ref = "room" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 androidx-room-common = { module = "androidx.room:room-common", version.ref = "room" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }

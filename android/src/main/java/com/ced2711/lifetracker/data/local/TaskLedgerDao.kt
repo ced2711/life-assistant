@@ -119,6 +119,10 @@ interface TaskLedgerDao {
     @Query("SELECT * FROM subtasks WHERE todoId = :todoId ORDER BY sortOrder, id")
     fun observeSubtasks(todoId: Long): Flow<List<SubtaskEntity>>
 
+    /** Every subtask, for lists that show each todo's progress. */
+    @Query("SELECT * FROM subtasks ORDER BY todoId, sortOrder, id")
+    fun observeAllSubtasks(): Flow<List<SubtaskEntity>>
+
     @Query("SELECT * FROM subtasks WHERE todoId = :todoId ORDER BY sortOrder, id")
     suspend fun getSubtasks(todoId: Long): List<SubtaskEntity>
 
@@ -494,8 +498,39 @@ interface TaskLedgerDao {
     @Query("DELETE FROM diary_entries WHERE epochDay = :epochDay")
     suspend fun deleteDiaryEntry(epochDay: Long)
 
+    @Query("SELECT * FROM daily_checklist_items ORDER BY sortOrder, id")
+    fun observeChecklistItems(): Flow<List<ChecklistItemEntity>>
+
+    @Query("SELECT * FROM daily_checklist_items ORDER BY sortOrder, id")
+    suspend fun getChecklistItems(): List<ChecklistItemEntity>
+
+    @Query("SELECT * FROM daily_checklist_checks")
+    fun observeChecklistChecks(): Flow<List<ChecklistCheckEntity>>
+
+    @Insert
+    suspend fun insertChecklistItem(item: ChecklistItemEntity): Long
+
+    @Update
+    suspend fun updateChecklistItems(items: List<ChecklistItemEntity>)
+
+    @Query("DELETE FROM daily_checklist_items WHERE id = :itemId")
+    suspend fun deleteChecklistItem(itemId: Long)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertChecklistCheck(check: ChecklistCheckEntity)
+
+    @Query("DELETE FROM daily_checklist_checks WHERE itemId = :itemId AND epochDay = :epochDay")
+    suspend fun deleteChecklistCheck(itemId: Long, epochDay: Long)
+
+    @Query("DELETE FROM daily_checklist_checks WHERE epochDay < :epochDay")
+    suspend fun deleteChecklistChecksBefore(epochDay: Long)
+
     @Query("SELECT * FROM attachments WHERE ownerType = :ownerType AND ownerId = :ownerId AND pendingDeleteAt IS NULL ORDER BY createdAt")
     fun observeAttachments(ownerType: String, ownerId: Long): Flow<List<AttachmentEntity>>
+
+    /** The items of one kind that have at least one attachment, for the paper-clip mark in lists. */
+    @Query("SELECT DISTINCT ownerId FROM attachments WHERE ownerType = :ownerType AND pendingDeleteAt IS NULL")
+    fun observeAttachmentOwnerIds(ownerType: String): Flow<List<Long>>
 
     @Query("SELECT * FROM attachments WHERE ownerType = :ownerType AND ownerId = :ownerId AND pendingDeleteAt IS NULL ORDER BY createdAt")
     suspend fun getAttachments(ownerType: String, ownerId: Long): List<AttachmentEntity>

@@ -78,6 +78,35 @@ class GitHubBackupStoreTest {
     }
 
     @Test
+    fun aTokenGitHubTurnsDownIsRenewedAndTheOperationRunsAgain() = runBlocking {
+        var renewals = 0
+        val provider = object : RenewableTokenProvider {
+            override suspend fun accessToken() = "stale-token"
+            override suspend fun renewAfterRejection(rejected: String): String? {
+                assertEquals("stale-token", rejected)
+                renewals++
+                return "test-token"
+            }
+        }
+        val store = GitHubBackupStore(provider, GitHubRepository("owner", "backups"), ioDispatcher = Dispatchers.Unconfined, apiBaseUrl = server.url("/"))
+        val uploaded = store.uploadRevision(file("first.tlb", "first".encodeToByteArray()), revision(1))
+        assertEquals(1, renewals)
+        // Every operation starts with the provider's token again, so each one renews once here.
+        assertEquals(listOf(uploaded.fileId), store.listRevisions().map(CloudRevision::fileId))
+    }
+
+    @Test
+    fun aTokenThatCannotBeRenewedAsksToSignInAgain() = runBlocking {
+        val store = GitHubBackupStore({ "stale-token" }, GitHubRepository("owner", "backups"), ioDispatcher = Dispatchers.Unconfined, apiBaseUrl = server.url("/"))
+        try {
+            store.listRevisions()
+            org.junit.Assert.fail("A rejected token without a way to renew it must ask for a new sign-in")
+        } catch (expected: GitHubSignInExpiredException) {
+            assertTrue(expected.message.orEmpty().contains("Reconnect"))
+        }
+    }
+
+    @Test
     fun deletingARevisionRemovesItFromTheBranch() = runBlocking {
         val store = store()
         val first = store.uploadRevision(file("a.tlb", "a".encodeToByteArray()), revision(1))
@@ -128,6 +157,8 @@ private class FakeGitHub : Dispatcher() {
     override fun dispatch(request: RecordedRequest): MockResponse {
         val path = request.path!!.substringBefore('?')
         val prefix = "/repos/owner/backups/"
+        // A token GitHub no longer accepts, as after the eight hours of an expiring token.
+        if (request.getHeader("Authorization") == "Bearer stale-token") return MockResponse().setResponseCode(401)
         check(request.getHeader("Authorization") == "Bearer test-token")
         val route = path.removePrefix(prefix)
         return when {

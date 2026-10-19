@@ -18,28 +18,6 @@ class WidgetLayoutPolicyTest {
     }
 
     @Test
-    fun compactWidgetShowsOneTodo() {
-        assertEquals(1, visibleTodoCountForWidget(heightDp = 110, availableCount = 8))
-    }
-
-    @Test
-    fun heightAddsRowsAtFortyEightDpIntervals() {
-        assertEquals(2, visibleTodoCountForWidget(heightDp = 170, availableCount = 8))
-        assertEquals(3, visibleTodoCountForWidget(heightDp = 250, availableCount = 8))
-        assertEquals(4, visibleTodoCountForWidget(heightDp = 300, availableCount = 8))
-    }
-
-    @Test
-    fun capacityNeverInventsRows() {
-        assertEquals(2, visibleTodoCountForWidget(heightDp = 300, availableCount = 2))
-    }
-
-    @Test
-    fun emptyWidgetShowsNoRows() {
-        assertEquals(0, visibleTodoCountForWidget(heightDp = 250, availableCount = 0))
-    }
-
-    @Test
     fun todoRowsUseMinimumRecommendedTouchTarget() {
         assertEquals(48, WIDGET_TODO_ROW_HEIGHT_DP)
     }

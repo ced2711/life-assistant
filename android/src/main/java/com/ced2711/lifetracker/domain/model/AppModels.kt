@@ -90,6 +90,8 @@ enum class ReminderOffsetPreset(val minutesBeforeDue: Long) {
 }
 
 enum class TopLevelDestination {
+    /** The day at a glance: what is due, what was spent, the diary and what comes next. */
+    TODAY,
     TODO,
     LEDGER,
     CALENDAR,
@@ -101,6 +103,21 @@ enum class TopLevelDestination {
 /** Optional modules stay out of the menu until the user turns them on in Settings. */
 val DefaultHiddenDestinations: Set<TopLevelDestination> =
     setOf(TopLevelDestination.DIARY, TopLevelDestination.CONFESSIONAL)
+
+/**
+ * The modules in the menu, from what a device saved: the names of the hidden modules ([hidden],
+ * null when nothing was saved yet). The apps save the hidden modules, so a module added later shows
+ * up by itself.
+ *
+ * [legacyOptedIn] is what 2.0.1 saved next to them: Today was opt-in there and listed as hidden
+ * whenever it was not opted in, chosen or not. Today is in the menu by default again, so a choice
+ * saved by 2.0.1 does not hide it; the next choice saved drops [legacyOptedIn] and is kept as is.
+ */
+fun resolveVisibleDestinations(hidden: Set<String>?, legacyOptedIn: Set<String>?): Set<TopLevelDestination> {
+    val hiddenNames = hidden ?: DefaultHiddenDestinations.mapTo(mutableSetOf()) { it.name }
+    val effective = if (legacyOptedIn != null) hiddenNames - TopLevelDestination.TODAY.name else hiddenNames
+    return TopLevelDestination.entries.filterTo(mutableSetOf()) { it.name !in effective }
+}
 
 val DefaultVisibleDestinations: Set<TopLevelDestination> =
     TopLevelDestination.entries.toSet() - DefaultHiddenDestinations
@@ -182,6 +199,12 @@ data class NoteDraft(
 )
 
 const val MAX_DIARY_LENGTH = 1_000_000
+
+/** Longest title of a daily checklist item. */
+const val MAX_CHECKLIST_TITLE_LENGTH = 200
+
+/** Ticks of the daily checklist are kept this many days; only today's are shown. */
+const val CHECKLIST_HISTORY_DAYS = 30L
 
 /** First non-blank line of a diary page, shortened for lists and calendar details. */
 fun diaryPreview(body: String, maximumLength: Int = 80): String {

@@ -13,6 +13,9 @@ import com.ced2711.lifetracker.cloudsync.CloudRevision
 import com.ced2711.lifetracker.cloudsync.ConflictResolution
 import com.ced2711.lifetracker.cloudsync.GitHubBackupStore
 import com.ced2711.lifetracker.cloudsync.GitHubDeviceAuthorization
+import com.ced2711.lifetracker.cloudsync.GitHubSignIn
+import com.ced2711.lifetracker.cloudsync.GitHubSignInExpiredException
+import com.ced2711.lifetracker.data.backup.DEFAULT_MERGE_REMOVAL_LIMIT
 import com.ced2711.lifetracker.data.cloud.CloudProvider
 import com.ced2711.lifetracker.data.cloud.AndroidCloudSyncEngine
 import com.ced2711.lifetracker.data.cloud.AndroidCloudSyncResult
@@ -28,11 +31,13 @@ import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 enum class CloudSyncTask {
     NONE,
@@ -87,6 +92,10 @@ data class CloudSyncUiState(
     /** This build carries its own GitHub sign-in, so connecting needs no Client ID. */
     val builtInGitHub: Boolean = false,
     val gitHubPrompt: GitHubCodePrompt? = null,
+    /** Why the last sync failed, in English; shown with the attention message. */
+    val lastError: String? = null,
+    /** Most records an automatic merge may remove here without asking; null = no check. */
+    val mergeRemovalLimit: Int? = DEFAULT_MERGE_REMOVAL_LIMIT,
 ) {
     val busy: Boolean get() = task != CloudSyncTask.NONE
 }
@@ -209,10 +218,14 @@ class CloudSyncViewModel internal constructor(
                 _uiState.update { it.copy(gitHubPrompt = GitHubCodePrompt(code.userCode, code.verificationUri)) }
                 val token = authorization.awaitToken(code)
                 _uiState.update { it.copy(gitHubPrompt = null) }
-                val resolved = authorization.resolveRepository(token.accessToken, repository)
-                // Prove write access to the branch history before anything is saved.
-                GitHubBackupStore({ token.accessToken }, resolved).listRevisions()
-                gitHubTokenStore.save(token.accessToken.toCharArray())
+                val resolved = authorization.resolveRepository(token.accessToken, repository).also { resolved ->
+                    // Prove write access to the branch history before anything is saved.
+                    GitHubBackupStore({ token.accessToken }, resolved).listRevisions()
+                }
+                // The sign-in this replaces is only forgotten, never revoked: see GitHubDeviceAuthorization.
+                // The refresh token is saved with it so that the eight-hour token can be renewed.
+                gitHubTokenStore.save(GitHubSignIn.of(token).encode().toCharArray())
+                preferences.setAttention(null)
                 if (reconnecting) {
                     preferences.setProvider(CloudProvider.GITHUB, clientId.trim(), resolved.fullName)
                     _uiState.value = readState().copy(task = CloudSyncTask.NONE, message = "GitHub reconnected.")
@@ -316,6 +329,11 @@ class CloudSyncViewModel internal constructor(
         preferences.setAutomaticSync(enabled)
         scheduleAutomaticSync(enabled)
         _uiState.update { it.copy(automaticSync = enabled) }
+    }
+
+    fun setMergeRemovalLimit(limit: Int?) {
+        preferences.setMergeRemovalLimit(limit)
+        _uiState.update { it.copy(mergeRemovalLimit = limit) }
     }
 
     fun syncNow(resolution: ConflictResolution? = null) {
@@ -465,9 +483,11 @@ class CloudSyncViewModel internal constructor(
                 is AndroidCloudSyncResult.Conflict -> CloudSyncAttention.CONFLICT
                 is AndroidCloudSyncResult.NeedsVaultUnlock -> CloudSyncAttention.VAULT_UNLOCK
                 AndroidCloudSyncResult.NeedsGoogleConsent -> CloudSyncAttention.GOOGLE_CONSENT
+                AndroidCloudSyncResult.NeedsGitHubSignIn -> CloudSyncAttention.GITHUB_SIGN_IN
                 is AndroidCloudSyncResult.Failed -> CloudSyncAttention.FAILED
                 else -> null
             },
+            (result as? AndroidCloudSyncResult.Failed)?.message,
         )
         when (result) {
             AndroidCloudSyncResult.Disabled ->
@@ -501,6 +521,8 @@ class CloudSyncViewModel internal constructor(
             }
             AndroidCloudSyncResult.NeedsGoogleConsent ->
                 _uiState.value = readState().copy(message = "Reconnect Google Drive to continue.")
+            AndroidCloudSyncResult.NeedsGitHubSignIn ->
+                _uiState.value = readState().copy(message = GitHubSignInExpiredException.MESSAGE)
             is AndroidCloudSyncResult.Failed ->
                 _uiState.value = readState().copy(message = result.message)
         }
@@ -523,6 +545,8 @@ class CloudSyncViewModel internal constructor(
             // New connections use the built-in sign-in; reconnecting keeps the saved Client ID.
             gitHubClientId = defaultGitHubClientId.ifBlank { value.gitHubClientId },
             builtInGitHub = defaultGitHubClientId.isNotBlank(),
+            lastError = value.lastError,
+            mergeRemovalLimit = value.mergeRemovalLimit,
         )
     }
 

@@ -26,8 +26,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         VaultEntryEntity::class,
         RestoreCommitEntity::class,
         DiaryEntryEntity::class,
+        ChecklistItemEntity::class,
+        ChecklistCheckEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -248,6 +250,38 @@ abstract class TaskLedgerDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `daily_checklist_items` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `sortOrder` INTEGER NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `daily_checklist_checks` (
+                        `itemId` INTEGER NOT NULL,
+                        `epochDay` INTEGER NOT NULL,
+                        `checkedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`itemId`, `epochDay`),
+                        FOREIGN KEY(`itemId`) REFERENCES `daily_checklist_items`(`id`)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_daily_checklist_checks_epochDay` " +
+                        "ON `daily_checklist_checks` (`epochDay`)",
+                )
+            }
+        }
+
         fun getInstance(context: Context): TaskLedgerDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
@@ -261,6 +295,7 @@ abstract class TaskLedgerDatabase : RoomDatabase() {
                     MIGRATION_4_5,
                     MIGRATION_5_6,
                     MIGRATION_6_7,
+                    MIGRATION_7_8,
                 )
                 .build()
                 .also { instance = it }

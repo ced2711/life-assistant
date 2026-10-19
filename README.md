@@ -1,11 +1,28 @@
 # Life Assistant
 
-Life Assistant is an open-source, offline-first personal organizer for Android, Windows and Linux. It combines Todo, Ledger, Calendar, and Notes, with encrypted backup and optional one-click GitHub synchronization. The Android interface uses device-independent sizing for phones, tablets and foldables, including narrow clamshell layouts such as the Samsung Galaxy Z Flip series. The Windows and Linux apps are native desktop applications with their own bundled Java runtime; no browser or separate Java installation is required.
+Life Assistant is an open-source, offline-first personal organizer for Android, Windows and Linux. It combines a Today page, Todo, Ledger, Calendar, and Notes, with encrypted backup and optional one-click GitHub synchronization. The Android interface uses device-independent sizing for phones, tablets and foldables, including narrow clamshell layouts such as the Samsung Galaxy Z Flip series. The Windows and Linux apps are native desktop applications with their own bundled Java runtime; no browser or separate Java installation is required.
 
 By **ced2711** · 中文名：**生活助手** · [Source](https://github.com/ced2711/life-assistant)
 
+## Download · 下载
+
+| Platform · 平台 | Download · 下载 | Notes · 说明 |
+| --- | --- | --- |
+| **Android** 8.0+ | [LifeAssistant-android.apk](https://github.com/ced2711/life-assistant/releases/latest/download/LifeAssistant-android.apk) | Open the file on your phone and allow installing from this source. · 在手机上打开，允许安装即可。 |
+| **Windows** 10/11 | [LifeAssistant-windows-setup.exe](https://github.com/ced2711/life-assistant/releases/latest/download/LifeAssistant-windows-setup.exe) | Run the installer; no admin rights needed. · 双击安装，不需要管理员权限。 |
+| **Linux** (Debian/Ubuntu) | [LifeAssistant-linux-amd64.deb](https://github.com/ced2711/life-assistant/releases/latest/download/LifeAssistant-linux-amd64.deb) | `sudo apt install ./LifeAssistant-linux-amd64.deb` |
+| **Linux** (other) | [LifeAssistant-linux-x64.tar.gz](https://github.com/ced2711/life-assistant/releases/latest/download/LifeAssistant-linux-x64.tar.gz) | Unpack and run `bin/life-assistant`. · 解压后运行 `bin/life-assistant`。 |
+
+All versions and release notes: [Releases](https://github.com/ced2711/life-assistant/releases). Install the same version on every device before syncing.
+所有版本和更新说明见 [Releases](https://github.com/ced2711/life-assistant/releases)。同步前请把每台设备都更新到同一个版本。
+
 ## Highlights
 
+- **Today**: what is overdue and due today, a daily checklist that starts fresh every morning (brush teeth, shower), the coming week, what you spent, the diary page and pinned notes on one page.
+- One design on the phone and the computer: calm surfaces, rows instead of cards, the same wording. See [the design notes](docs/DESIGN.md).
+- **Daily backups**: each day the apps keep a copy of the day before and delete it on the third day; restore one in Settings, with Undo.
+- **AI assistants on the computer**: switch on Settings → AI assistants and add Life Assistant to Claude Desktop or Claude Code with one click. An assistant can then read and, if allowed, change todos, ledger entries, notes, diary pages and categories through the Model Context Protocol (`Life Assistant.exe --mcp`). The Vault and the Confessional are never exposed. Off by default.
+- The computer opens without asking for a password and works offline on its own; you choose a data password only when you first use the Vault, the app lock, sealed confessions or cloud sync.
 - Nested Todo categories, subtasks, priorities, tags, search, reminders, attachments, recurring tasks, and completion momentum.
 - Manual Income/Expense ledger entries, recurring entries, attachments, summaries, and close-fit trend charts.
 - Month, week, day, and agenda calendar views with daily net amounts and completed/incomplete Todo counts.
@@ -71,13 +88,13 @@ There are two Android distribution flavors:
 
 The personal flavor intentionally requires a local `android/src/personal/assets/personal-backup.tlb`. That encrypted user backup, its password, APK outputs, release keystore, and signing credentials are excluded from Git and must never be committed, even to a private repository.
 
-Windows installers are written to `desktop/build/compose/binaries/main-release/exe` and `msi` (ProGuard-shrunk). Use `:desktop:createReleaseDistributable` for a portable app folder. Building Windows installers requires Windows; Gradle obtains the WiX packaging tools as needed. Linux packages (`.deb` and a portable `.tar.gz`) are built on Linux by the `Linux build` GitHub Actions workflow.
+Windows installers are written to `desktop/build/compose/binaries/main-release/exe` and `msi` (ProGuard-shrunk). Use `:desktop:createReleaseDistributable` for a portable app folder. Building Windows installers requires Windows; Gradle obtains the WiX packaging tools as needed. Linux packages (`.deb` and a portable `.tar.gz`) are built on Linux by the `Linux build` GitHub Actions workflow, which also attaches them to published releases.
 
 Release Android signing is configured locally, never through committed credentials. `android/tools/setup-release-signing.ps1` creates a release key in a `life-assistant-signing` folder next to the repository folder and stores its settings in your personal Gradle properties (`$GRADLE_USER_HOME/gradle.properties`, default `~/.gradle/gradle.properties`).
 
 ## Verification
 
-The project includes JVM, Android instrumentation, sync transport/branch-conflict, Windows encrypted-store/attachment, and Windows DPAPI tests. See the [release notes](docs/releases/): [1.9.0](docs/releases/RELEASE_1.9.0.md), [1.8.0](docs/releases/RELEASE_1.8.0.md), [1.7.1 fullscreen and compatibility report](docs/releases/RELEASE_1.7.1.md), [1.7.0](docs/releases/RELEASE_1.7.0.md) and the historical [1.6.0 verification report](docs/releases/RELEASE_1.6.0.md). The cloud tests use a local HTTP fixture; a real OAuth end-to-end check additionally requires the developer's configured Google Cloud project and interactive consent. Unit tests alone do not establish that live Google authorization is configured.
+The project includes JVM, Android instrumentation, sync transport/branch-conflict, Windows encrypted-store/attachment, and Windows DPAPI tests. See the [release notes](docs/releases/): [2.0.1](docs/releases/RELEASE_2.0.1.md), [2.0.0](docs/releases/RELEASE_2.0.0.md), [1.9.0](docs/releases/RELEASE_1.9.0.md), [1.8.0](docs/releases/RELEASE_1.8.0.md), [1.7.1 fullscreen and compatibility report](docs/releases/RELEASE_1.7.1.md), [1.7.0](docs/releases/RELEASE_1.7.0.md) and the historical [1.6.0 verification report](docs/releases/RELEASE_1.6.0.md). The cloud tests use a local HTTP fixture; a real OAuth end-to-end check additionally requires the developer's configured Google Cloud project and interactive consent. Unit tests alone do not establish that live Google authorization is configured.
 
 Android support remains **Android 8.0 (API 26) and newer**, for phone/tablet app environments. There is no Samsung-only restriction. Tests on Android 8 and Android 16 emulators and resized/folded layouts do not prove compatibility with every OEM, keyboard, or future OS release. Camera hardware cannot be removed; system-owned authentication, permission or external-app screens control their own bars. Flip cover-screen launch access is controlled by Samsung/One UI (and may require its supported launcher/settings); adapting the app's small-window layout does not bypass those restrictions.
 

@@ -101,7 +101,7 @@ private object HalfOpenedVerticalFold : FoldingFeature {
     override val bounds = Rect(200, 0, 200, 10_000)
     override val state = FoldingFeature.State.HALF_OPENED
     override val orientation = FoldingFeature.Orientation.VERTICAL
-    override val occlusionType = FoldingFeature.OcclusionType.NONE
+    override val occlusionType = FoldingFeature.OcclusionType.FULL
     override val isSeparating = true
 }
 
@@ -109,6 +109,6 @@ private object HalfOpenedHorizontalFold : FoldingFeature {
     override val bounds = Rect(0, 200, 10_000, 200)
     override val state = FoldingFeature.State.HALF_OPENED
     override val orientation = FoldingFeature.Orientation.HORIZONTAL
-    override val occlusionType = FoldingFeature.OcclusionType.NONE
+    override val occlusionType = FoldingFeature.OcclusionType.FULL
     override val isSeparating = true
 }

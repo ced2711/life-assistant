@@ -1,52 +1,40 @@
 package com.ced2711.lifetracker.ui.ledger
 
-import android.app.DatePickerDialog
-import android.app.TimePickerDialog
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AttachFile
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Event
-import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.rounded.AttachFile
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import com.ced2711.lifetracker.ui.localization.localizedText
-import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
-import com.ced2711.lifetracker.ui.localization.translateUiText
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,8 +42,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ced2711.lifetracker.data.local.AttachmentEntity
@@ -64,402 +55,457 @@ import com.ced2711.lifetracker.domain.model.LedgerDraft
 import com.ced2711.lifetracker.domain.model.LedgerType
 import com.ced2711.lifetracker.domain.model.RecurrenceRule
 import com.ced2711.lifetracker.domain.model.RecurrenceUnit
-import com.ced2711.lifetracker.ui.adaptive.HingeSafeDialog
-import com.ced2711.lifetracker.ui.adaptive.hingeSafeDialogSurface
-import com.ced2711.lifetracker.ui.adaptive.rememberHingeSafePlatformDialogLauncher
+import com.ced2711.lifetracker.domain.model.parseTags
+import com.ced2711.lifetracker.ui.components.DatePickerButton
+import com.ced2711.lifetracker.ui.components.EditorSheet
+import com.ced2711.lifetracker.ui.components.FieldLabel
+import com.ced2711.lifetracker.ui.components.TimePickerButton
+import com.ced2711.lifetracker.ui.design.LifeTextField
+import com.ced2711.lifetracker.ui.design.ListRow
+import com.ced2711.lifetracker.ui.design.Panel
+import com.ced2711.lifetracker.ui.design.Pill
+import com.ced2711.lifetracker.ui.design.Segmented
+import com.ced2711.lifetracker.ui.design.Space
+import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
+import com.ced2711.lifetracker.ui.localization.localizedText
+import com.ced2711.lifetracker.ui.theme.LifeTheme
 import java.time.LocalDate
-import java.util.Locale
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 
+/** An open entry editor: what it started from and how its last save went. */
+internal data class LedgerEditorUi(
+    val draft: LedgerDraft,
+    /** Changes whenever another entry is opened, so typed text never leaks from one editor into the next. */
+    val sessionKey: String = "",
+    val isSaving: Boolean = false,
+    val failureMessage: String? = null,
+)
+
+/**
+ * Where an editor lives: the full-height sheet on phones, or the right-hand pane on wide screens
+ * ([inPane]). Both have Close, the title and Save at the top, scrolling fields, and [footer] for
+ * rare actions; [snackbar] shows Undo for a removed file above the footer.
+ */
 @Composable
-internal fun LedgerEditorDialog(
+internal fun LedgerEditorFrame(
+    inPane: Boolean,
+    title: String,
+    onClose: () -> Unit,
+    onSave: () -> Unit,
+    saveEnabled: Boolean,
+    working: Boolean,
+    modifier: Modifier = Modifier,
+    snackbar: SnackbarHostState? = null,
+    footer: (@Composable RowScope.() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val bottom: (@Composable RowScope.() -> Unit)? = if (footer != null || snackbar?.currentSnackbarData != null) {
+        {
+            Column(Modifier.weight(1f)) {
+                if (snackbar != null) SnackbarHost(snackbar)
+                if (footer != null) Row(verticalAlignment = Alignment.CenterVertically, content = footer)
+            }
+        }
+    } else {
+        null
+    }
+    if (!inPane) {
+        EditorSheet(
+            title = title,
+            onClose = { if (!working) onClose() },
+            actionLabel = localizedText("Save"),
+            onAction = onSave,
+            modifier = modifier,
+            actionEnabled = saveEnabled,
+            working = working,
+            footer = bottom,
+            content = content,
+        )
+        return
+    }
+    Column(modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxWidth().height(60.dp).padding(horizontal = Space.xs), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onClose, enabled = !working) { Icon(Icons.Rounded.Close, localizedText("Close")) }
+            Text(
+                title,
+                style = MaterialTheme.typography.titleLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).padding(horizontal = Space.xs).semantics { heading() },
+            )
+            Button(onClick = onSave, enabled = saveEnabled && !working, modifier = Modifier.padding(end = Space.md)) {
+                if (working) {
+                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                } else {
+                    Text(localizedText("Save"))
+                }
+            }
+        }
+        Column(
+            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = Space.lg, vertical = Space.sm),
+            verticalArrangement = Arrangement.spacedBy(Space.sm),
+            content = content,
+        )
+        if (bottom != null) {
+            Box(Modifier.fillMaxWidth().height(1.dp).background(LifeTheme.colors.divider))
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = Space.md, vertical = Space.sm),
+                verticalAlignment = Alignment.CenterVertically,
+                content = bottom,
+            )
+        }
+    }
+}
+
+/**
+ * The editor of one entry: type, amount, when, where, tags, note, repeat and attached files.
+ * A new entry can start a schedule; an entry that belongs to a schedule cannot change it here.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun LedgerEditor(
     initialDraft: LedgerDraft,
-    isWide: Boolean,
+    inPane: Boolean,
     formatting: LedgerDisplayFormatting,
+    knownTags: List<String>,
     attachmentsForEntry: (Long) -> Flow<List<AttachmentEntity>>,
     onOpenAttachment: (AttachmentEntity) -> Unit,
     onRemoveAttachment: (AttachmentEntity) -> Unit,
-    pendingAttachmentDelete: PendingLedgerAttachmentDelete?,
-    onUndoAttachmentDelete: (PendingLedgerAttachmentDelete) -> Unit,
-    onConsumeAttachmentDelete: (PendingLedgerAttachmentDelete) -> Unit,
     isSaving: Boolean,
     failureMessage: String?,
     onDismiss: () -> Unit,
     onSave: (LedgerDraft, List<Uri>) -> Unit,
+    onDelete: (Long) -> Unit,
+    modifier: Modifier = Modifier,
+    snackbar: SnackbarHostState? = null,
 ) {
-    val context = LocalContext.current
-    val platformDialogLauncher = rememberHingeSafePlatformDialogLauncher()
+    val language = LocalUiLanguage.current
     val editorKey = initialDraft.id?.toString() ?: "new"
+    val today = LocalDate.now()
     var typeName by rememberSaveable(editorKey) { mutableStateOf(initialDraft.type.name) }
     val type = LedgerType.entries.firstOrNull { it.name == typeName } ?: initialDraft.type
-    var amount by rememberSaveable(editorKey) {
-        mutableStateOf(if (initialDraft.amountCents > 0) initialDraft.amountCents.let(::formatMoney).removePrefix("$").replace(",", "") else "")
-    }
-    val today = LocalDate.now()
-    var dateInput by rememberSaveable(editorKey) {
-        mutableStateOf(LocalDate.ofEpochDay(initialDraft.epochDay).format(LEDGER_SHORTCUT_DATE_FORMATTER))
-    }
-    val date = SmartDateParser.parse(dateInput, today)
+    var amount by rememberSaveable(editorKey) { mutableStateOf(amountInputText(initialDraft.amountCents)) }
+    var dateInput by rememberSaveable(editorKey) { mutableStateOf(formatting.dateInput(initialDraft.epochDay)) }
+    val date = formatting.parseDate(dateInput, today)
     var timeInput by rememberSaveable(editorKey) {
-        mutableStateOf(
-            formatLedgerTimeInput(
-                initialDraft.minuteOfDay,
-                uses24HourTime = formatting.uses24HourTime,
-            ),
-        )
+        mutableStateOf(formatLedgerTimeInput(initialDraft.minuteOfDay, uses24HourTime = formatting.uses24HourTime))
     }
     val minuteOfDay = parseLedgerTimeInput(timeInput)
     var merchant by rememberSaveable(editorKey) { mutableStateOf(initialDraft.merchant) }
     var note by rememberSaveable(editorKey) { mutableStateOf(initialDraft.note) }
     var tags by rememberSaveable(editorKey) { mutableStateOf(initialDraft.tags.joinToString(", ")) }
-    var recurring by rememberSaveable(editorKey) { mutableStateOf(initialDraft.recurrence != null) }
-    var recurrenceUnitName by rememberSaveable(editorKey) {
-        mutableStateOf((initialDraft.recurrence?.unit ?: RecurrenceUnit.MONTH).name)
+    // Empty means the entry does not repeat.
+    var repeatUnitName by rememberSaveable(editorKey) { mutableStateOf(initialDraft.recurrence?.unit?.name.orEmpty()) }
+    val repeatUnit = RecurrenceUnit.entries.firstOrNull { it.name == repeatUnitName }
+    val recurring = repeatUnit != null
+    var interval by rememberSaveable(editorKey) { mutableStateOf((initialDraft.recurrence?.interval ?: 1).toString()) }
+    var endInput by rememberSaveable(editorKey) {
+        mutableStateOf(initialDraft.recurrence?.endEpochDay?.let(formatting::dateInput).orEmpty())
     }
-    val recurrenceUnit = RecurrenceUnit.entries.firstOrNull { it.name == recurrenceUnitName }
-        ?: RecurrenceUnit.MONTH
-    var interval by rememberSaveable(editorKey) {
-        mutableStateOf((initialDraft.recurrence?.interval ?: 1).toString())
-    }
-    var hasEndDate by rememberSaveable(editorKey) {
-        mutableStateOf(initialDraft.recurrence?.endEpochDay != null)
-    }
-    var endDateEpochDay by rememberSaveable(editorKey) {
-        mutableStateOf(
-            initialDraft.recurrence?.endEpochDay
-                ?: defaultLedgerRecurrenceEndEpochDay(initialDraft.epochDay),
-        )
-    }
-    val endDate = LocalDate.ofEpochDay(endDateEpochDay)
+    val endDate = endInput.takeIf(String::isNotBlank)?.let { formatting.parseDate(it, today) }
     var attachmentUriStrings by rememberSaveable(editorKey) { mutableStateOf(emptyList<String>()) }
-    val attachments = attachmentUriStrings.map(Uri::parse)
+    val pendingAttachments = attachmentUriStrings.map(Uri::parse)
     val existingAttachmentFlow = remember(initialDraft.id) {
         initialDraft.id?.let(attachmentsForEntry) ?: flowOf(emptyList())
     }
     val existingAttachments by existingAttachmentFlow.collectAsStateWithLifecycle(initialValue = emptyList())
-    val snackbarHostState = remember { SnackbarHostState() }
-    val uiLanguage = LocalUiLanguage.current
-    val attachmentLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenMultipleDocuments(),
-    ) { selected ->
-        val remaining = (10 - existingAttachments.size - attachments.size).coerceAtLeast(0)
-        attachmentUriStrings = (attachmentUriStrings + selected.take(remaining).map(Uri::toString))
-            .distinct()
+    val attachmentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { selected ->
+        val remaining = (10 - existingAttachments.size - pendingAttachments.size).coerceAtLeast(0)
+        attachmentUriStrings = (attachmentUriStrings + selected.take(remaining).map(Uri::toString)).distinct()
     }
+
     val amountCents = parseAmountCents(amount)
     val intervalValue = interval.toIntOrNull()
-    val recurrenceValid = !recurring || (
-        intervalValue != null && intervalValue > 0 && date != null &&
-            (!hasEndDate || !endDate.isBefore(date))
-        )
+    // An entry of an existing schedule is independent: its schedule is changed on the Recurring page.
+    val scheduleLocked = initialDraft.id != null && initialDraft.recurrence != null
+    val endInvalid = endInput.isNotBlank() && endDate == null
+    val endBeforeStart = endDate != null && date != null && endDate.isBefore(date)
+    val recurrenceValid = !recurring ||
+        (intervalValue != null && intervalValue > 0 && date != null && !endInvalid && !endBeforeStart)
     val futureRecurrenceConversionBlocked = isFutureRecurrenceConversionBlocked(
         initialDraft = initialDraft,
         recurringEnabled = recurring,
         selectedEpochDay = date?.toEpochDay(),
         todayEpochDay = today.toEpochDay(),
     )
+    // A new schedule that starts in the future has no entry yet to hold files.
     val futureRecurringWithoutEntry = initialDraft.id == null && recurring && date?.isAfter(today) == true
     val valid = amountCents != null && date != null && minuteOfDay != null && recurrenceValid &&
         !futureRecurrenceConversionBlocked &&
-        (!futureRecurringWithoutEntry || attachments.isEmpty())
+        (!futureRecurringWithoutEntry || pendingAttachments.isEmpty())
 
-    LaunchedEffect(pendingAttachmentDelete, uiLanguage) {
-        val item = pendingAttachmentDelete ?: return@LaunchedEffect
-        val result = snackbarHostState.showSnackbar(
-            message = translateUiText("Removed ${item.originalName}", uiLanguage),
-            actionLabel = translateUiText("Undo", uiLanguage),
-            withDismissAction = true,
-            duration = SnackbarDuration.Indefinite,
-        )
-        if (result == SnackbarResult.ActionPerformed) {
-            onUndoAttachmentDelete(item)
-        }
-        onConsumeAttachmentDelete(item)
-    }
-
-    fun openDatePicker(current: LocalDate, update: (LocalDate) -> Unit) {
-        platformDialogLauncher(
-            DatePickerDialog(
-                context,
-                { _, year, month, day -> update(LocalDate.of(year, month + 1, day)) },
-                current.year,
-                current.monthValue - 1,
-                current.dayOfMonth,
+    fun save() {
+        val cents = amountCents ?: return
+        val selectedDate = date ?: return
+        val selectedMinute = minuteOfDay ?: return
+        if (!valid || isSaving) return
+        onSave(
+            initialDraft.copy(
+                type = type,
+                amountCents = cents,
+                epochDay = selectedDate.toEpochDay(),
+                minuteOfDay = selectedMinute,
+                merchant = merchant,
+                note = note,
+                tags = parseTags(tags),
+                recurrence = repeatUnit?.let { RecurrenceRule(unit = it, interval = intervalValue ?: 1, endEpochDay = endDate?.toEpochDay()) },
             ),
+            pendingAttachments,
         )
     }
 
-    HingeSafeDialog(onDismissRequest = { if (!isSaving) onDismiss() }) {
-        Surface(
-            modifier = Modifier
-                .hingeSafeDialogSurface(
-                    maxWidth = 900.dp,
-                    widthFraction = 1f,
-                    heightFraction = 1f,
-                ),
-            color = MaterialTheme.colorScheme.background,
-        ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    IconButton(onClick = onDismiss, enabled = !isSaving) {
-                        Icon(Icons.Outlined.Close, contentDescription = localizedText("Close"))
-                    }
-                    Text(
-                        text = localizedText(if (initialDraft.id == null) "New entry" else "Edit entry"),
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Button(
-                        enabled = valid && !isSaving,
-                        onClick = {
-                            val cents = amountCents ?: return@Button
-                            val selectedDate = date ?: return@Button
-                            val selectedMinute = minuteOfDay ?: return@Button
-                            val rule = if (recurring) {
-                                RecurrenceRule(
-                                    unit = recurrenceUnit,
-                                    interval = intervalValue ?: 1,
-                                    endEpochDay = if (hasEndDate) endDate.toEpochDay() else null,
-                                )
-                            } else {
-                                null
-                            }
-                            onSave(
-                                initialDraft.copy(
-                                    type = type,
-                                    amountCents = cents,
-                                    epochDay = selectedDate.toEpochDay(),
-                                    minuteOfDay = selectedMinute,
-                                    merchant = merchant,
-                                    note = note,
-                                    tags = tags.split(',').map(String::trim).filter(String::isNotEmpty),
-                                    recurrence = rule,
-                                ),
-                                attachments,
-                            )
-                        },
-                    ) { Text(localizedText(if (isSaving) "Saving…" else "Save")) }
+    LedgerEditorFrame(
+        inPane = inPane,
+        title = localizedText(if (initialDraft.id == null) "New entry" else "Edit entry"),
+        onClose = onDismiss,
+        onSave = ::save,
+        saveEnabled = valid,
+        working = isSaving,
+        modifier = modifier,
+        snackbar = snackbar,
+        footer = initialDraft.id?.let { id ->
+            {
+                TextButton(onClick = { onDelete(id) }, enabled = !isSaving) {
+                    Text(localizedText("Delete"), color = LifeTheme.colors.danger)
                 }
-                failureMessage?.let { message ->
-                    Text(
-                        text = localizedText(message),
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                    )
-                }
+            }
+        },
+    ) {
+        failureMessage?.let { ErrorLine(localizedText(it)) }
+        Segmented(
+            listOf(LedgerType.EXPENSE, LedgerType.INCOME), type, { typeName = it.name },
+            { localizedText(it.displayName()) },
+            fill = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        AmountField(amount, { amount = it }, amountCents, required = true)
 
-                BoxWithConstraints(modifier = Modifier.weight(1f)) {
-                    val useColumns = isWide && maxWidth >= 650.dp
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                            start = 16.dp,
-                            end = 16.dp,
-                            top = 8.dp,
-                            bottom = 32.dp,
-                        ),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        item {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .widthIn(max = 900.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                LedgerTypeChooser(type = type, onTypeChanged = { typeName = it.name })
-                                OutlinedTextField(
-                                    value = amount,
-                                    onValueChange = { candidate ->
-                                        sanitizeAmountInput(candidate)?.let { amount = it }
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    label = { Text(localizedText("Amount")) },
-                                    prefix = { Text(localizedText("$")) },
-                                    singleLine = true,
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                    isError = amount.isNotBlank() && amountCents == null,
-                                    supportingText = {
-                                        Text(localizedText("Required · up to $999,999,999.99 · max 2 decimal places"))
-                                    },
-                                )
-                                AdaptiveFieldPair(
-                                    useColumns = useColumns,
-                                    first = {
-                                        OutlinedTextField(
-                                            value = dateInput,
-                                            onValueChange = { dateInput = it },
-                                            modifier = Modifier.fillMaxWidth(),
-                                            label = { Text(localizedText("Date")) },
-                                            placeholder = { Text(localizedText("15, 8/15, or 8/15/2026")) },
-                                            singleLine = true,
-                                            isError = date == null,
-                                            trailingIcon = {
-                                                IconButton(
-                                                    onClick = {
-                                                        openDatePicker(
-                                                            date ?: LocalDate.ofEpochDay(initialDraft.epochDay),
-                                                        ) { selected ->
-                                                            dateInput = selected.format(LEDGER_SHORTCUT_DATE_FORMATTER)
-                                                        }
-                                                    },
-                                                ) {
-                                                    Icon(
-                                                        Icons.Outlined.Event,
-                                                        contentDescription = localizedText("Choose date"),
-                                                    )
-                                                }
-                                            },
-                                            supportingText = {
-                                                Text(
-                                                    localizedText(
-                                                        date?.let { selected ->
-                                                            "Selected: ${formatting.date(selected.toEpochDay())}"
-                                                        } ?: "Enter a valid day, month/day, or month/day/year",
-                                                    ),
-                                                )
-                                            },
-                                        )
-                                    },
-                                    second = {
-                                        OutlinedTextField(
-                                            value = timeInput,
-                                            onValueChange = { timeInput = it },
-                                            modifier = Modifier.fillMaxWidth(),
-                                            label = { Text(localizedText("Time")) },
-                                            placeholder = { Text(localizedText("9:30 AM or 21:30")) },
-                                            singleLine = true,
-                                            isError = minuteOfDay == null,
-                                            trailingIcon = {
-                                                IconButton(
-                                                    onClick = {
-                                                        val initialMinute = minuteOfDay
-                                                            ?: initialDraft.minuteOfDay
-                                                        platformDialogLauncher(
-                                                            TimePickerDialog(
-                                                                context,
-                                                                { _, hour, minute ->
-                                                                    timeInput = formatLedgerTimeInput(
-                                                                        hour * 60 + minute,
-                                                                        uses24HourTime =
-                                                                            formatting.uses24HourTime,
-                                                                    )
-                                                                },
-                                                                initialMinute / 60,
-                                                                initialMinute % 60,
-                                                                formatting.uses24HourTime,
-                                                            ),
-                                                        )
-                                                    },
-                                                ) {
-                                                    Icon(
-                                                        Icons.Outlined.Schedule,
-                                                        contentDescription = localizedText("Choose time"),
-                                                    )
-                                                }
-                                            },
-                                            supportingText = {
-                                                Text(
-                                                    localizedText(
-                                                        minuteOfDay?.let(formatting::time)
-                                                            ?: "Enter a valid time such as 9:30 AM or 21:30",
-                                                    ),
-                                                )
-                                            },
-                                        )
-                                    },
-                                )
-                                AdaptiveFieldPair(
-                                    useColumns = useColumns,
-                                    first = {
-                                        OutlinedTextField(
-                                        value = merchant,
-                                        onValueChange = { merchant = it },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        label = { Text(localizedText("Merchant")) },
-                                        singleLine = true,
-                                    )
-                                    },
-                                    second = {
-                                        OutlinedTextField(
-                                        value = tags,
-                                        onValueChange = { tags = it },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        label = { Text(localizedText("Tags")) },
-                                        placeholder = { Text(localizedText("travel, work")) },
-                                        singleLine = true,
-                                    )
-                                    },
-                                )
-                                OutlinedTextField(
-                                    value = note,
-                                    onValueChange = { note = it },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    label = { Text(localizedText("Note")) },
-                                    minLines = 2,
-                                    maxLines = 5,
-                                )
-                                RecurrenceEditor(
-                                    enabled = recurring,
-                                    onEnabledChanged = { recurring = it },
-                                    scheduleLocked = initialDraft.id != null && initialDraft.recurrence != null,
-                                    unit = recurrenceUnit,
-                                    onUnitChanged = { recurrenceUnitName = it.name },
-                                    interval = interval,
-                                    onIntervalChanged = { candidate ->
-                                        sanitizeRecurrenceIntervalInput(candidate)?.let { interval = it }
-                                    },
-                                    hasEndDate = hasEndDate,
-                                    onHasEndDateChanged = { hasEndDate = it },
-                                    endDate = endDate,
-                                    onPickEndDate = {
-                                        openDatePicker(endDate) { endDateEpochDay = it.toEpochDay() }
-                                    },
-                                    startDate = date ?: LocalDate.ofEpochDay(initialDraft.epochDay),
-                                    formatting = formatting,
-                                    conversionError = if (futureRecurrenceConversionBlocked) {
-                                        "An existing entry can only start repeating today or earlier. " +
-                                            "Create a new recurring entry for a future start."
-                                    } else {
-                                        null
-                                    },
-                                )
-                                AttachmentPicker(
-                                    existingAttachments = existingAttachments,
-                                    pendingAttachments = attachments,
-                                    allowNewAttachments = !futureRecurringWithoutEntry,
-                                    enabled = !isSaving,
-                                    disabledReason = if (futureRecurringWithoutEntry) {
-                                        "Receipts can be added after the first scheduled entry is generated."
-                                    } else {
-                                        null
-                                    },
-                                    onPick = { attachmentLauncher.launch(ledgerAttachmentMimeTypes()) },
-                                    onOpenExisting = onOpenAttachment,
-                                    onRemoveExisting = onRemoveAttachment,
-                                    onRemovePending = { uri ->
-                                        attachmentUriStrings = attachmentUriStrings - uri.toString()
-                                    },
-                                )
-                            }
-                        }
-                    }
-                }
-                SnackbarHost(
-                    hostState = snackbarHostState,
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+        FieldLabel(localizedText("When"))
+        AdaptivePair(
+            firstWeight = 1.25f,
+            first = {
+                LifeTextField(
+                    dateInput, { dateInput = it },
+                    placeholder = localizedText("Date"),
+                    isError = date == null,
+                    trailing = { DatePickerButton(date ?: LocalDate.ofEpochDay(initialDraft.epochDay), { dateInput = formatting.dateInput(it.toEpochDay()) }) },
+                    modifier = it,
                 )
+            },
+            second = {
+                LifeTextField(
+                    timeInput, { timeInput = it },
+                    placeholder = localizedText("Time"),
+                    isError = minuteOfDay == null,
+                    trailing = {
+                        TimePickerButton(minuteOfDay ?: initialDraft.minuteOfDay, formatting.uses24HourTime, {
+                            timeInput = formatLedgerTimeInput(it, uses24HourTime = formatting.uses24HourTime)
+                        })
+                    },
+                    modifier = it,
+                )
+            },
+        )
+        when {
+            date == null -> ErrorLine(localizedText("Enter a valid day, month/day, or month/day/year"))
+            minuteOfDay == null -> ErrorLine(localizedText("Enter a valid time such as 9:30 AM or 21:30"))
+            else -> Text(
+                ledgerDayHeading(date.toEpochDay(), today, formatting, language) + " · " + formatting.time(minuteOfDay),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+
+        FieldLabel(localizedText("Merchant"))
+        LifeTextField(merchant, { merchant = it }, placeholder = localizedText("Where or who"), modifier = Modifier.fillMaxWidth())
+
+        FieldLabel(localizedText("Tags"))
+        TagsField(tags, { tags = it }, knownTags)
+
+        FieldLabel(localizedText("Note"))
+        LifeTextField(note, { note = it }, placeholder = localizedText("Optional"), minLines = 2, maxLines = 5, modifier = Modifier.fillMaxWidth())
+
+        FieldLabel(localizedText("Repeat"))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Pill(localizedText("Never"), !recurring, { repeatUnitName = "" }, exclusive = true, enabled = !scheduleLocked)
+            RecurrenceUnit.entries.forEach { unit ->
+                Pill(localizedText(ledgerRepeatLabel(unit)), repeatUnit == unit, { repeatUnitName = unit.name }, exclusive = true, enabled = !scheduleLocked)
+            }
+        }
+        if (scheduleLocked) {
+            QuietNote(localizedText("This occurrence is independent. Stop its schedule from the Recurring page."))
+        }
+        if (futureRecurrenceConversionBlocked) {
+            ErrorLine(localizedText("An existing entry can only start repeating today or earlier. Create a new recurring entry for a future start."))
+        }
+        if (repeatUnit != null) {
+            RepeatDetails(
+                unit = repeatUnit,
+                interval = interval,
+                onInterval = { interval = it },
+                endInput = endInput,
+                onEndInput = { endInput = it },
+                endDate = endDate,
+                // The calendar opens a month after the entry, a likely first end date.
+                endPickerStart = LocalDate.ofEpochDay(defaultLedgerRecurrenceEndEpochDay((date ?: LocalDate.ofEpochDay(initialDraft.epochDay)).toEpochDay())),
+                endError = when {
+                    endInvalid -> "Enter a valid day, month/day, or month/day/year"
+                    endBeforeStart -> "End date cannot be before the entry date"
+                    else -> null
+                },
+                formatting = formatting,
+                enabled = !scheduleLocked,
+            )
+            if (!scheduleLocked) QuietNote(localizedText("Create independent entries on schedule"))
+        }
+
+        val attachmentCount = existingAttachments.size + pendingAttachments.size
+        FieldLabel(localizedText("Attachments")) {
+            TextButton(
+                onClick = { attachmentLauncher.launch(ledgerAttachmentMimeTypes()) },
+                enabled = !isSaving && !futureRecurringWithoutEntry && attachmentCount < 10,
+            ) {
+                Icon(Icons.Rounded.AttachFile, null, Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text(localizedText("Attach"))
+            }
+        }
+        QuietNote(ledgerFileCount(attachmentCount, language))
+        if (futureRecurringWithoutEntry) {
+            QuietNote(localizedText("Receipts can be added after the first scheduled entry is generated."))
+        }
+        if (attachmentCount > 0) {
+            Panel(Modifier.fillMaxWidth()) {
+                existingAttachments.forEach { attachment ->
+                    ListRow(
+                        title = attachment.originalName,
+                        maxTitleLines = 1,
+                        onClick = if (isSaving) null else ({ onOpenAttachment(attachment) }),
+                        onClickLabel = localizedText("Open"),
+                        trailing = {
+                            IconButton(onClick = { onRemoveAttachment(attachment) }, enabled = !isSaving) {
+                                Icon(Icons.Rounded.Close, localizedText("Remove ${attachment.originalName}"), Modifier.size(18.dp))
+                            }
+                        },
+                    )
+                }
+                pendingAttachments.forEach { uri ->
+                    val name = uri.lastPathSegment ?: localizedText("Selected file")
+                    ListRow(
+                        title = name,
+                        supporting = localizedText("Added when you save"),
+                        maxTitleLines = 1,
+                        trailing = {
+                            IconButton(onClick = { attachmentUriStrings = attachmentUriStrings - uri.toString() }, enabled = !isSaving) {
+                                Icon(Icons.Rounded.Close, localizedText("Remove $name"), Modifier.size(18.dp))
+                            }
+                        },
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(Space.lg))
+    }
+}
+
+@Composable
+internal fun ErrorLine(text: String, modifier: Modifier = Modifier) {
+    Text(text, style = MaterialTheme.typography.bodySmall, color = LifeTheme.colors.danger, modifier = modifier)
+}
+
+@Composable
+internal fun QuietNote(text: String, modifier: Modifier = Modifier) {
+    Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = modifier)
+}
+
+/** The big amount field of an editor, with the limits spelled out while the amount is missing or wrong. */
+@Composable
+internal fun AmountField(value: String, onValueChange: (String) -> Unit, cents: Long?, required: Boolean) {
+    LifeTextField(
+        value, { candidate -> sanitizeAmountInput(candidate)?.let(onValueChange) },
+        placeholder = "0.00",
+        prefix = "$",
+        textStyle = MaterialTheme.typography.headlineMedium.copy(fontFeatureSettings = "tnum"),
+        isError = value.isNotBlank() && cents == null,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        modifier = Modifier.fillMaxWidth(),
+    )
+    if (cents == null) {
+        val hint = localizedText(
+            if (required) "Required · up to $999,999,999.99 · max 2 decimal places" else "Up to $999,999,999.99 · max 2 decimal places",
+        )
+        if (value.isBlank()) QuietNote(hint) else ErrorLine(hint)
+    }
+}
+
+/** Tags typed with commas, with the ledger's existing tags offered as pills under the field. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun TagsField(tags: String, onTags: (String) -> Unit, knownTags: List<String>) {
+    LifeTextField(tags, onTags, placeholder = localizedText("Comma separated, e.g. food, travel"), modifier = Modifier.fillMaxWidth())
+    val typing = tags.substringAfterLast(',').trim().removePrefix("#")
+    val chosen = parseTags(tags).map { it.lowercase() }.toSet()
+    val suggestions = knownTags
+        .filter { it.lowercase() !in chosen && (typing.isEmpty() || it.startsWith(typing, ignoreCase = true)) }
+        .take(8)
+    if (suggestions.isNotEmpty()) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            suggestions.forEach { suggestion ->
+                Pill("#$suggestion", false, {
+                    val kept = tags.split(',').dropLast(1).map(String::trim).filter(String::isNotEmpty)
+                    onTags((kept + suggestion).joinToString(", ") + ", ")
+                })
             }
         }
     }
+}
+
+/** "Every [2] weeks" and the optional last day of a schedule. */
+@Composable
+internal fun RepeatDetails(
+    unit: RecurrenceUnit,
+    interval: String,
+    onInterval: (String) -> Unit,
+    endInput: String,
+    onEndInput: (String) -> Unit,
+    endDate: LocalDate?,
+    endPickerStart: LocalDate,
+    endError: String?,
+    formatting: LedgerDisplayFormatting,
+    enabled: Boolean,
+) {
+    val language = LocalUiLanguage.current
+    val intervalError = recurrenceIntervalError(interval)
+    Row(horizontalArrangement = Arrangement.spacedBy(Space.sm), verticalAlignment = Alignment.CenterVertically) {
+        Text(localizedText("Every"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        LifeTextField(
+            interval, { candidate -> sanitizeRecurrenceIntervalInput(candidate)?.let(onInterval) },
+            isError = intervalError != null,
+            enabled = enabled,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.width(76.dp * LocalDensity.current.fontScale),
+        )
+        Text(
+            ledgerRepeatUnitWord(unit, interval.toIntOrNull(), language),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    intervalError?.let { ErrorLine(localizedText(it)) }
+    LifeTextField(
+        endInput, onEndInput,
+        placeholder = localizedText("Until (optional)"),
+        isError = endError != null,
+        enabled = enabled,
+        trailing = if (enabled) {
+            { DatePickerButton(endDate ?: endPickerStart, { onEndInput(formatting.dateInput(it.toEpochDay())) }) }
+        } else {
+            null
+        },
+        modifier = Modifier.fillMaxWidth(),
+    )
+    endError?.let { ErrorLine(localizedText(it)) }
 }
 
 internal fun defaultLedgerRecurrenceEndEpochDay(startEpochDay: Long): Long {
@@ -475,144 +521,6 @@ internal fun defaultLedgerRecurrenceEndEpochDay(startEpochDay: Long): Long {
 
 internal fun ledgerAttachmentMimeTypes(): Array<String> = arrayOf("*/*")
 
-@Composable
-private fun AdaptiveFieldPair(
-    useColumns: Boolean,
-    first: @Composable () -> Unit,
-    second: @Composable () -> Unit,
-) {
-    if (useColumns) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Box(modifier = Modifier.weight(1f)) { first() }
-            Box(modifier = Modifier.weight(1f)) { second() }
-        }
-    } else {
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            first()
-            second()
-        }
-    }
-}
-
-@Composable
-private fun RecurrenceEditor(
-    enabled: Boolean,
-    onEnabledChanged: (Boolean) -> Unit,
-    scheduleLocked: Boolean,
-    unit: RecurrenceUnit,
-    onUnitChanged: (RecurrenceUnit) -> Unit,
-    interval: String,
-    onIntervalChanged: (String) -> Unit,
-    hasEndDate: Boolean,
-    onHasEndDateChanged: (Boolean) -> Unit,
-    endDate: LocalDate,
-    onPickEndDate: () -> Unit,
-    startDate: LocalDate,
-    formatting: LedgerDisplayFormatting,
-    conversionError: String?,
-) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(localizedText("Repeat"), style = MaterialTheme.typography.titleSmall)
-                    Text(
-                        localizedText("Create independent entries on schedule"),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = enabled,
-                    onCheckedChange = onEnabledChanged,
-                    enabled = !scheduleLocked,
-                )
-            }
-            if (scheduleLocked) {
-                Text(
-                    localizedText("This occurrence is independent. Stop its schedule from the Recurring page."),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            conversionError?.let { message ->
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-            if (enabled) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    RecurrenceUnit.entries.forEach { option ->
-                        FilterChip(
-                            selected = option == unit,
-                            onClick = { onUnitChanged(option) },
-                            enabled = !scheduleLocked,
-                            label = {
-                                Text(localizedText(option.name.lowercase().replaceFirstChar { it.titlecase(Locale.US) }))
-                            },
-                        )
-                    }
-                }
-                OutlinedTextField(
-                    value = interval,
-                    onValueChange = onIntervalChanged,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(localizedText("Every N ${unit.name.lowercase()}(s)")) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    isError = recurrenceIntervalError(interval) != null,
-                    enabled = !scheduleLocked,
-                    supportingText = recurrenceIntervalError(interval)?.let { message ->
-                        { Text(localizedText(message)) }
-                    },
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(
-                        checked = hasEndDate,
-                        onCheckedChange = onHasEndDateChanged,
-                        enabled = !scheduleLocked,
-                    )
-                    Text(localizedText("End date"))
-                }
-                if (hasEndDate) {
-                    OutlinedButton(
-                        onClick = onPickEndDate,
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !scheduleLocked,
-                    ) {
-                        Icon(Icons.Outlined.Event, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(formatting.date(endDate.toEpochDay()))
-                    }
-                    if (endDate.isBefore(startDate)) {
-                        Text(
-                            localizedText("End date cannot be before the entry date"),
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
 internal fun isFutureRecurrenceConversionBlocked(
     initialDraft: LedgerDraft,
     recurringEnabled: Boolean,
@@ -623,87 +531,3 @@ internal fun isFutureRecurrenceConversionBlocked(
     recurringEnabled &&
     selectedEpochDay != null &&
     selectedEpochDay > todayEpochDay
-
-@Composable
-private fun AttachmentPicker(
-    existingAttachments: List<AttachmentEntity>,
-    pendingAttachments: List<Uri>,
-    allowNewAttachments: Boolean,
-    enabled: Boolean,
-    disabledReason: String?,
-    onPick: () -> Unit,
-    onOpenExisting: (AttachmentEntity) -> Unit,
-    onRemoveExisting: (AttachmentEntity) -> Unit,
-    onRemovePending: (Uri) -> Unit,
-) {
-    val attachmentCount = existingAttachments.size + pendingAttachments.size
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(localizedText("Attachments"), style = MaterialTheme.typography.titleSmall)
-                    Text(
-                        localizedText("$attachmentCount of 10 files"),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        localizedText("25 MB each, 128 MB total"),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                OutlinedButton(
-                    onClick = onPick,
-                    enabled = enabled && allowNewAttachments && attachmentCount < 10,
-                ) {
-                    Icon(Icons.Outlined.AttachFile, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text(localizedText("Choose"))
-                }
-            }
-            disabledReason?.let { reason ->
-                Text(
-                    localizedText(reason),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            existingAttachments.forEach { attachment ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = attachment.originalName,
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                        modifier = Modifier.weight(1f),
-                    )
-                    TextButton(
-                        onClick = { onOpenExisting(attachment) },
-                        enabled = enabled,
-                    ) { Text(localizedText("Open")) }
-                    TextButton(
-                        onClick = { onRemoveExisting(attachment) },
-                        enabled = enabled,
-                    ) { Text(localizedText("Remove")) }
-                }
-            }
-            pendingAttachments.forEach { uri ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = uri.lastPathSegment ?: localizedText("Selected file"),
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                        modifier = Modifier.weight(1f),
-                    )
-                    TextButton(
-                        onClick = { onRemovePending(uri) },
-                        enabled = enabled,
-                    ) { Text(localizedText("Remove")) }
-                }
-            }
-        }
-    }
-}

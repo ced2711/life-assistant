@@ -12,7 +12,7 @@ import kotlinx.coroutines.withContext
 /**
  * `Life Assistant.exe --self-test <report file>` checks a packaged build without opening a window:
  * the parts that shrinking or a trimmed Java runtime could break (device encryption, the
- * encrypted data file with an attachment, the UI thread, merging and the GitHub connection). It
+ * encrypted data file with an attachment, the UI thread, merging, the bridge for AI assistants and the GitHub connection). It
  * writes one line per check to the report and exits with 0 when everything passed.
  */
 object DesktopSelfTest {
@@ -60,6 +60,26 @@ object DesktopSelfTest {
             check("merge") {
                 val snapshot = DesktopDataStore.defaultSnapshot(1_000)
                 mergeSnapshots(snapshot, snapshot, snapshot, 2_000)
+            }
+            check("ai assistant bridge") {
+                runBlocking {
+                    val directory = File(root, "agent")
+                    val store = DesktopDataStore(File(directory, "data"))
+                    require(store.open("self-test-password".toCharArray())) { "could not create" }
+                    val server = DesktopAgentServer(directory, DesktopAgentTools(store), accessEnabled = { true }, changesAllowed = { true }, locked = { false }, onShowWindow = {})
+                    server.start()
+                    try {
+                        val bridge = DesktopMcpBridge(appDirectory = directory, launchApp = { false })
+                        val tools = bridge.handle("""{"jsonrpc":"2.0","id":1,"method":"tools/list"}""").orEmpty()
+                        require("create_todo" in tools) { "tools are not listed" }
+                        bridge.handle("""{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"create_todo","arguments":{"title":"Self test"}}}""")
+                        val listed = bridge.handle("""{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_todos","arguments":{}}}""").orEmpty()
+                        require("Self test" in listed) { "a todo written by an assistant was not read back" }
+                    } finally {
+                        server.stop()
+                        store.close()
+                    }
+                }
             }
             check("github connection") {
                 val clientId = DesktopCloudDefaults.builtIn.gitHubClientId.ifBlank { error("no built-in GitHub sign-in") }

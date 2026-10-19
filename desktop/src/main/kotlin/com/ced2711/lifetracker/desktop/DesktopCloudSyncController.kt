@@ -8,6 +8,9 @@ import com.ced2711.lifetracker.cloudsync.GitHubBackupStore
 import com.ced2711.lifetracker.cloudsync.GitHubDeviceAuthorization
 import com.ced2711.lifetracker.cloudsync.GitHubDeviceCode
 import com.ced2711.lifetracker.cloudsync.GitHubRepository
+import com.ced2711.lifetracker.cloudsync.GitHubSession
+import com.ced2711.lifetracker.cloudsync.GitHubSignIn
+import com.ced2711.lifetracker.cloudsync.GitHubSignInExpiredException
 import com.ced2711.lifetracker.cloudsync.GoogleDriveBackupStore
 import com.ced2711.lifetracker.cloudsync.NewCloudRevision
 import com.ced2711.lifetracker.cloudsync.SyncDecision
@@ -16,11 +19,16 @@ import com.ced2711.lifetracker.cloudsync.cloudRevisionHeads
 import com.ced2711.lifetracker.cloudsync.decideSyncAction
 import com.ced2711.lifetracker.cloudsync.latestCloudRevision
 import com.ced2711.lifetracker.cloudsync.prunableCloudRevisions
+import com.ced2711.lifetracker.data.backup.DEFAULT_MERGE_REMOVAL_LIMIT
+import com.ced2711.lifetracker.data.backup.MergeWouldRemoveRecordsException
 import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,6 +44,7 @@ import kotlinx.coroutines.launch
 data class DesktopCloudUiState(
     val connected: Boolean = false,
     val automaticSync: Boolean = false,
+    val mergeRemovalLimit: Int? = DEFAULT_MERGE_REMOVAL_LIMIT,
     val syncing: Boolean = false,
     val lastSyncAt: Long? = null,
     val message: String? = null,
@@ -47,7 +56,22 @@ data class DesktopCloudUiState(
     // Local data differs from what was last synced.
     val pendingChanges: Boolean = false,
     val lastSyncFailed: Boolean = false,
+    /** GitHub no longer accepts this PC's sign-in; only reconnecting helps. */
+    val needsSignIn: Boolean = false,
+    /** Connecting waits for the sync password; see [DesktopCloudSyncController.submitSyncPassword]. */
+    val passwordPrompt: DesktopPasswordPrompt? = null,
 )
+
+enum class DesktopPasswordPromptKind {
+    /** This PC is the first device in the cloud: pick the password all devices will use. */
+    CHOOSE,
+    /** The cloud holds data from other devices: type the password they use. */
+    MATCH,
+    /** As [MATCH], after a password that did not open the cloud data. */
+    MATCH_RETRY,
+}
+
+data class DesktopPasswordPrompt(val kind: DesktopPasswordPromptKind)
 
 class DesktopCloudSyncController(
     private val dataStore: DesktopDataStore,
@@ -72,17 +96,30 @@ class DesktopCloudSyncController(
             when (config.provider) {
                 DesktopCloudProvider.GOOGLE_DRIVE -> googleDrive
                 DesktopCloudProvider.GITHUB -> GitHubBackupStore(
-                    tokenProvider = { gitHubToken() },
+                    tokenProvider = gitHubSession,
                     repository = GitHubRepository.parse(config.gitHubRepository),
                 )
             }
         }
 
-    private fun gitHubToken(): String {
-        val token = credentials?.load(DesktopCredentialStore.GITHUB_TOKEN)
-            ?: throw CloudAuthorizationException("GitHub is not connected. Reconnect GitHub.")
-        return try { token.concatToString() } finally { token.fill('\u0000') }
-    }
+    // One session for the app: it renews the eight-hour GitHub token and saves the new one.
+    private val gitHubSession = GitHubSession(
+        load = {
+            val saved = credentials?.load(DesktopCredentialStore.GITHUB_TOKEN)
+            if (saved == null && credentials?.exists(DesktopCredentialStore.GITHUB_TOKEN) == true) {
+                // Saved but unreadable for the moment: try again later rather than ask to sign in.
+                throw java.io.IOException("The saved GitHub sign-in could not be read. Sync will try again.")
+            }
+            saved?.let { try { it.concatToString() } finally { it.fill('\u0000') } }
+        },
+        save = { text ->
+            requireNotNull(credentials) { "Secure credential storage is unavailable." }
+                .save(DesktopCredentialStore.GITHUB_TOKEN, text.toCharArray())
+        },
+        authorization = {
+            GitHubDeviceAuthorization(configStore.read().gitHubClientId.ifBlank { DesktopCloudDefaults.builtIn.gitHubClientId })
+        },
+    )
 
     private fun isConnected(): Boolean = connectionStatus?.invoke() ?: when (configStore.read().provider) {
         DesktopCloudProvider.GOOGLE_DRIVE -> oauth.isConnected()
@@ -138,7 +175,8 @@ class DesktopCloudSyncController(
 
     /** Runs an automatic sync, waiting for a sync already in progress instead of skipping. */
     private suspend fun syncWhenIdle() {
-        if (!_state.value.connected || !_state.value.automaticSync) return
+        // A rejected sign-in stays rejected; asking GitHub every two minutes would not help.
+        if (!_state.value.connected || !_state.value.automaticSync || signInExpired) return
         while (_state.value.syncing) delay(500)
         lastAutomaticAttemptAt = now()
         synchronize()
@@ -181,10 +219,17 @@ class DesktopCloudSyncController(
             _state.update { it.copy(gitHubCode = code) }
             val token = authorization.awaitToken(code)
             _state.update { it.copy(gitHubCode = null) }
-            val resolved = authorization.resolveRepository(token.accessToken, repository)
-            GitHubBackupStore({ token.accessToken }, resolved).listRevisions()
-            requireNotNull(credentials) { "Secure credential storage is unavailable." }
-                .save(DesktopCredentialStore.GITHUB_TOKEN, token.accessToken.toCharArray())
+            val resolved = authorization.resolveRepository(token.accessToken, repository).also { resolved ->
+                if (!matchCloudPassword(GitHubBackupStore({ token.accessToken }, resolved))) {
+                    throw CancellationException("password not given")
+                }
+            }
+            val store = requireNotNull(credentials) { "Secure credential storage is unavailable." }
+            // The sign-in this replaces is only forgotten, never revoked: see GitHubDeviceAuthorization.
+            // The refresh token is saved with it so that the eight-hour token can be renewed.
+            gitHubSession.reset()
+            store.save(DesktopCredentialStore.GITHUB_TOKEN, GitHubSignIn.of(token).encode().toCharArray())
+            signInExpired = false
             val sameRepository = configStore.read().let {
                 it.provider == DesktopCloudProvider.GITHUB && it.gitHubRepository == resolved.fullName
             }
@@ -199,6 +244,68 @@ class DesktopCloudSyncController(
             throw cancelled
         } catch (error: Throwable) {
             _state.value = readState().copy(message = error.safeMessage())
+        }
+    }
+
+    private var passwordAnswer: CompletableDeferred<CharArray?>? = null
+
+    /** Answers [DesktopCloudUiState.passwordPrompt]; the array is consumed. */
+    fun submitSyncPassword(password: CharArray) {
+        passwordAnswer?.complete(password) ?: password.fill(' ')
+    }
+
+    fun cancelSyncPassword() {
+        passwordAnswer?.complete(null)
+    }
+
+    /**
+     * Every device encrypts its cloud copies with the same password. Before this PC syncs for the
+     * first time its data must use that password: nothing is asked when it already does, the user
+     * types the other devices' password when the cloud holds data this PC cannot open, and picks
+     * one when this PC is the first device and still runs on its own random password. False when
+     * the user cancelled.
+     */
+    private suspend fun matchCloudPassword(store: CloudBackupStore): Boolean {
+        val revisions = store.listRevisions(100)
+        val head = latestCloudRevision(revisions)
+        val headFile = head?.let { File(dataStore.appDirectory, "cloud-check-${UUID.randomUUID()}.tlb.part") }
+        try {
+            if (head != null && headFile != null) {
+                store.downloadRevision(head, headFile)
+                if (dataStore.verifyEncrypted(headFile)) return true
+            } else if (configStore.passwordChosen()) {
+                return true
+            }
+            var kind = if (head == null) DesktopPasswordPromptKind.CHOOSE else DesktopPasswordPromptKind.MATCH
+            while (true) {
+                val answer = CompletableDeferred<CharArray?>()
+                passwordAnswer = answer
+                _state.update { it.copy(passwordPrompt = DesktopPasswordPrompt(kind)) }
+                val password = try {
+                    answer.await()
+                } finally {
+                    passwordAnswer = null
+                    _state.update { it.copy(passwordPrompt = null) }
+                } ?: return false
+                val fits = headFile == null || dataStore.previewEncrypted(headFile, password.copyOf()) != null
+                if (!fits) {
+                    password.fill(' ')
+                    kind = DesktopPasswordPromptKind.MATCH_RETRY
+                    continue
+                }
+                val chosen = DesktopLocalKey.choose(
+                    password,
+                    dataStore,
+                    requireNotNull(credentials) { "Secure credential storage is unavailable." },
+                    configStore,
+                )
+                check(chosen) { "Could not change the data password." }
+                // The last agreed copy was written with the old password.
+                configStore.clearSyncState()
+                return true
+            }
+        } finally {
+            headFile?.delete()
         }
     }
 
@@ -217,6 +324,7 @@ class DesktopCloudSyncController(
         val provider = configStore.read().provider
         if (provider == DesktopCloudProvider.GITHUB) {
             credentials?.delete(DesktopCredentialStore.GITHUB_TOKEN)
+            signInExpired = false
             configStore.clearSyncState()
             configStore.setProvider(DesktopCloudProvider.GOOGLE_DRIVE)
             _state.value = readState().copy(message = "GitHub disconnected. Local data was kept.")
@@ -229,6 +337,11 @@ class DesktopCloudSyncController(
     fun setAutomaticSync(enabled: Boolean) {
         configStore.setAutomaticSync(enabled)
         _state.update { it.copy(automaticSync = enabled) }
+    }
+
+    fun setMergeRemovalLimit(limit: Int?) {
+        configStore.setMergeRemovalLimit(limit)
+        _state.update { it.copy(mergeRemovalLimit = limit) }
     }
 
     suspend fun synchronize(resolution: ConflictResolution? = null) {
@@ -299,6 +412,9 @@ class DesktopCloudSyncController(
         } catch (cancelled: CancellationException) {
             _state.value = readState().copy(conflict = previousConflict)
             throw cancelled
+        } catch (error: GitHubSignInExpiredException) {
+            signInExpired = true
+            _state.value = readState().copy(message = error.safeMessage(), lastSyncFailed = true)
         } catch (error: Throwable) {
             _state.value = readState().copy(message = error.safeMessage(), lastSyncFailed = true)
         }
@@ -330,7 +446,10 @@ class DesktopCloudSyncController(
                 }
                 baseFile = syncBase(configStore.read().syncState.lastRevisionId, revisions)
                 merged = try {
-                    dataStore.createMergedFile(baseFile, headFiles, localFingerprint, now())
+                    dataStore.createMergedFile(baseFile, headFiles, localFingerprint, now(), configStore.read().mergeRemovalLimit)
+                } catch (_: MergeWouldRemoveRecordsException) {
+                    _state.update { it.copy(message = "The cloud backup lacks records that this PC still has. Choose which version to keep.") }
+                    return false
                 } catch (_: Exception) {
                     return false // Nothing could be merged safely; let the user choose.
                 } ?: run {
@@ -532,7 +651,7 @@ class DesktopCloudSyncController(
             configStore.recordSync(revision.fileId, fingerprint, now())
             saveSyncBase(source, revision.fileId)
         }
-        runCatching { prunableCloudRevisions(refreshed, keepCount = KEPT_CLOUD_REVISIONS).forEach { drive.deleteRevision(it.fileId) } }
+        runCatching { drive.deleteRevisions(prunableCloudRevisions(refreshed, keepCount = KEPT_CLOUD_REVISIONS).map { it.fileId }) }
         if (successMessage != null) {
             _state.value = readState().copy(message = successMessage)
         }
@@ -586,9 +705,13 @@ class DesktopCloudSyncController(
             provider = config.provider,
             gitHubRepository = config.gitHubRepository,
             automaticSync = config.automaticSync,
+            mergeRemovalLimit = config.mergeRemovalLimit,
             lastSyncAt = config.syncState.lastSyncAt,
+            needsSignIn = signInExpired,
         )
     }
+
+    @Volatile private var signInExpired = false
 
     private fun Throwable.safeMessage(): String = when (this) {
         is java.net.UnknownHostException -> "The cloud service could not be reached."

@@ -7,6 +7,9 @@ import com.ced2711.lifetracker.cloudsync.ConflictResolution
 import com.ced2711.lifetracker.cloudsync.CloudAuthorizationException
 import com.ced2711.lifetracker.cloudsync.GitHubBackupStore
 import com.ced2711.lifetracker.cloudsync.GitHubRepository
+import com.ced2711.lifetracker.cloudsync.GitHubDeviceAuthorization
+import com.ced2711.lifetracker.cloudsync.GitHubSession
+import com.ced2711.lifetracker.cloudsync.GitHubSignInExpiredException
 import com.ced2711.lifetracker.cloudsync.GoogleDriveBackupStore
 import com.ced2711.lifetracker.cloudsync.NewCloudRevision
 import com.ced2711.lifetracker.cloudsync.SyncDecision
@@ -52,6 +55,8 @@ sealed interface AndroidCloudSyncResult {
     data class Conflict(val remote: CloudRevision) : AndroidCloudSyncResult
     data class NeedsVaultUnlock(val remote: CloudRevision? = null) : AndroidCloudSyncResult
     data object NeedsGoogleConsent : AndroidCloudSyncResult
+    /** GitHub no longer accepts this device's sign-in; reconnecting fixes it, nothing else does. */
+    data object NeedsGitHubSignIn : AndroidCloudSyncResult
     data class Failed(val message: String) : AndroidCloudSyncResult
 }
 
@@ -105,7 +110,7 @@ class AndroidCloudSyncEngine(
             return@withContext AndroidCloudSyncResult.Failed(error.message ?: "The GitHub repository name is invalid.")
         }
         val password = secretStore.load()
-            ?: return@withContext AndroidCloudSyncResult.Failed("The saved sync password is unavailable.")
+            ?: return@withContext AndroidCloudSyncResult.Failed("The saved sync password could not be read. Sync will try again.")
         try {
             val revisions = try {
                 store.listRevisions(limit = 100)
@@ -177,6 +182,8 @@ class AndroidCloudSyncEngine(
             throw cancelled
         } catch (_: CloudConsentRequiredException) {
             AndroidCloudSyncResult.NeedsGoogleConsent
+        } catch (_: GitHubSignInExpiredException) {
+            AndroidCloudSyncResult.NeedsGitHubSignIn
         } catch (error: Throwable) {
             AndroidCloudSyncResult.Failed(error.safeCloudMessage())
         } finally {
@@ -207,18 +214,33 @@ class AndroidCloudSyncEngine(
     private fun storeFor(settings: AndroidCloudSyncSettings): CloudBackupStore = when (settings.provider) {
         CloudProvider.GOOGLE_DRIVE -> driveStore
         CloudProvider.GITHUB -> GitHubBackupStore(
-            tokenProvider = {
-                val token = gitHubTokenStore?.load() ?: throw CloudAuthorizationException("GitHub is not connected. Reconnect GitHub.")
-                try { token.concatToString() } finally { token.fill('\u0000') }
-            },
+            tokenProvider = gitHubSession,
             repository = GitHubRepository.parse(settings.gitHubRepository),
         )
     }
 
+    // One session for the app: it renews the eight-hour GitHub token and saves the new one.
+    private val gitHubSession = GitHubSession(
+        load = {
+            val tokens = gitHubTokenStore
+            val saved = tokens?.load()
+            if (saved == null && tokens?.hasSecret() == true) {
+                // Saved but unreadable for the moment: try again later rather than ask to sign in.
+                throw IOException("The saved GitHub sign-in could not be read. Sync will try again.")
+            }
+            saved?.let { try { it.concatToString() } finally { it.fill('\u0000') } }
+        },
+        save = { text -> requireNotNull(gitHubTokenStore) { "No storage for the GitHub sign-in." }.save(text.toCharArray()) },
+        authorization = {
+            GitHubDeviceAuthorization(preferences.read().gitHubClientId.ifBlank { com.ced2711.lifetracker.BuildConfig.GITHUB_CLIENT_ID })
+        },
+        now = now,
+    )
+
     /** Old revisions only cost cloud space; keep recent history and never touch competing tips. */
     private suspend fun pruneOldRevisions(revisions: List<CloudRevision>) {
         runCatching {
-            prunableCloudRevisions(revisions, keepCount = KEPT_CLOUD_REVISIONS).forEach { store.deleteRevision(it.fileId) }
+            store.deleteRevisions(prunableCloudRevisions(revisions, keepCount = KEPT_CLOUD_REVISIONS).map { it.fileId })
         }
     }
 
@@ -470,7 +492,7 @@ class AndroidCloudSyncEngine(
                 val base = syncBase(lastRevisionId, revisions)
                 if (base != null && base != syncBaseFile) downloadedBase = base
                 val textConflicts = try {
-                    mergeEncryptedBackups(local, base, headFiles, password, work, merged, now())
+                    mergeEncryptedBackups(local, base, headFiles, password, work, merged, now(), preferences.read().mergeRemovalLimit)
                 } catch (_: com.ced2711.lifetracker.data.backup.BackupException) {
                     return null // Another password, or nothing valid to merge: let the user choose.
                 }

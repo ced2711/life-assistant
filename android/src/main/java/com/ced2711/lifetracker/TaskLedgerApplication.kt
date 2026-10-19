@@ -43,7 +43,7 @@ class TaskLedgerApplication : Application() {
             onReady = { recoveredRestore ->
                 runCatching { launcherIconMoodCoordinator.start() }
                 runCatching {
-                    WidgetRefreshCoordinator.observeRoomChanges(this, container.repository)
+                    WidgetRefreshCoordinator.observeRoomChanges(this, container.repository, container.settingsRepository.settings)
                 }
                 if (recoveredRestore) {
                     runCatching {
@@ -107,6 +107,15 @@ class AppContainer(application: Application) {
         backupDao = database.backupDao(),
         settingsRepository = settingsRepository,
         vaultRepository = vaultRepository,
+    )
+    val dailyBackups = com.ced2711.lifetracker.data.backup.DailyBackups(
+        directory = java.io.File(application.filesDir, com.ced2711.lifetracker.data.backup.DailyBackups.DIRECTORY),
+        repository = backupRepository,
+        keyStore = CloudSyncSecretStore(
+            context = application,
+            preferencesName = "life_assistant_daily_backup_key",
+            keyAlias = "life_assistant_daily_backup_key_v1",
+        ),
     )
     val cloudSyncPreferences = CloudSyncPreferences(application)
     val cloudSyncSecretStore = CloudSyncSecretStore(application)

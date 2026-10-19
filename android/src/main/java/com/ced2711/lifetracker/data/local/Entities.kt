@@ -317,6 +317,39 @@ data class DiaryEntryEntity(
     val updatedAt: Long = createdAt,
 )
 
+/**
+ * Something done every day, such as brushing teeth: an item of the daily checklist on Today.
+ * Unlike a todo it has no date; only whether it was ticked today is shown.
+ */
+@Entity(tableName = "daily_checklist_items")
+data class ChecklistItemEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val title: String,
+    val sortOrder: Long = 0,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = createdAt,
+)
+
+/** One checklist item ticked on one day. A new day starts with none ticked. */
+@Entity(
+    tableName = "daily_checklist_checks",
+    primaryKeys = ["itemId", "epochDay"],
+    foreignKeys = [
+        ForeignKey(
+            entity = ChecklistItemEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["itemId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [Index(value = ["epochDay"])],
+)
+data class ChecklistCheckEntity(
+    val itemId: Long,
+    val epochDay: Long,
+    val checkedAt: Long = System.currentTimeMillis(),
+)
+
 data class DailyLedgerTotal(
     val epochDay: Long,
     val incomeCents: Long,

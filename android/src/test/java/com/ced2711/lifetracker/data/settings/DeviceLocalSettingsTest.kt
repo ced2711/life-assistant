@@ -25,7 +25,7 @@ class DeviceLocalSettingsTest {
         assertEquals(false, settings.appLockEnabled)
         assertEquals(AppLockTimeout.ONE_MINUTE, settings.appLockTimeout)
         assertEquals(
-            setOf(TopLevelDestination.TODO, TopLevelDestination.LEDGER, TopLevelDestination.CALENDAR, TopLevelDestination.NOTES),
+            setOf(TopLevelDestination.TODAY, TopLevelDestination.TODO, TopLevelDestination.LEDGER, TopLevelDestination.CALENDAR, TopLevelDestination.NOTES),
             settings.visibleDestinations,
         )
     }
@@ -65,6 +65,20 @@ class DeviceLocalSettingsTest {
         assertEquals(ThemeMode.LIGHT, after.themeMode)
         assertEquals(true, after.appLockEnabled)
         assertEquals(setOf(TopLevelDestination.NOTES), after.visibleDestinations)
+    }
+
+    @Test
+    fun `Pocket AI read access is off by default, persists, and is never restored from a backup`() = runBlocking {
+        val repository = repository()
+        assertEquals(false, repository.settings.first().pocketAiReadAccess)
+        repository.setPocketAiReadAccess(true)
+        val before = repository.snapshot()
+        assertEquals(true, before.pocketAiReadAccess)
+
+        assertTrue(repository.replaceIfUnchanged(before.copy(pocketAiReadAccess = false), AppSettings(themeMode = ThemeMode.LIGHT)))
+        assertEquals(true, repository.settings.first().pocketAiReadAccess)
+        repository.replace(AppSettings())
+        assertEquals(true, repository.settings.first().pocketAiReadAccess)
     }
 }
 

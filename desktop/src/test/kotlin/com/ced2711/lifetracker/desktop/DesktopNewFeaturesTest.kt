@@ -111,6 +111,13 @@ class DesktopNewFeaturesTest {
 
         DesktopConfigStore(file).setVisibleDestinations(TopLevelDestination.entries.toSet())
         assertEquals(TopLevelDestination.entries.toSet(), DesktopConfigStore(file).read().visibleDestinations)
+
+        // A choice saved before Today existed does not list it as hidden, so Today shows.
+        file.writeText("ui.hiddenDestinations=CONFESSIONAL\n")
+        assertEquals(
+            TopLevelDestination.entries.toSet() - setOf(TopLevelDestination.CONFESSIONAL),
+            DesktopConfigStore(file).read().visibleDestinations,
+        )
     }
 
     @Test

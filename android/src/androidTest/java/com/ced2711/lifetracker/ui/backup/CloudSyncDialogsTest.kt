@@ -41,7 +41,7 @@ class CloudSyncDialogsTest {
             }
         }
         composeRule.onNodeWithText("Connect GitHub").assertIsDisplayed()
-        composeRule.onNodeWithText("GitHub App Client ID").assertIsDisplayed()
+        composeRule.onNodeWithText("GitHub Client ID").assertIsDisplayed()
         composeRule.onNodeWithText("Private repository (owner/name, optional)").assertIsDisplayed()
     }
 }

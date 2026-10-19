@@ -105,7 +105,29 @@ class GitHubDeviceAuthorizationTest {
         assertFalse(fake.createdBody != null)
     }
 
+    @Test
+    fun signingInNeverAsksGitHubToRevokeAnything() = runBlocking {
+        // Revoking a replaced sign-in ended every sign-in of the app for the account.
+        val authorization = authorization("Ov23liExample12345")
+        val token = authorization.awaitToken(authorization.start())
+        authorization.resolveRepository(token.accessToken, "")
+        assertFalse(fake.revokeRequested)
+    }
+
+    @Test
+    fun aRevokedSignInIsReportedAsExpired() = runBlocking {
+        fake.userUnauthorized = true
+        try {
+            authorization("Ov23liExample12345").resolveRepository("gho_gone", "")
+            fail("A revoked token must not resolve a repository")
+        } catch (expected: GitHubSignInExpiredException) {
+            assertTrue(expected.message.orEmpty().contains("Reconnect"))
+        }
+    }
+
     private class FakeGitHubAccount : Dispatcher() {
+        var revokeRequested = false
+        var userUnauthorized = false
         var existing = false
         var public = false
         var createConflict = false
@@ -128,6 +150,11 @@ class GitHubDeviceAuthorizationTest {
                     if (tokenPolls <= failTokenPolls) MockResponse().setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.DISCONNECT_AT_START)
                     else json("""{"access_token":"gho_token","token_type":"bearer","scope":"repo"}""")
                 }
+                path == "/api/credentials/revoke" -> {
+                    revokeRequested = true
+                    MockResponse().setResponseCode(202)
+                }
+                path == "/api/user" && userUnauthorized -> MockResponse().setResponseCode(401)
                 path == "/api/user" -> if (failUserLookups-- > 0) MockResponse().setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.DISCONNECT_AT_START) else json("""{"login":"octo"}""")
                 path == "/api/repos/octo/life-assistant-data" ->
                     if (existing) json("""{"full_name":"octo/life-assistant-data","private":${!public}}""")

@@ -5,7 +5,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import com.ced2711.lifetracker.data.settings.AppSettings
+import com.ced2711.lifetracker.domain.date.SmartDateParser
 import com.ced2711.lifetracker.domain.format.UserFormatting
+import com.ced2711.lifetracker.domain.model.DateFormatOption
 import com.ced2711.lifetracker.domain.model.LedgerType
 import com.ced2711.lifetracker.domain.model.MAX_LEDGER_AMOUNT_CENTS
 import com.ced2711.lifetracker.ui.localization.uiLocale
@@ -39,6 +41,25 @@ internal data class LedgerDisplayFormatting(
         locale = locale,
     )
 
+    /**
+     * A date as it is put into a date field: all digits and a four-digit year in the user's
+     * order, so SmartDateParser reads back exactly the same day.
+     */
+    fun dateInput(epochDay: Long): String = LocalDate.ofEpochDay(epochDay).format(
+        DateTimeFormatter.ofPattern(
+            when (SmartDateParser.effectiveOrder(settings.dateFormat, locale)) {
+                DateFormatOption.DAY_MONTH_YEAR -> "dd/MM/yyyy"
+                DateFormatOption.YEAR_MONTH_DAY -> "yyyy-MM-dd"
+                else -> "MM/dd/yyyy"
+            },
+            Locale.US,
+        ),
+    )
+
+    /** Reads a typed date: the user's date format, or words such as "tomorrow", "fri", "周五". */
+    fun parseDate(text: String, today: LocalDate = LocalDate.now()): LocalDate? =
+        SmartDateParser.parse(text, today, settings.dateFormat, locale)
+
     fun time(minuteOfDay: Int): String = UserFormatting.formatMinuteOfDay(
         minuteOfDay = minuteOfDay,
         option = settings.timeFormat,
@@ -71,6 +92,14 @@ internal fun formatSignedMoney(cents: Long): String = when {
     cents < 0 -> "-${formatMoney(-cents)}"
     else -> formatMoney(0)
 }
+
+/** A net amount as shown on screen: always signed, with a real minus sign. */
+internal fun signedMoney(cents: Long): String =
+    (if (cents < 0) "−" else "+") + formatMoney(kotlin.math.abs(cents))
+
+/** The amount as it is typed into an amount field: no "$", no thousands separators. */
+internal fun amountInputText(cents: Long): String =
+    if (cents > 0) formatMoney(cents).removePrefix("$").replace(",", "") else ""
 
 internal fun parseAmountCents(value: String): Long? = runCatching {
     BigDecimal(value)

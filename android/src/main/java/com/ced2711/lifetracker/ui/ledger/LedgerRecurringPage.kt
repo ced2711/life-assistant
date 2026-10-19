@@ -1,273 +1,181 @@
 package com.ced2711.lifetracker.ui.ledger
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.StopCircle
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Card
-import androidx.compose.material3.Icon
+import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.TextButton
-import com.ced2711.lifetracker.ui.adaptive.HingeSafeAlertDialog
 import androidx.compose.material3.Text
-import com.ced2711.lifetracker.ui.localization.localizedText
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ced2711.lifetracker.data.local.LedgerSeriesEntity
-import com.ced2711.lifetracker.domain.model.LedgerDraft
-import com.ced2711.lifetracker.domain.model.LedgerType
-import java.util.UUID
+import com.ced2711.lifetracker.domain.model.parseTags
+import com.ced2711.lifetracker.ui.components.ConfirmDialog
+import com.ced2711.lifetracker.ui.design.EmptyState
+import com.ced2711.lifetracker.ui.design.MoneyText
+import com.ced2711.lifetracker.ui.design.Panel
+import com.ced2711.lifetracker.ui.design.Space
+import com.ced2711.lifetracker.ui.design.Tag
+import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
+import com.ced2711.lifetracker.ui.localization.localizedText
+import com.ced2711.lifetracker.ui.theme.LifeTheme
 
+/**
+ * The Recurring page: every schedule with what it adds and how often. Active ones can be changed
+ * or stopped, stopped ones deleted; stopping and deleting ask first, because Undo cannot bring a
+ * schedule back.
+ */
 @Composable
 internal fun LedgerRecurringPage(
     series: List<LedgerSeriesEntity>,
-    contentPadding: PaddingValues,
+    formatting: LedgerDisplayFormatting,
+    selectedSeriesId: Long?,
+    onEditRule: (Long) -> Unit,
     onStop: (Long) -> Unit,
     onDelete: (Long) -> Unit,
-    onEditRule: (
-        seriesId: Long,
-        effectiveEpochDay: Long,
-        draft: LedgerDraft,
-        onSaved: () -> Unit,
-        onFailure: (String) -> Unit,
-    ) -> Unit,
-    formatting: LedgerDisplayFormatting,
-    uiOperations: LedgerUiOperationsViewModel,
+    modifier: Modifier = Modifier,
+    initialStopRequest: Long? = null,
 ) {
-    var editingSeriesId by rememberSaveable { mutableStateOf<Long?>(null) }
-    var editingSessionKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var stoppingSeriesId by rememberSaveable { mutableStateOf(initialStopRequest) }
     var deletingSeriesId by rememberSaveable { mutableStateOf<Long?>(null) }
-
-    fun closeEditor() {
-        val closingSession = editingSessionKey
-        if (uiOperations.savingSessionKey == closingSession) return
-        editingSeriesId = null
-        editingSessionKey = null
-        uiOperations.abandonSession(closingSession)
-    }
-
-    LaunchedEffect(uiOperations.savedSessionKeys, editingSessionKey) {
-        val sessionKey = editingSessionKey ?: return@LaunchedEffect
-        if (sessionKey in uiOperations.savedSessionKeys) {
-            uiOperations.consumeSaved(sessionKey)
-            closeEditor()
-        }
-    }
-
-    series.firstOrNull { it.id == editingSeriesId }?.let { editingSeries ->
-        val sessionKey = editingSessionKey ?: return@let
-        LedgerRecurringRuleDialog(
-            series = editingSeries,
-            formatting = formatting,
-            isSaving = uiOperations.savingSessionKey == sessionKey,
-            failureMessage = uiOperations.failureFor(sessionKey),
-            onDismiss = ::closeEditor,
-            onSave = { effectiveEpochDay, draft ->
-                val attempt = uiOperations.beginSave(sessionKey) ?: return@LedgerRecurringRuleDialog
-                onEditRule(
-                    editingSeries.id,
-                    effectiveEpochDay,
-                    draft,
-                    { uiOperations.markSaveSucceeded(sessionKey, attempt) },
-                    { message -> uiOperations.markSaveFailed(sessionKey, attempt, message) },
-                )
-            },
-        )
-    }
-
-    series.firstOrNull { it.id == deletingSeriesId && !it.active }?.let { stopped ->
-        HingeSafeAlertDialog(
-            onDismissRequest = { deletingSeriesId = null },
-            title = { Text(localizedText("Delete this stopped schedule?")) },
-            text = { Text(localizedText("It disappears from Recurring. Entries it already created stay in your ledger.")) },
-            confirmButton = {
-                TextButton(onClick = {
-                    deletingSeriesId = null
-                    onDelete(stopped.id)
-                }) { Text(localizedText("Delete"), color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = { TextButton(onClick = { deletingSeriesId = null }) { Text(localizedText("Cancel")) } },
-        )
+    val ordered = remember(series) {
+        series.sortedWith(compareByDescending<LedgerSeriesEntity> { it.active }.thenBy { it.startEpochDay }.thenBy { it.id })
     }
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = 16.dp,
-            end = 16.dp,
-            bottom = contentPadding.calculateBottomPadding(),
-        ),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = Space.lg, end = Space.lg, top = Space.xs, bottom = 96.dp),
+        verticalArrangement = Arrangement.spacedBy(Space.md),
     ) {
-        item {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = 820.dp)
-                    .padding(bottom = 4.dp),
-            ) {
-                Text(localizedText("Recurring entries"), style = MaterialTheme.typography.titleMedium)
+        item(key = "intro") {
+            Text(
+                localizedText("Entries are added on schedule. Stopping a schedule keeps the entries it already created."),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (ordered.isEmpty()) {
+            item(key = "empty") {
+                EmptyState(
+                    title = localizedText("No recurring entries"),
+                    icon = Icons.Rounded.Repeat,
+                    body = localizedText("Choose Repeat when adding an entry, for rent, salary or subscriptions."),
+                )
+            }
+        }
+        items(ordered, key = { it.id }) { item ->
+            ScheduleRow(
+                item = item,
+                formatting = formatting,
+                selected = item.id == selectedSeriesId,
+                onEdit = { onEditRule(item.id) },
+                onStop = { stoppingSeriesId = item.id },
+                onDelete = { deletingSeriesId = item.id },
+            )
+        }
+    }
+
+    series.firstOrNull { it.id == stoppingSeriesId && it.active }?.let { active ->
+        ConfirmDialog(
+            title = localizedText("Stop this schedule?"),
+            text = localizedText("No new entries will be added. Entries it already created stay."),
+            confirmLabel = localizedText("Stop"),
+            destructive = true,
+            onConfirm = {
+                stoppingSeriesId = null
+                onStop(active.id)
+            },
+            onDismiss = { stoppingSeriesId = null },
+        )
+    }
+    series.firstOrNull { it.id == deletingSeriesId && !it.active }?.let { stopped ->
+        ConfirmDialog(
+            title = localizedText("Delete this stopped schedule?"),
+            text = localizedText("It disappears from Recurring. Entries it already created stay in your ledger."),
+            confirmLabel = localizedText("Delete"),
+            destructive = true,
+            onConfirm = {
+                deletingSeriesId = null
+                onDelete(stopped.id)
+            },
+            onDismiss = { deletingSeriesId = null },
+        )
+    }
+}
+
+/** One schedule: its name and state, how often and since when, its amount, and its actions. */
+@Composable
+private fun ScheduleRow(
+    item: LedgerSeriesEntity,
+    formatting: LedgerDisplayFormatting,
+    selected: Boolean,
+    onEdit: () -> Unit,
+    onStop: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val language = LocalUiLanguage.current
+    val summary = ledgerRepeatSummary(
+        unit = item.recurrenceUnit,
+        interval = item.intervalCount,
+        start = formatting.date(item.startEpochDay),
+        end = item.endEpochDay?.let(formatting::date),
+        language = language,
+    )
+    val tags = parseTags(item.tagsCsv).joinToString(" ") { "#$it" }
+    Panel(
+        Modifier.fillMaxWidth(),
+        padding = PaddingValues(start = Space.lg, end = Space.sm, top = Space.md, bottom = Space.xs),
+        color = if (selected) LifeTheme.colors.accentSoft else MaterialTheme.colorScheme.surfaceContainer,
+    ) {
+        Row(Modifier.padding(end = Space.sm), verticalAlignment = Alignment.Top) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
                 Text(
-                    localizedText("Scheduled entries are generated independently. Stopping a schedule keeps existing entries."),
+                    ledgerLabel(item.merchant, item.note, item.type, language),
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    listOf(summary, tags).filter(String::isNotBlank).joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-        }
-        if (series.isEmpty()) {
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(160.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        localizedText("No recurring entries"),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        } else {
-            items(series, key = { it.id }) { item ->
-                RecurringCard(
-                    item = item,
-                    formatting = formatting,
-                    onEdit = {
-                        if (uiOperations.savingSessionKey == null) {
-                            editingSeriesId = item.id
-                            editingSessionKey = UUID.randomUUID().toString()
-                        }
-                    },
-                    onStop = { onStop(item.id) },
-                    onDelete = { deletingSeriesId = item.id },
-                    modifier = Modifier.widthIn(max = 820.dp),
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun RecurringCard(
-    item: LedgerSeriesEntity,
-    formatting: LedgerDisplayFormatting,
-    onEdit: () -> Unit,
-    onStop: () -> Unit,
-    onDelete: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val amountColor = if (item.type == LedgerType.INCOME) incomeColor() else expenseColor()
-    val intervalLabel = if (item.intervalCount == 1) {
-        when (item.recurrenceUnit) {
-            com.ced2711.lifetracker.domain.model.RecurrenceUnit.DAY -> "Daily"
-            com.ced2711.lifetracker.domain.model.RecurrenceUnit.WEEK -> "Weekly"
-            com.ced2711.lifetracker.domain.model.RecurrenceUnit.MONTH -> "Monthly"
-            com.ced2711.lifetracker.domain.model.RecurrenceUnit.YEAR -> "Yearly"
-        }
-    } else {
-        "Every ${item.intervalCount} ${item.recurrenceUnit.name.lowercase()}s"
-    }
-    val localizedIntervalLabel = localizedText(intervalLabel)
-    val startsLabel = localizedText("starts")
-    val endsLabel = localizedText("ends")
-    Card(modifier = modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = when {
-                            item.merchant.isNotBlank() -> item.merchant
-                            item.note.isNotBlank() -> item.note
-                            else -> localizedText(item.type.displayName())
-                        },
-                        style = MaterialTheme.typography.titleSmall,
-                        maxLines = 2,
-                    )
-                    Text(
-                        text = (if (item.type == LedgerType.INCOME) "+" else "−") +
-                            formatMoney(item.amountCents),
-                        color = amountColor,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-                AssistChip(
-                    onClick = {},
-                    enabled = false,
-                    label = { Text(localizedText(if (item.active) "Active" else "Stopped")) },
-                )
-            }
-            Text(
-                text = buildString {
-                    append(localizedIntervalLabel)
-                    append(" · $startsLabel ")
-                    append(formatting.date(item.startEpochDay))
-                    item.endEpochDay?.let {
-                        append(" · $endsLabel ")
-                        append(formatting.date(it))
-                    }
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            MoneyText(
+                item.amountCents, item.type, formatMoney(item.amountCents),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(start = Space.md),
             )
-            if (item.tagsCsv.isNotBlank()) {
-                Text(
-                    item.tagsCsv.split(',').joinToString("  ") { "#$it" },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             if (item.active) {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    OutlinedButton(onClick = onEdit, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Outlined.Edit, contentDescription = null)
-                        Text(localizedText(" Edit rule"))
-                    }
-                    OutlinedButton(onClick = onStop, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Outlined.StopCircle, contentDescription = null)
-                        Text(localizedText(" Stop"))
-                    }
-                }
+                Tag(localizedText("Active"), MaterialTheme.colorScheme.primary)
             } else {
-                OutlinedButton(
-                    onClick = onDelete,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                ) {
-                    Icon(Icons.Outlined.Delete, contentDescription = null)
-                    Text(localizedText(" Delete"))
-                }
+                Tag(localizedText("Stopped"), MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Spacer(Modifier.weight(1f))
+            if (item.active) {
+                TextButton(onClick = onEdit) { Text(localizedText("Edit rule")) }
+                TextButton(onClick = onStop) { Text(localizedText("Stop")) }
+            } else {
+                TextButton(onClick = onDelete) { Text(localizedText("Delete"), color = LifeTheme.colors.danger) }
             }
         }
     }

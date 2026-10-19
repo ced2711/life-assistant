@@ -6,12 +6,15 @@ import com.ced2711.lifetracker.data.backup.BackupCrypto
 import com.ced2711.lifetracker.data.backup.BackupLimits
 import com.ced2711.lifetracker.data.backup.BackupSettings
 import com.ced2711.lifetracker.data.backup.BackupSnapshot
+import com.ced2711.lifetracker.data.backup.DEFAULT_MERGE_REMOVAL_LIMIT
 import com.ced2711.lifetracker.data.backup.MergeSide
 import com.ced2711.lifetracker.data.backup.attachmentArchivePath
 import com.ced2711.lifetracker.data.backup.mergeSnapshots
 import com.ced2711.lifetracker.data.backup.validate
 import com.ced2711.lifetracker.data.local.AttachmentEntity
 import com.ced2711.lifetracker.data.local.CategoryEntity
+import com.ced2711.lifetracker.data.local.ChecklistCheckEntity
+import com.ced2711.lifetracker.data.local.ChecklistItemEntity
 import com.ced2711.lifetracker.data.local.DiaryEntryEntity
 import com.ced2711.lifetracker.data.local.LedgerEntryEntity
 import com.ced2711.lifetracker.data.local.NoteEntity
@@ -23,6 +26,8 @@ import com.ced2711.lifetracker.domain.model.AttachmentOwnerType
 import com.ced2711.lifetracker.domain.model.DateFormatOption
 import com.ced2711.lifetracker.domain.model.LedgerDraft
 import com.ced2711.lifetracker.domain.model.LedgerType
+import com.ced2711.lifetracker.domain.model.CHECKLIST_HISTORY_DAYS
+import com.ced2711.lifetracker.domain.model.MAX_CHECKLIST_TITLE_LENGTH
 import com.ced2711.lifetracker.domain.model.MAX_DIARY_LENGTH
 import com.ced2711.lifetracker.domain.model.ThemeMode
 import com.ced2711.lifetracker.domain.model.TimeFormatOption
@@ -68,6 +73,9 @@ data class DesktopUploadSnapshot(
 /** Local data merged with cloud versions, encrypted with the data password, not applied yet. */
 data class DesktopMergedFile(val file: File, val fingerprint: String, val textConflicts: Int)
 
+/** One daily copy: the data as it was at the end of [day]. */
+data class DesktopDailyBackup(val day: LocalDate, val file: File, val sizeBytes: Long)
+
 sealed interface DesktopReplaceResult {
     data class Applied(val fingerprint: String) : DesktopReplaceResult
     data object LocalChanged : DesktopReplaceResult
@@ -79,7 +87,7 @@ class DesktopDataStore(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : AutoCloseable {
     private val mutex = Mutex()
-    private val localBackup = File(appDirectory, "life-tracker-local.tlb")
+    private val localBackup = localDataFile(appDirectory)
     private val attachmentsDirectory = File(appDirectory, "attachments")
     private val workDirectory = File(appDirectory, "work")
     private val cloudRecovery = File(appDirectory, "cloud-recovery")
@@ -147,7 +155,7 @@ class DesktopDataStore(
             var loaded: LoadedSnapshot? = null
             try {
                 loaded = loadSnapshot(source, secret)
-                val replacement = File(appDirectory, "life-tracker-local.tlb.download")
+                val replacement = File(appDirectory, "${localBackup.name}.download")
                 try {
                     Files.copy(source.toPath(), replacement.toPath(), StandardCopyOption.REPLACE_EXISTING)
                     replaceFile(replacement, localBackup)
@@ -243,7 +251,7 @@ class DesktopDataStore(
             snapshot.categories.isEmpty() && snapshot.todos.isEmpty() && snapshot.todoSeries.isEmpty() &&
             snapshot.ledgerEntries.isEmpty() && snapshot.ledgerSeries.isEmpty() &&
             snapshot.noteFolders.isEmpty() && snapshot.notes.isEmpty() &&
-            snapshot.diaryEntries.isEmpty() &&
+            snapshot.diaryEntries.isEmpty() && snapshot.checklistItems.isEmpty() &&
             snapshot.attachments.isEmpty() && snapshot.vaultEntries.isEmpty()
     } ?: true
 
@@ -607,6 +615,175 @@ class DesktopDataStore(
         snapshot.copy(diaryEntries = snapshot.diaryEntries.filterNot { it.epochDay == epochDay })
     }
 
+    /** Adds an item to the end of the daily checklist; a blank title is ignored. */
+    suspend fun addChecklistItem(title: String) = mutate { snapshot ->
+        val clean = title.trim().take(MAX_CHECKLIST_TITLE_LENGTH)
+        if (clean.isEmpty()) return@mutate snapshot
+        val now = System.currentTimeMillis()
+        snapshot.copy(
+            checklistItems = snapshot.checklistItems + ChecklistItemEntity(
+                id = snapshot.checklistItems.maxOfOrNull(ChecklistItemEntity::id)?.plus(1) ?: 1L,
+                title = clean,
+                sortOrder = (snapshot.checklistItems.maxOfOrNull(ChecklistItemEntity::sortOrder) ?: -1L) + 1,
+                createdAt = now,
+                updatedAt = now,
+            ),
+        )
+    }
+
+    suspend fun renameChecklistItem(itemId: Long, title: String) = mutate { snapshot ->
+        val clean = title.trim().take(MAX_CHECKLIST_TITLE_LENGTH)
+        if (clean.isEmpty()) return@mutate snapshot
+        snapshot.copy(
+            checklistItems = snapshot.checklistItems.map { item ->
+                if (item.id != itemId || item.title == clean) item else item.copy(title = clean, updatedAt = maxOf(System.currentTimeMillis(), item.updatedAt + 1))
+            },
+        )
+    }
+
+    /** Removes a checklist item and its ticks. */
+    suspend fun deleteChecklistItem(itemId: Long) = mutate { snapshot ->
+        snapshot.copy(
+            checklistItems = snapshot.checklistItems.filterNot { it.id == itemId },
+            checklistChecks = snapshot.checklistChecks.filterNot { it.itemId == itemId },
+        )
+    }
+
+    /** Puts the checklist in the order of [itemIds]; items not named keep their place at the end. */
+    suspend fun reorderChecklist(itemIds: List<Long>) = mutate { snapshot ->
+        val position = itemIds.withIndex().associate { (index, id) -> id to index }
+        val now = System.currentTimeMillis()
+        val ordered = snapshot.checklistItems.sortedWith(compareBy<ChecklistItemEntity> { position[it.id] ?: Int.MAX_VALUE }.thenBy { it.sortOrder })
+        snapshot.copy(
+            checklistItems = ordered.mapIndexed { index, item ->
+                if (item.sortOrder == index.toLong()) item else item.copy(sortOrder = index.toLong(), updatedAt = maxOf(now, item.updatedAt + 1))
+            },
+        )
+    }
+
+    /** Ticks or unticks a checklist item for [epochDay]. Ticks older than a month are let go. */
+    suspend fun setChecklistChecked(itemId: Long, epochDay: Long, checked: Boolean) = mutate { snapshot ->
+        if (snapshot.checklistItems.none { it.id == itemId }) return@mutate snapshot
+        val kept = snapshot.checklistChecks.filter { it.epochDay >= epochDay - CHECKLIST_HISTORY_DAYS && !(it.itemId == itemId && it.epochDay == epochDay) }
+        snapshot.copy(
+            checklistChecks = if (checked) kept + ChecklistCheckEntity(itemId, epochDay, System.currentTimeMillis()) else kept,
+        )
+    }
+
+    /**
+     * Encrypts the data and the daily backups with [newPassword] from now on. Used when the user
+     * picks a password for the first time (a new PC starts with a random one it keeps itself) or
+     * takes over the password the other devices already sync with.
+     */
+    suspend fun changePassword(newPassword: CharArray): Boolean = mutex.withLock {
+        withContext(ioDispatcher) {
+            val snapshot = currentSnapshot()
+            val previous = password
+            if (snapshot == null || previous == null) {
+                newPassword.fill('\u0000')
+                return@withContext false
+            }
+            val backups = dailyBackupFiles()
+            try {
+                password = newPassword.copyOf()
+                saveLocked(snapshot)
+                // Daily copies were written with the old password; keep them restorable.
+                backups.forEach { rekey(it, previous) }
+                previous.fill('\u0000')
+                true
+            } catch (_: Throwable) {
+                password?.fill('\u0000')
+                password = previous
+                runCatching { saveLocked(snapshot) }
+                false
+            } finally {
+                newPassword.fill('\u0000')
+            }
+        }
+    }
+
+    private fun rekey(file: File, oldPassword: CharArray) {
+        val loaded = runCatching { loadSnapshot(file, oldPassword) }.getOrNull() ?: return
+        try {
+            val temporary = File(file.parentFile, "${file.name}.part")
+            val secret = password?.copyOf() ?: return
+            try {
+                temporary.outputStream().buffered().use { output ->
+                    BackupCrypto.encrypt(
+                        loaded.snapshot,
+                        secret,
+                        output,
+                        BackupAttachmentSource { attachment -> loaded.files[attachment.id]?.inputStream() ?: error("Attachment ${attachment.id} is missing") },
+                    )
+                }
+                replaceFile(temporary, file)
+            } finally {
+                secret.fill('\u0000')
+                temporary.delete()
+            }
+        } finally {
+            loaded.directory.deleteRecursively()
+        }
+    }
+
+    /** Daily copies of the data, one per day, named after the day whose data they hold. */
+    val dailyBackupDirectory: File get() = File(appDirectory, DAILY_BACKUP_DIRECTORY)
+
+    fun dailyBackups(): List<DesktopDailyBackup> = dailyBackupFiles().mapNotNull { file ->
+        val day = runCatching { LocalDate.parse(file.name.removeSuffix(".tlb")) }.getOrNull() ?: return@mapNotNull null
+        DesktopDailyBackup(day, file, file.length())
+    }.sortedByDescending { it.day }
+
+    private fun dailyBackupFiles(): List<File> = dailyBackupDirectory.listFiles()
+        .orEmpty().filter { it.isFile && it.name.matches(DAILY_BACKUP_NAME) }
+
+    /**
+     * Once a day keeps the data as it was at the end of the previous day (the first run of a day
+     * comes before that day's edits), and removes copies on their third day: on [today] the copies
+     * of yesterday and the day before stay.
+     */
+    suspend fun backUpDaily(today: LocalDate): Boolean = mutex.withLock {
+        withContext(ioDispatcher) {
+            if (_state.value !is DesktopStoreState.Open || !localBackup.isFile) return@withContext false
+            val directory = dailyBackupDirectory.apply { mkdirs() }
+            val target = File(directory, "${today.minusDays(1)}.tlb")
+            val created = if (target.isFile) {
+                false
+            } else {
+                val temporary = File(directory, "${target.name}.part")
+                try {
+                    Files.copy(localBackup.toPath(), temporary.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                    replaceFile(temporary, target)
+                    true
+                } finally {
+                    temporary.delete()
+                }
+            }
+            val oldest = today.minusDays(DAILY_BACKUPS_KEPT.toLong())
+            dailyBackupFiles().forEach { file ->
+                val day = runCatching { LocalDate.parse(file.name.removeSuffix(".tlb")) }.getOrNull()
+                if (day != null && day < oldest) file.delete()
+            }
+            created
+        }
+    }
+
+    /**
+     * Replaces the data with a daily copy. The current data is kept first as
+     * [beforeRestoreFile], so the restore itself can be undone.
+     */
+    suspend fun restoreDailyBackup(backup: DesktopDailyBackup): DesktopReplaceResult {
+        mutex.withLock {
+            withContext(ioDispatcher) {
+                if (localBackup.isFile) Files.copy(localBackup.toPath(), beforeRestoreFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            }
+        }
+        return replaceFromEncrypted(backup.file)
+    }
+
+    /** The data as it was right before the last restore of a daily copy, if any. */
+    val beforeRestoreFile: File get() = File(dailyBackupDirectory.apply { mkdirs() }, "before-restore.tlb")
+
     /** Constant-time check of the open data password, used by the optional app lock. */
     fun verifyPassword(candidate: CharArray): Boolean {
         val current = password
@@ -749,7 +926,7 @@ class DesktopDataStore(
             val temporary = File(cloudRecovery, ".recovery-${UUID.randomUUID()}.part")
             val recovery = File(
                 cloudRecovery,
-                "life-tracker-local-${System.currentTimeMillis()}-${UUID.randomUUID()}.tlb",
+                "life-assistant-local-${System.currentTimeMillis()}-${UUID.randomUUID()}.tlb",
             )
             try {
                 Files.copy(localBackup.toPath(), temporary.toPath(), StandardCopyOption.REPLACE_EXISTING)
@@ -781,6 +958,7 @@ class DesktopDataStore(
         remotes: List<File>,
         expectedLocalFingerprint: String,
         now: Long = System.currentTimeMillis(),
+        maxRemovals: Int? = DEFAULT_MERGE_REMOVAL_LIMIT,
     ): DesktopMergedFile? = mutex.withLock {
         withContext(ioDispatcher) {
             val secret = password?.copyOf() ?: error("Desktop data is locked")
@@ -793,7 +971,7 @@ class DesktopDataStore(
                 var textConflicts = 0
                 remotes.forEach { file ->
                     val remote = loadSnapshot(file, secret).also(loaded::add)
-                    val result = mergeSnapshots(baseLoaded?.snapshot, merged, remote.snapshot, now)
+                    val result = mergeSnapshots(baseLoaded?.snapshot, merged, remote.snapshot, now, maxRemovals)
                     val previousFiles = files
                     files = result.attachmentSources.mapValues { (id, source) ->
                         when (source.side) {
@@ -880,7 +1058,7 @@ class DesktopDataStore(
     ) {
         val secret = password?.copyOf() ?: error("Desktop data is locked")
         appDirectory.mkdirs()
-        val temporary = File(appDirectory, "life-tracker-local.tlb.part")
+        val temporary = File(appDirectory, "${localBackup.name}.part")
         try {
             temporary.outputStream().buffered().use { output ->
                 BackupCrypto.encrypt(
@@ -1007,7 +1185,27 @@ class DesktopDataStore(
     private fun BackupSnapshot.validateForDesktop(): BackupSnapshot = validate()
 
     companion object {
+        internal const val LOCAL_DATA_FILE = "life-assistant-local.tlb"
+
+        /** The name versions before 2.0.4 gave the file, after the app's old name Life Tracker. */
+        internal const val LEGACY_LOCAL_DATA_FILE = "life-tracker-local.tlb"
+
+        /**
+         * The encrypted data file in [appDirectory]. A file of the old name is renamed first; if it
+         * cannot be (another copy of the app has it open), it stays in use under its old name.
+         */
+        internal fun localDataFile(appDirectory: File): File {
+            val current = File(appDirectory, LOCAL_DATA_FILE)
+            val legacy = File(appDirectory, LEGACY_LOCAL_DATA_FILE)
+            if (current.exists() || !legacy.isFile) return current
+            return if (runCatching { Files.move(legacy.toPath(), current.toPath(), StandardCopyOption.ATOMIC_MOVE) }.isSuccess) current else legacy
+        }
+
         const val KEPT_RECOVERY_COPIES = 5
+        const val DAILY_BACKUP_DIRECTORY = "daily-backups"
+        /** Yesterday's and the day before's copies; a copy is removed on its third day. */
+        const val DAILY_BACKUPS_KEPT = 2
+        private val DAILY_BACKUP_NAME = Regex("""\d{4}-\d{2}-\d{2}\.tlb""")
 
         /** Deletes all but the [keep] newest recovery copies in [directory]. */
         fun pruneRecoveryCopies(directory: File, keep: Int) {
@@ -1032,7 +1230,7 @@ class DesktopDataStore(
                 defaultAllDayReminderMinute = 0,
                 defaultReminderOffsetsMinutes = setOf(0L),
                 todoQuickAddFields = emptySet(),
-                lastDestination = TopLevelDestination.TODO,
+                lastDestination = TopLevelDestination.TODAY,
             ),
             categories = emptyList(),
             todoSeries = emptyList(),

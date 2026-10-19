@@ -88,7 +88,16 @@ class GitHubBackupStore(
     private suspend fun <T> withToken(block: () -> T): T = withContext(ioDispatcher) {
         token = tokenProvider.accessToken()
         if (token.isBlank()) throw CloudAuthorizationException("GitHub is not connected.")
-        block()
+        try {
+            block()
+        } catch (rejected: GitHubSignInExpiredException) {
+            // GitHub turns a token down with the first request, before anything was changed, so the
+            // operation can simply run again with a renewed token.
+            val renewed = (tokenProvider as? RenewableTokenProvider)?.renewAfterRejection(token) ?: throw rejected
+            if (renewed.isBlank() || renewed == token) throw rejected
+            token = renewed
+            block()
+        }
     }
 
     override suspend fun listRevisions(limit: Int): List<CloudRevision> = retryTransient { listRevisionsOnce(limit) }
@@ -172,16 +181,21 @@ class GitHubBackupStore(
         }
     }
 
-    override suspend fun deleteRevision(fileId: String) = withToken {
-        commitWithRetry("Remove old backup") { head, index ->
-            val entry = index.revisions.firstOrNull { it.revision.fileId == fileId } ?: return@commitWithRetry null
+    override suspend fun deleteRevision(fileId: String) = deleteRevisions(listOf(fileId))
+
+    /** One commit for all of them, so no other device ever sees the history half pruned. */
+    override suspend fun deleteRevisions(fileIds: List<String>) = withToken {
+        if (fileIds.isEmpty()) return@withToken
+        val wanted = fileIds.toSet()
+        commitWithRetry(if (wanted.size == 1) "Remove old backup" else "Remove ${wanted.size} old backups") { head, index ->
+            val entries = index.revisions.filter { it.revision.fileId in wanted }
+            if (entries.isEmpty()) return@commitWithRetry null
             TreeChange(
                 baseTree = head?.treeSha,
-                files = mapOf(entry.revision.fileName to null),
-                index = index.copy(revisions = index.revisions - entry),
+                files = entries.associate { it.revision.fileName to null },
+                index = index.copy(revisions = index.revisions - entries.toSet()),
             )
         }
-        Unit
     }
 
     private data class Head(val commitSha: String, val treeSha: String)
@@ -379,7 +393,7 @@ class GitHubBackupStore(
             runCatching { json.parseToJsonElement(text).jsonObject["message"]?.jsonPrimitive?.contentOrNull }.getOrNull()
         }.orEmpty()
         throw when {
-            code == 401 -> CloudAuthorizationException("GitHub sign-in expired or was revoked. Reconnect GitHub.")
+            code == 401 -> GitHubSignInExpiredException()
             code == 403 && message.contains("rate limit", ignoreCase = true) ->
                 CloudTransportException("GitHub's rate limit was reached. Try again in a few minutes.")
             code == 403 || code == 404 -> CloudAuthorizationException(

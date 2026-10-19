@@ -1,5 +1,7 @@
 package com.ced2711.lifetracker.desktop
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -7,46 +9,42 @@ import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.automirrored.rounded.Notes
 import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AttachFile
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.PushPin
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -55,10 +53,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ced2711.lifetracker.data.backup.BackupSnapshot
@@ -66,8 +66,12 @@ import com.ced2711.lifetracker.data.local.NoteEntity
 import com.ced2711.lifetracker.data.local.NoteFolderEntity
 import com.ced2711.lifetracker.domain.format.UserFormatting
 import com.ced2711.lifetracker.domain.model.AttachmentOwnerType
+import com.ced2711.lifetracker.ui.design.EmptyState
+import com.ced2711.lifetracker.ui.design.LifeTextField
+import com.ced2711.lifetracker.ui.design.Space
 import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
 import com.ced2711.lifetracker.ui.localization.uiLocale
+import com.ced2711.lifetracker.ui.theme.LifeTheme
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -75,7 +79,7 @@ import java.util.UUID
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** Which notes the middle column lists. */
+/** Which notes the list shows. */
 private sealed interface NoteScope {
     data object All : NoteScope
     data object Pinned : NoteScope
@@ -83,16 +87,21 @@ private sealed interface NoteScope {
     data class Folder(val id: Long) : NoteScope
 }
 
-/** The note being edited. [session] restarts the editor; [id] is filled in once a new note is saved. */
+/** The open editor: [session] changes whenever another note is opened, [id] is null until saved. */
 private data class NoteEditing(val session: String, val id: Long?)
 
 /**
- * Notes for a large screen: folders on the left, the notes of the chosen folder in the middle and
- * the open note on the right. Edits save themselves a moment after typing stops (Ctrl+S saves at
- * once), so there is no save dialog.
+ * Folders, the list of notes and the open note side by side. Notes save themselves as you type;
+ * arrow keys step through the list, Ctrl+N starts a note, Ctrl+F searches.
  */
 @Composable
-internal fun NotesPage(snapshot: BackupSnapshot, store: DesktopDataStore, openVault: () -> Unit) {
+internal fun NotesPage(
+    snapshot: BackupSnapshot,
+    store: DesktopDataStore,
+    requestedNoteId: Long? = null,
+    onRequestHandled: () -> Unit = {},
+    openVault: () -> Unit,
+) {
     val scope = rememberSafeCoroutineScope()
     val language = LocalUiLanguage.current
     var noteScope by remember { mutableStateOf<NoteScope>(NoteScope.All) }
@@ -107,6 +116,13 @@ internal fun NotesPage(snapshot: BackupSnapshot, store: DesktopDataStore, openVa
 
     fun newNote() {
         editing = NoteEditing(UUID.randomUUID().toString(), null)
+    }
+    // Opened from elsewhere (Today's pinned notes): show that note.
+    LaunchedEffect(requestedNoteId) {
+        requestedNoteId?.let { id ->
+            if (snapshot.notes.any { it.id == id }) editing = NoteEditing(UUID.randomUUID().toString(), id)
+            onRequestHandled()
+        }
     }
     RegisterPageShortcuts(onNew = ::newNote, onFind = { runCatching { searchFocus.requestFocus() } })
 
@@ -144,28 +160,55 @@ internal fun NotesPage(snapshot: BackupSnapshot, store: DesktopDataStore, openVa
                     onNewFolder = { parent -> newFolderParent = parent; creatingFolder = true },
                     onRename = { renamingFolder = it },
                     onDelete = { deletingFolder = it },
-                    onOpenVault = openVault,
-                    modifier = Modifier.width(232.dp).fillMaxHeight(),
+                    modifier = Modifier.width(232.dp),
                 )
-                VerticalDivider()
+                ColumnDivider()
             }
             Column((if (current != null) Modifier.width(360.dp) else Modifier.weight(1f)).fillMaxHeight()) {
-                Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 18.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                val compact = current != null
+                Row(
+                    Modifier.fillMaxWidth().padding(start = if (compact) Space.xl else PagePadding, end = if (compact) Space.lg else PagePadding, top = 28.dp, bottom = Space.lg),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Column(Modifier.weight(1f)) {
-                        Text(noteScopeTitle(noteScope, snapshot), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(desktopNotesCount(notes.size, language), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                        Text(noteScopeTitle(noteScope, snapshot), style = if (compact) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.headlineLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(desktopNotesCount(notes.size, language), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
                     }
-                    Button(onClick = ::newNote) { Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text(desktopText("New note")) }
+                    if (!showFolders) {
+                        ChoiceMenu(
+                            label = desktopText("Show"),
+                            options = listOf<NoteScope>(NoteScope.All, NoteScope.Pinned, NoteScope.Unfiled) + snapshot.noteFolders.sortedBy { noteFolderPath(it.id, snapshot).lowercase() }.map { NoteScope.Folder(it.id) },
+                            selected = noteScope,
+                            optionLabel = { option ->
+                                when (option) {
+                                    NoteScope.All -> desktopText("All notes", language)
+                                    NoteScope.Pinned -> desktopText("Pinned", language)
+                                    NoteScope.Unfiled -> desktopText("Unfiled", language)
+                                    is NoteScope.Folder -> noteFolderPath(option.id, snapshot)
+                                }
+                            },
+                            onSelect = { noteScope = it },
+                        )
+                    }
+                    Button(onClick = ::newNote) {
+                        Icon(Icons.Rounded.Add, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(desktopText("New note"))
+                    }
                 }
-                OutlinedTextField(
+                LifeTextField(
                     query, { query = it },
-                    placeholder = { Text(desktopText("Search (Ctrl+F)")) },
-                    leadingIcon = { Icon(Icons.Default.Search, null) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).focusRequester(searchFocus),
+                    placeholder = desktopText("Search (Ctrl+F)"),
+                    leadingIcon = Icons.Rounded.Search,
+                    trailing = if (query.isNotEmpty()) {
+                        { IconButton(onClick = { query = "" }, modifier = Modifier.size(24.dp)) { Icon(Icons.Rounded.Close, desktopText("Clear"), Modifier.size(16.dp)) } }
+                    } else {
+                        null
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = if (compact) Space.lg else PagePadding).focusRequester(searchFocus),
                 )
                 LazyColumn(
-                    Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
+                    Modifier.weight(1f).fillMaxWidth().padding(horizontal = if (compact) Space.sm else PagePadding - Space.md, vertical = Space.sm)
                         .listKeys(
                             onUp = { notes.moveFrom(current?.id, -1)?.let { editing = NoteEditing(UUID.randomUUID().toString(), it.id) } },
                             onDown = { notes.moveFrom(current?.id, 1)?.let { editing = NoteEditing(UUID.randomUUID().toString(), it.id) } },
@@ -173,10 +216,14 @@ internal fun NotesPage(snapshot: BackupSnapshot, store: DesktopDataStore, openVa
                             onDelete = { notes.firstOrNull { it.id == current?.id }?.let { deletingNote = it } },
                         )
                         .focusable(),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
                     if (notes.isEmpty()) item {
-                        Text(desktopText(if (query.isBlank()) "No notes here yet. Press Ctrl+N to write one." else "No notes match the search."), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(12.dp))
+                        EmptyState(
+                            title = desktopText(if (query.isBlank()) "No notes here yet" else "No notes match"),
+                            icon = Icons.AutoMirrored.Rounded.Notes,
+                            body = desktopText(if (query.isBlank()) "Press Ctrl+N to write one. Notes save themselves as you type." else "Try other words, or look in All notes."),
+                        )
                     }
                     items(notes, key = { it.id }) { note ->
                         NoteListRow(note, snapshot, selected = note.id == current?.id, showFolder = noteScope !is NoteScope.Folder) {
@@ -186,7 +233,7 @@ internal fun NotesPage(snapshot: BackupSnapshot, store: DesktopDataStore, openVa
                 }
             }
             if (current != null) {
-                VerticalDivider()
+                ColumnDivider()
                 NoteEditor(
                     snapshot, store, current, defaultFolder,
                     onSaved = { id -> if (editing?.session == current.session) editing = current.copy(id = id) },
@@ -258,7 +305,7 @@ private fun descendantFolderIds(folders: List<NoteFolderEntity>, root: Long): Se
 
 @Composable
 private fun noteScopeTitle(scope: NoteScope, snapshot: BackupSnapshot): String = when (scope) {
-    NoteScope.All -> desktopText("All notes")
+    NoteScope.All -> desktopText("Notes")
     NoteScope.Pinned -> desktopText("Pinned")
     NoteScope.Unfiled -> desktopText("Unfiled")
     is NoteScope.Folder -> snapshot.noteFolders.firstOrNull { it.id == scope.id }?.name ?: desktopText("Notes")
@@ -272,20 +319,15 @@ private fun NoteFolderColumn(
     onNewFolder: (Long?) -> Unit,
     onRename: (NoteFolderEntity) -> Unit,
     onDelete: (NoteFolderEntity) -> Unit,
-    onOpenVault: () -> Unit,
     modifier: Modifier,
 ) {
-    Column(
-        modifier.background(MaterialTheme.colorScheme.surfaceContainerLowest).verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        FolderEntry(desktopText("All notes"), snapshot.notes.size, selected == NoteScope.All) { onSelect(NoteScope.All) }
-        FolderEntry(desktopText("Pinned"), snapshot.notes.count { it.pinned }, selected == NoteScope.Pinned) { onSelect(NoteScope.Pinned) }
-        FolderEntry(desktopText("Unfiled"), snapshot.notes.count { it.folderId == null }, selected == NoteScope.Unfiled) { onSelect(NoteScope.Unfiled) }
-        Row(Modifier.fillMaxWidth().padding(start = 10.dp, top = 18.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(desktopText("Folders"), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+    FilterColumn(modifier) {
+        FilterEntry(desktopText("All notes"), snapshot.notes.size, selected == NoteScope.All) { onSelect(NoteScope.All) }
+        FilterEntry(desktopText("Pinned"), snapshot.notes.count { it.pinned }, selected == NoteScope.Pinned) { onSelect(NoteScope.Pinned) }
+        FilterEntry(desktopText("Unfiled"), snapshot.notes.count { it.folderId == null }, selected == NoteScope.Unfiled) { onSelect(NoteScope.Unfiled) }
+        FilterHeader("Folders") {
             IconButton(onClick = { onNewFolder((selected as? NoteScope.Folder)?.id) }, modifier = Modifier.size(28.dp)) {
-                Icon(Icons.Default.Add, desktopText("New folder"), Modifier.size(18.dp))
+                Icon(Icons.Rounded.Add, desktopText("New folder"), Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         val children = snapshot.noteFolders.groupBy { it.parentId }
@@ -299,44 +341,13 @@ private fun NoteFolderColumn(
         walk(null, 0)
         tree.forEach { (folder, depth) ->
             val count = snapshot.notes.count { it.folderId in descendantFolderIds(snapshot.noteFolders, folder.id) }
-            FolderEntry(
+            FilterEntry(
                 folder.name, count, selected == NoteScope.Folder(folder.id), indent = depth,
                 onRename = { onRename(folder) }, onDelete = { onDelete(folder) },
             ) { onSelect(NoteScope.Folder(folder.id)) }
         }
-        if (tree.isEmpty()) Text(desktopText("No folders yet."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(10.dp))
-    }
-}
-
-@Composable
-private fun FolderEntry(
-    label: String,
-    count: Int,
-    selected: Boolean,
-    indent: Int = 0,
-    onRename: (() -> Unit)? = null,
-    onDelete: (() -> Unit)? = null,
-    onClick: () -> Unit,
-) {
-    val interaction = remember { MutableInteractionSource() }
-    val hovered by interaction.collectIsHoveredAsState()
-    Surface(
-        shape = RoundedCornerShape(10.dp),
-        color = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
-        modifier = Modifier.fillMaxWidth().hoverable(interaction).clickable(onClick = onClick),
-    ) {
-        Row(Modifier.padding(start = 10.dp + (indent * 14).dp, end = 6.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                label, modifier = Modifier.weight(1f).padding(vertical = 4.dp), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface,
-            )
-            if (hovered && onRename != null) {
-                IconButton(onClick = onRename, modifier = Modifier.size(26.dp)) { Icon(Icons.Default.Edit, desktopText("Rename folder"), Modifier.size(16.dp)) }
-                IconButton(onClick = { onDelete?.invoke() }, modifier = Modifier.size(26.dp)) { Icon(Icons.Default.Delete, desktopText("Delete folder"), Modifier.size(16.dp)) }
-            } else if (count > 0) {
-                Text(count.toString(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(end = 4.dp))
-            }
+        if (tree.isEmpty()) {
+            Text(desktopText("No folders yet."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(10.dp))
         }
     }
 }
@@ -346,26 +357,36 @@ private fun NoteListRow(note: NoteEntity, snapshot: BackupSnapshot, selected: Bo
     val language = LocalUiLanguage.current
     val updated = Instant.ofEpochMilli(note.updatedAt).atZone(ZoneId.systemDefault()).toLocalDate()
     val dateText = if (updated == LocalDate.now()) desktopText("Today") else UserFormatting.formatDate(updated, snapshot.settings.dateFormat, uiLocale(language))
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
+    val background by animateColorAsState(
+        when {
+            selected -> LifeTheme.colors.accentSoft
+            hovered -> MaterialTheme.colorScheme.surfaceContainer
+            else -> Color.Transparent
+        },
+        tween(120),
+        label = "note-row",
+    )
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(background).hoverable(interaction).clickable(onClick = onClick)
+            .padding(horizontal = Space.md, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
-        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (note.pinned) Icon(Icons.Default.PushPin, desktopText("Pinned"), Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
-                if (note.pinned) Spacer(Modifier.width(4.dp))
-                Text(note.title, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                Text(dateText, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (note.pinned) {
+                Icon(Icons.Rounded.PushPin, desktopText("Pinned"), Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(4.dp))
             }
-            val preview = note.body.lineSequence().map(String::trim).filter(String::isNotEmpty).joinToString("  ")
-            if (preview.isNotEmpty()) Text(preview, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (showFolder) note.folderId?.let { Text(noteFolderPath(it, snapshot), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary) }
+            Text(note.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Text(dateText, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = Space.sm))
         }
+        val preview = note.body.lineSequence().map(String::trim).filter(String::isNotEmpty).joinToString("  ")
+        if (preview.isNotEmpty()) Text(preview, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (showFolder) note.folderId?.let { Text(noteFolderPath(it, snapshot), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary) }
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun NoteEditor(
     snapshot: BackupSnapshot,
@@ -378,6 +399,7 @@ private fun NoteEditor(
     modifier: Modifier,
 ) {
     val scope = rememberSafeCoroutineScope()
+    val language = LocalUiLanguage.current
     val stored = editing.id?.let { id -> snapshot.notes.firstOrNull { it.id == id } }
     // The editor keeps its own text while open; saving never resets what is being typed.
     var title by remember(editing.session) { mutableStateOf(stored?.title.orEmpty()) }
@@ -409,50 +431,91 @@ private fun NoteEditor(
         saveNow()
     }
 
-    Column(modifier.background(MaterialTheme.colorScheme.surface).editorKeys(onSave = { scope.launch { saveNow() } }, onCancel = { scope.launch { saveNow(); onClose() } })) {
-        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+    Column(modifier.background(MaterialTheme.colorScheme.surfaceContainerLow).editorKeys(onSave = { scope.launch { saveNow() } }, onCancel = { scope.launch { saveNow(); onClose() } })) {
+        Row(Modifier.fillMaxWidth().padding(start = 28.dp, end = 12.dp, top = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            ChoiceMenu(
+                label = desktopText("Folder"),
+                options = listOf<Long?>(null) + snapshot.noteFolders.sortedBy { noteFolderPath(it.id, snapshot).lowercase() }.map { it.id },
+                selected = folder,
+                optionLabel = { id -> id?.let { noteFolderPath(it, snapshot) } ?: desktopText("Unfiled", language) },
+                onSelect = { folder = it },
+            )
+            Spacer(Modifier.weight(1f))
             Text(
                 desktopText(if (dirty) "Saving…" else if (savedId == null) "New note" else "Saved"),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.padding(end = Space.sm),
             )
             IconButton(onClick = { pinned = !pinned }) {
-                Icon(if (pinned) Icons.Default.PushPin else Icons.Outlined.PushPin, desktopText(if (pinned) "Unpin" else "Pin"), tint = if (pinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                Icon(if (pinned) Icons.Rounded.PushPin else Icons.Outlined.PushPin, desktopText(if (pinned) "Unpin" else "Pin"), tint = if (pinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            savedId?.let { id -> IconButton({ chooseAndAttach(scope, store, AttachmentOwnerType.NOTE, id) }) { Icon(Icons.Default.AttachFile, desktopText("Attach")) } }
-            stored?.let { note -> IconButton(onClick = { onDelete(note) }) { Icon(Icons.Default.Delete, desktopText("Delete")) } }
-            IconButton(onClick = { scope.launch { saveNow(); onClose() } }) { Icon(Icons.Default.Close, desktopText("Close (Esc)")) }
+            IconButton(
+                onClick = {
+                    scope.launch {
+                        // A new note is saved first so the file has something to belong to.
+                        saveNow()
+                        savedId?.let { chooseAndAttach(scope, store, AttachmentOwnerType.NOTE, it) }
+                    }
+                },
+                enabled = hasContent,
+            ) { Icon(Icons.Rounded.AttachFile, desktopText("Attach"), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+            stored?.let { note -> IconButton(onClick = { onDelete(note) }) { Icon(Icons.Rounded.DeleteOutline, desktopText("Delete"), tint = MaterialTheme.colorScheme.onSurfaceVariant) } }
+            IconButton(onClick = { scope.launch { saveNow(); onClose() } }) { Icon(Icons.Rounded.Close, desktopText("Close (Esc)"), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
-        val plain = TextFieldDefaults.colors(
-            focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
-            focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
-        )
-        TextField(
-            title, { title = it },
-            placeholder = { Text(desktopText("Title"), style = MaterialTheme.typography.headlineSmall) },
-            textStyle = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-            singleLine = true, colors = plain,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp).focusRequester(titleFocus).onEnter { runCatching { bodyFocus.requestFocus() } },
-        )
-        FlowRow(Modifier.fillMaxWidth().padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            FilterChipSimple(desktopText("Unfiled"), folder == null) { folder = null }
-            snapshot.noteFolders.sortedBy { noteFolderPath(it.id, snapshot).lowercase() }.forEach { candidate ->
-                FilterChipSimple(noteFolderPath(candidate.id, snapshot), folder == candidate.id) { folder = candidate.id }
-            }
-        }
-        HorizontalDivider(Modifier.padding(top = 10.dp))
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            TextField(
-                body, { body = it },
-                placeholder = { Text(desktopText("Start writing…")) },
-                textStyle = MaterialTheme.typography.bodyLarge,
-                colors = plain,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp).focusRequester(bodyFocus),
-            )
-            savedId?.let { id ->
-                Column(Modifier.padding(horizontal = 24.dp, vertical = 12.dp)) { AttachmentList(snapshot, AttachmentOwnerType.NOTE, id, store) }
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 40.dp, vertical = Space.md), horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(Modifier.widthIn(max = 760.dp).fillMaxWidth()) {
+                PlainField(
+                    value = title,
+                    onValueChange = { title = it },
+                    placeholder = desktopText("Title"),
+                    style = MaterialTheme.typography.headlineMedium,
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().focusRequester(titleFocus).onEnter { runCatching { bodyFocus.requestFocus() } },
+                )
+                Spacer(Modifier.height(Space.md))
+                PlainField(
+                    value = body,
+                    onValueChange = { body = it },
+                    placeholder = desktopText("Start writing…"),
+                    style = MaterialTheme.typography.bodyLarge.copy(lineHeight = MaterialTheme.typography.bodyLarge.lineHeight * 1.15f),
+                    singleLine = false,
+                    modifier = Modifier.fillMaxWidth().focusRequester(bodyFocus),
+                    minHeight = 320,
+                )
+                savedId?.let { id ->
+                    Spacer(Modifier.height(Space.lg))
+                    AttachmentList(snapshot, AttachmentOwnerType.NOTE, id, store)
+                }
+                Spacer(Modifier.height(48.dp))
             }
         }
     }
+}
+
+/** A borderless text field for writing: just the text on the page. */
+@Composable
+internal fun PlainField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    style: TextStyle,
+    singleLine: Boolean,
+    modifier: Modifier = Modifier,
+    minHeight: Int = 0,
+) {
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        singleLine = singleLine,
+        textStyle = style.copy(color = MaterialTheme.colorScheme.onSurface),
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+        modifier = modifier,
+        decorationBox = { inner ->
+            Box(Modifier.fillMaxWidth().heightIn(min = minHeight.dp)) {
+                if (value.isEmpty()) Text(placeholder, style = style, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                inner()
+            }
+        },
+    )
 }

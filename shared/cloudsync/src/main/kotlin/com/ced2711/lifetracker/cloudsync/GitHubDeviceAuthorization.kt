@@ -33,11 +33,17 @@ data class GitHubDeviceCode(
 )
 
 /**
- * A GitHub user token. [expiresAtMillis] is null for OAuth App tokens and for GitHub Apps with
- * token expiration turned off: refreshing would need a client secret that must not ship inside
- * the apps.
+ * A GitHub user token as GitHub hands it out. [expiresAtMillis] and [refreshToken] are null when
+ * the app's owner turned token expiration off; otherwise the access token lasts eight hours and
+ * [refreshToken] gets the next one. Tokens from the device flow are renewed without a client
+ * secret, so nothing secret ships inside the apps.
  */
-data class GitHubToken(val accessToken: String, val expiresAtMillis: Long?)
+data class GitHubToken(
+    val accessToken: String,
+    val expiresAtMillis: Long?,
+    val refreshToken: String? = null,
+    val refreshExpiresAtMillis: Long? = null,
+)
 
 /**
  * OAuth device flow for GitHub. The client ID is public; no client secret is involved.
@@ -97,10 +103,7 @@ class GitHubDeviceAuthorization(
                 if (error.cause is IOException) continue else throw error
             }
             when (val error = result.error()) {
-                null -> return GitHubToken(
-                    accessToken = result.text("access_token"),
-                    expiresAtMillis = result["expires_in"]?.jsonPrimitive?.longOrNull?.let { now() + it * 1_000L },
-                )
+                null -> return result.toToken()
                 "authorization_pending" -> Unit
                 "slow_down" -> interval = result["interval"]?.jsonPrimitive?.intOrNull ?: (interval + 5)
                 else -> throw CloudAuthorizationException(describe(error))
@@ -108,6 +111,41 @@ class GitHubDeviceAuthorization(
         }
         throw CloudAuthorizationException("The GitHub code expired. Start again.")
     }
+
+    /**
+     * Trades [refreshToken] for a new access token and a new refresh token; the old pair stops
+     * working at once. A refresh token GitHub no longer accepts means signing in again
+     * ([GitHubSignInExpiredException]); a network problem is a [CloudTransportException] and
+     * leaves the old pair as it was, to be tried again.
+     * See https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#refreshing-an-access-token-with-a-refresh-token
+     */
+    suspend fun refresh(refreshToken: String): GitHubToken = withContext(ioDispatcher) {
+        val body = FormBody.Builder()
+            .add("client_id", clientId)
+            .add("grant_type", "refresh_token")
+            .add("refresh_token", refreshToken)
+            .build()
+        val result = postForm(webBaseUrl.resolve("login/oauth/access_token")!!, body)
+        when (val error = result.error()) {
+            null -> result.toToken()
+            // The refresh token expired, was used already, or the authorization was removed.
+            "bad_refresh_token", "invalid_grant", "unauthorized_client", "incorrect_client_credentials" -> throw GitHubSignInExpiredException()
+            else -> throw CloudTransportException("GitHub could not renew the sign-in ($error).")
+        }
+    }
+
+    private fun JsonObject.toToken(): GitHubToken = GitHubToken(
+        accessToken = text("access_token"),
+        expiresAtMillis = this["expires_in"]?.jsonPrimitive?.longOrNull?.let { now() + it * 1_000L },
+        refreshToken = this["refresh_token"]?.jsonPrimitive?.contentOrNull?.takeIf(String::isNotBlank),
+        refreshExpiresAtMillis = this["refresh_token_expires_in"]?.jsonPrimitive?.longOrNull?.let { now() + it * 1_000L },
+    )
+
+    // There is deliberately no way to end a sign-in here. GitHub's credential revocation API
+    // (POST /credentials/revoke) is for leaked tokens: using it on a sign-in that was merely
+    // replaced ended the other sign-ins of this app for the same account as well, so the phone
+    // and the computer kept disconnecting each other. A replaced sign-in is simply forgotten;
+    // GitHub retires the least recently used one by itself once an account has more than ten.
 
     /** Repositories the GitHub App is installed on and this user can access, as owner/name. */
     suspend fun accessibleRepositories(token: String): List<String> = withContext(ioDispatcher) {
@@ -179,7 +217,7 @@ class GitHubDeviceAuthorization(
                 when (response.code) {
                     in 200..299 -> true
                     422 -> false // Another device created it a moment ago.
-                    401 -> throw CloudAuthorizationException("GitHub sign-in expired or was revoked. Reconnect GitHub.")
+                    401 -> throw GitHubSignInExpiredException()
                     403, 404 -> throw CloudAuthorizationException(
                         "GitHub did not allow creating the private repository $DEFAULT_REPOSITORY. " +
                             "Create it yourself on GitHub, then connect again.",
@@ -204,7 +242,7 @@ class GitHubDeviceAuthorization(
             client.newCall(authorized(url, token).get().build()).execute().use { response ->
                 when (response.code) {
                     404 -> null
-                    401 -> throw CloudAuthorizationException("GitHub sign-in expired or was revoked. Reconnect GitHub.")
+                    401 -> throw GitHubSignInExpiredException()
                     in 200..299 -> json.parseToJsonElement(
                         response.body?.string() ?: throw CloudTransportException("GitHub returned an empty response."),
                     ).jsonObject
@@ -238,7 +276,7 @@ class GitHubDeviceAuthorization(
 
     private fun execute(request: Request): JsonObject = try {
         client.newCall(request).execute().use { response ->
-            if (response.code == 401) throw CloudAuthorizationException("GitHub sign-in expired or was revoked. Reconnect GitHub.")
+            if (response.code == 401) throw GitHubSignInExpiredException()
             if (response.code == 404) throw CloudAuthorizationException("GitHub did not recognize this Client ID.")
             if (response.code !in 200..299) throw CloudTransportException("GitHub request failed (${response.code}).")
             val text = response.body?.string().orEmpty()

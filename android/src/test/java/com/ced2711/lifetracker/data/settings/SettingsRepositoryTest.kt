@@ -55,7 +55,7 @@ class SettingsRepositoryTest {
             assertEquals(0, settings.defaultAllDayReminderMinute)
             assertEquals(setOf(0L), settings.defaultReminderOffsetsMinutes)
             assertEquals(emptySet<TodoQuickAddField>(), settings.todoQuickAddFields)
-            assertEquals(TopLevelDestination.TODO, settings.lastDestination)
+            assertEquals(TopLevelDestination.TODAY, settings.lastDestination)
         } finally {
             job.cancelAndJoin()
         }

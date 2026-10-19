@@ -9,7 +9,8 @@ import java.io.File
  *
  * Returns how many texts were edited on both sides (both versions are kept). Throws
  * [BackupAuthenticationException] when a file uses another password and
- * [InvalidBackupException] when the merge cannot produce valid data; the caller then asks the user.
+ * [InvalidBackupException] when the merge cannot produce valid data and
+ * [MergeWouldRemoveRecordsException] past [maxRemovals]; the caller then asks the user.
  * A [base] that cannot be read is treated as unknown, which keeps everything from both sides.
  */
 fun mergeEncryptedBackups(
@@ -20,6 +21,7 @@ fun mergeEncryptedBackups(
     workDirectory: File,
     destination: File,
     now: Long,
+    maxRemovals: Int? = DEFAULT_MERGE_REMOVAL_LIMIT,
 ): Int {
     val stages = ArrayList<StagedAttachments>()
     fun open(file: File): Pair<BackupSnapshot, Map<Long, File>> {
@@ -37,7 +39,7 @@ fun mergeEncryptedBackups(
         var textConflicts = 0
         remotes.forEach { remoteFile ->
             val (remote, remoteFiles) = open(remoteFile)
-            val result = mergeSnapshots(baseOpened?.first, merged, remote, now)
+            val result = mergeSnapshots(baseOpened?.first, merged, remote, now, maxRemovals)
             val previousFiles = files
             files = result.attachmentSources.mapValues { (id, source) ->
                 when (source.side) {

@@ -1,8 +1,9 @@
 package com.ced2711.lifetracker.desktop
 
 import com.ced2711.lifetracker.cloudsync.LocalCloudSyncState
+import com.ced2711.lifetracker.data.backup.DEFAULT_MERGE_REMOVAL_LIMIT
 import com.ced2711.lifetracker.domain.model.AppLockTimeout
-import com.ced2711.lifetracker.domain.model.DefaultHiddenDestinations
+import com.ced2711.lifetracker.domain.model.resolveVisibleDestinations
 import com.ced2711.lifetracker.domain.model.DefaultVisibleDestinations
 import com.ced2711.lifetracker.domain.model.TopLevelDestination
 import com.ced2711.lifetracker.domain.model.UiLanguage
@@ -19,13 +20,15 @@ data class DesktopCloudConfig(
     val automaticSync: Boolean,
     val syncState: LocalCloudSyncState,
     val uiLanguage: UiLanguage = UiLanguage.ENGLISH,
-    val lastDestination: TopLevelDestination = TopLevelDestination.TODO,
+    val lastDestination: TopLevelDestination = TopLevelDestination.TODAY,
     val visibleDestinations: Set<TopLevelDestination> = DefaultVisibleDestinations,
     val appLockEnabled: Boolean = false,
     val appLockTimeout: AppLockTimeout = AppLockTimeout.ONE_MINUTE,
     val provider: DesktopCloudProvider = DesktopCloudProvider.GOOGLE_DRIVE,
     val gitHubClientId: String = "",
     val gitHubRepository: String = "",
+    /** Most records an automatic merge may remove from this PC without asking; null = no check. */
+    val mergeRemovalLimit: Int? = DEFAULT_MERGE_REMOVAL_LIMIT,
 )
 
 data class DesktopWindowBounds(val width: Int, val height: Int, val x: Int?, val y: Int?, val maximized: Boolean)
@@ -56,17 +59,13 @@ class DesktopConfigStore(
                 ?: UiLanguage.ENGLISH,
             lastDestination = properties.getProperty(KEY_LAST_DESTINATION)
                 ?.let { value -> runCatching { TopLevelDestination.valueOf(value) }.getOrNull() }
-                ?: TopLevelDestination.TODO,
-            // Hidden rather than visible modules are stored so modules added later start visible.
-            // No saved choice yet means the defaults; an empty saved value means every module is shown.
-            visibleDestinations = (
-                properties.getProperty(KEY_HIDDEN_DESTINATIONS)
-                    ?: DefaultHiddenDestinations.joinToString(",") { it.name }
-                )
-                .split(',')
-                .map(String::trim)
-                .toSet()
-                .let { hidden -> TopLevelDestination.entries.filterNot { it.name in hidden }.toSet() },
+                ?: TopLevelDestination.TODAY,
+            // Hidden rather than visible modules are stored so modules added later start visible;
+            // opt-in modules (Today) show only when chosen. No saved choice yet means the defaults.
+            visibleDestinations = resolveVisibleDestinations(
+                hidden = properties.getProperty(KEY_HIDDEN_DESTINATIONS)?.split(',')?.mapTo(mutableSetOf(), String::trim),
+                legacyOptedIn = properties.getProperty(KEY_OPTED_IN_DESTINATIONS)?.split(',')?.mapTo(mutableSetOf(), String::trim),
+            ),
             appLockEnabled = properties.getProperty(KEY_APP_LOCK)?.toBooleanStrictOrNull() ?: false,
             appLockTimeout = properties.getProperty(KEY_APP_LOCK_TIMEOUT)
                 ?.let { value -> AppLockTimeout.entries.firstOrNull { it.name == value } }
@@ -77,6 +76,11 @@ class DesktopConfigStore(
             gitHubClientId = properties.getProperty(KEY_GITHUB_CLIENT_ID)
                 ?: System.getenv("LIFE_ASSISTANT_GITHUB_CLIENT_ID").orEmpty(),
             gitHubRepository = properties.getProperty(KEY_GITHUB_REPOSITORY).orEmpty(),
+            mergeRemovalLimit = when (val saved = properties.getProperty(KEY_MERGE_REMOVAL_LIMIT)) {
+                null -> DEFAULT_MERGE_REMOVAL_LIMIT
+                NO_LIMIT -> null
+                else -> saved.toIntOrNull()?.takeIf { it >= 0 } ?: DEFAULT_MERGE_REMOVAL_LIMIT
+            },
         )
     }
 
@@ -91,6 +95,13 @@ class DesktopConfigStore(
     fun setAutomaticSync(enabled: Boolean) {
         val properties = load()
         properties.setProperty(KEY_AUTOMATIC, enabled.toString())
+        save(properties)
+    }
+
+    @Synchronized
+    fun setMergeRemovalLimit(limit: Int?) {
+        val properties = load()
+        properties.setProperty(KEY_MERGE_REMOVAL_LIMIT, limit?.toString() ?: NO_LIMIT)
         save(properties)
     }
 
@@ -115,6 +126,7 @@ class DesktopConfigStore(
             KEY_HIDDEN_DESTINATIONS,
             TopLevelDestination.entries.filterNot(value::contains).joinToString(",") { it.name },
         )
+        properties.remove(KEY_OPTED_IN_DESTINATIONS)
         save(properties)
     }
 
@@ -152,6 +164,32 @@ class DesktopConfigStore(
         properties.remove(KEY_LAST_SYNC_AT)
         save(properties)
     }
+
+    /**
+     * Whether the user picked the data password. A new PC starts with a random password that it
+     * keeps itself, so nothing is asked before the app opens; the user picks one only when a
+     * feature needs it (cloud sync, Vault, Confessional, app lock). Earlier versions always asked,
+     * so a missing value means chosen.
+     */
+    @Synchronized
+    fun passwordChosen(): Boolean = load().getProperty(KEY_PASSWORD_CHOSEN)?.toBooleanStrictOrNull() ?: true
+
+    @Synchronized
+    fun setPasswordChosen(chosen: Boolean) = load().let { it.setProperty(KEY_PASSWORD_CHOSEN, chosen.toString()); save(it) }
+
+    /** Whether AI assistants on this PC may use Life Assistant (off until the user turns it on). */
+    @Synchronized
+    fun agentAccess(): Boolean = load().getProperty(KEY_AGENT_ACCESS)?.toBooleanStrictOrNull() ?: false
+
+    @Synchronized
+    fun setAgentAccess(enabled: Boolean) = load().let { it.setProperty(KEY_AGENT_ACCESS, enabled.toString()); save(it) }
+
+    /** Whether those assistants may also change data, not only read it (on by default). */
+    @Synchronized
+    fun agentChanges(): Boolean = load().getProperty(KEY_AGENT_CHANGES)?.toBooleanStrictOrNull() ?: true
+
+    @Synchronized
+    fun setAgentChanges(enabled: Boolean) = load().let { it.setProperty(KEY_AGENT_CHANGES, enabled.toString()); save(it) }
 
     /** Whether the sidebar is folded to icons (off by default). */
     @Synchronized
@@ -234,6 +272,8 @@ class DesktopConfigStore(
     private companion object {
         const val KEY_CLIENT_ID = "google.desktop.clientId"
         const val KEY_AUTOMATIC = "cloud.automatic"
+        const val KEY_MERGE_REMOVAL_LIMIT = "cloud.mergeRemovalLimit"
+        const val NO_LIMIT = "off"
         const val KEY_DEVICE_ID = "device.id"
         const val KEY_LAST_REVISION = "cloud.lastRevision"
         const val KEY_LAST_FINGERPRINT = "cloud.lastFingerprint"
@@ -241,6 +281,7 @@ class DesktopConfigStore(
         const val KEY_UI_LANGUAGE = "ui.language"
         const val KEY_LAST_DESTINATION = "ui.lastDestination"
         const val KEY_HIDDEN_DESTINATIONS = "ui.hiddenDestinations"
+        const val KEY_OPTED_IN_DESTINATIONS = "ui.optedInDestinations"
         const val KEY_APP_LOCK = "security.appLock"
         const val KEY_APP_LOCK_TIMEOUT = "security.appLockTimeout"
         const val KEY_PROVIDER = "cloud.provider"
@@ -253,6 +294,9 @@ class DesktopConfigStore(
         const val KEY_WINDOW_MAXIMIZED = "window.maximized"
         const val KEY_DESKTOP_REMINDERS = "reminders.desktop"
         const val KEY_SIDEBAR_COLLAPSED = "ui.sidebarCollapsed"
+        const val KEY_PASSWORD_CHOSEN = "security.passwordChosen"
+        const val KEY_AGENT_ACCESS = "agent.access"
+        const val KEY_AGENT_CHANGES = "agent.changes"
         const val KEY_KEEP_IN_TRAY = "window.keepInTray"
         const val KEY_REMINDERS_CHECKED_AT = "reminders.checkedAt"
     }

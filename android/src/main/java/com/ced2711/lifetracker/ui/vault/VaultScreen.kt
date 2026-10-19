@@ -1,78 +1,61 @@
 package com.ced2711.lifetracker.ui.vault
 
-import android.app.Activity
 import android.app.KeyguardManager
-import android.content.Context
-import android.content.ContextWrapper
-import android.content.Intent
-import android.os.Build
-import android.provider.Settings
 import androidx.activity.compose.BackHandler
-import androidx.biometric.BiometricManager
-import androidx.biometric.BiometricPrompt
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Fingerprint
+import androidx.compose.material.icons.rounded.Key
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import com.ced2711.lifetracker.ui.localization.localizedText
-import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
-import com.ced2711.lifetracker.ui.localization.translateUiText
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
@@ -81,23 +64,43 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.password
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
-import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ced2711.lifetracker.domain.model.VaultEntry
-import com.ced2711.lifetracker.ui.adaptive.HingeSafeAlertDialog
+import com.ced2711.lifetracker.ui.components.ConfirmDialog
+import com.ced2711.lifetracker.ui.components.EditorSheet
+import com.ced2711.lifetracker.ui.components.FieldLabel
+import com.ced2711.lifetracker.ui.components.SearchField
+import com.ced2711.lifetracker.ui.design.EmptyState
+import com.ced2711.lifetracker.ui.design.IconTile
+import com.ced2711.lifetracker.ui.design.LifeTextField
+import com.ced2711.lifetracker.ui.design.ListRow
+import com.ced2711.lifetracker.ui.design.Panel
+import com.ced2711.lifetracker.ui.design.ReadableWidth
+import com.ced2711.lifetracker.ui.design.Space
+import com.ced2711.lifetracker.ui.localization.LocalUiLanguage
+import com.ced2711.lifetracker.ui.localization.localizedText
+import com.ced2711.lifetracker.ui.localization.translateUiText
+import com.ced2711.lifetracker.ui.theme.LifeTheme
 
+/**
+ * Accounts and passwords. Closed until the owner confirms with fingerprint, face or screen lock;
+ * then a searchable list, a reading view with copy buttons, and an editor. The Vault locks after a
+ * minute without touch and when it is left; copied values leave the clipboard after 30 seconds.
+ */
 @Composable
 fun VaultScreen(
     viewModel: VaultViewModel,
@@ -108,32 +111,26 @@ fun VaultScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val keyguardManager = remember(context) {
-        context.getSystemService(KeyguardManager::class.java)
-    }
+    val keyguardManager = remember(context) { context.getSystemService(KeyguardManager::class.java) }
     var deviceSecure by remember { mutableStateOf(keyguardManager?.isDeviceSecure == true) }
     val snackbarHostState = remember { SnackbarHostState() }
     val uiLanguage = LocalUiLanguage.current
-    var deleteEntryId by remember { mutableStateOf<String?>(null) }
-    var showResetConfirmation by remember { mutableStateOf(false) }
 
-    val requestBack: () -> Unit = {
-        if (viewModel.uiState.value.mutationInProgress) {
-            viewModel.touch()
-        } else {
-            viewModel.touch()
-            onBack()
+    // Back leaves the Vault (which locks it); on wide screens it first closes the open entry.
+    BackHandler(enabled = uiState.access == VaultAccessState.Unlocked) {
+        viewModel.touch()
+        val current = viewModel.uiState.value
+        when {
+            current.mutationInProgress -> Unit
+            isWide && current.viewingEntryId != null -> viewModel.closeEntry()
+            else -> onBack()
         }
     }
-    BackHandler(enabled = uiState.access == VaultAccessState.Unlocked) {
-        requestBack()
-    }
 
+    // A screen lock may have been set or removed while the app was in the background.
     DisposableEffect(lifecycleOwner, keyguardManager) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                deviceSecure = keyguardManager?.isDeviceSecure == true
-            }
+            if (event == Lifecycle.Event.ON_RESUME) deviceSecure = keyguardManager?.isDeviceSecure == true
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -152,675 +149,343 @@ fun VaultScreen(
         viewModel.consumeSnackbarMessage()
     }
 
-    val interactionModifier = Modifier
-        .pointerInput(viewModel) {
-            awaitPointerEventScope {
-                while (true) {
-                    val event = awaitPointerEvent(PointerEventPass.Final)
-                    if (event.changes.any { it.pressed || it.previousPressed }) viewModel.touch()
-                }
-            }
-        }
-        .onPreviewKeyEvent { event ->
-            if (event.type == KeyEventType.KeyDown) viewModel.touch()
-            false
-        }
-
-    Scaffold(
-        modifier = modifier
-            .fillMaxSize()
-            .then(interactionModifier),
-        contentWindowInsets = WindowInsets.safeDrawing,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-    ) { contentPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(contentPadding)
-                .imePadding(),
-        ) {
-            VaultActions(
-                access = uiState.access,
-                mutationInProgress = uiState.mutationInProgress,
-                onLock = {
-                    if (!viewModel.uiState.value.mutationInProgress) viewModel.lock()
-                },
-                onAdd = viewModel::addEntry,
-            )
-            HorizontalDivider()
-
-            when (val access = uiState.access) {
-                VaultAccessState.Locked -> LockedVaultContent(
-                    hasVault = uiState.hasVault,
-                    deviceSecure = deviceSecure,
-                    onUnlock = {
-                        deviceSecure = keyguardManager?.isDeviceSecure == true
-                        if (deviceSecure) viewModel.requestAccess(context.canUseStrongBiometric())
-                    },
-                    onOpenSecuritySettings = context::openSecuritySettings,
-                    onReset = { showResetConfirmation = true },
-                )
-
-                VaultAccessState.Unlocking -> VaultStatusContent(
-                    title = "Confirm your identity",
-                    message = "Waiting for secure device authentication.",
-                    progress = true,
-                )
-
-                is VaultAccessState.Error -> VaultStatusContent(
-                    title = "Vault unavailable",
-                    message = access.message,
-                    actionLabel = if (deviceSecure) "Try again" else "Open Android security settings",
-                    onAction = {
-                        if (deviceSecure) {
-                            viewModel.requestAccess(context.canUseStrongBiometric())
-                        } else {
-                            context.openSecuritySettings()
-                        }
-                    },
-                    secondaryActionLabel = "Reset vault".takeIf { uiState.hasVault },
-                    onSecondaryAction = { showResetConfirmation = true },
-                )
-
-                VaultAccessState.Unlocked -> VaultUnlockedContent(
-                    uiState = uiState,
-                    isWide = isWide,
-                    viewModel = viewModel,
-                    onDelete = {
-                        if (!viewModel.uiState.value.mutationInProgress) deleteEntryId = it
-                    },
-                    onReset = {
-                        if (!viewModel.uiState.value.mutationInProgress) {
-                            showResetConfirmation = true
-                        }
-                    },
-                )
-            }
-        }
-    }
-
-    val deleteTarget = uiState.entries.firstOrNull { it.id == deleteEntryId }
-    if (deleteEntryId != null) {
-        HingeSafeAlertDialog(
-            onDismissRequest = {
-                if (!uiState.mutationInProgress) {
-                    viewModel.touch()
-                    deleteEntryId = null
-                }
+    val actions = remember(viewModel, context, keyguardManager) {
+        VaultActions(
+            onUnlock = {
+                deviceSecure = keyguardManager?.isDeviceSecure == true
+                if (deviceSecure) viewModel.requestAccess(context.canUseStrongBiometric())
             },
-            title = { Text(localizedText("Delete entry?")) },
-            text = {
-                Text(
-                    localizedText(
-                        "Delete ${deleteTarget?.displayLabel() ?: "this entry"}? This cannot be undone.",
-                    ),
-                )
-            },
-            dismissButton = {
-                TextButton(
-                    enabled = !uiState.mutationInProgress,
-                    onClick = {
-                        viewModel.touch()
-                        deleteEntryId = null
-                    },
-                ) { Text(localizedText("Cancel")) }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = !uiState.mutationInProgress,
-                    onClick = {
-                        val id = deleteEntryId
-                        deleteEntryId = null
-                        if (id != null) viewModel.deleteEntry(id)
-                    },
-                ) { Text(localizedText("Delete")) }
-            },
+            onOpenSecuritySettings = { context.openSecuritySettings() },
+            onReset = viewModel::resetVault,
+            onLock = { if (!viewModel.uiState.value.mutationInProgress) viewModel.lock() },
+            onQueryChange = viewModel::setQuery,
+            onEnableFingerprint = viewModel::requestFingerprintEnrollment,
+            onUpgradeSecurity = viewModel::requestModernUpgrade,
+            onOpenEntry = viewModel::openEntry,
+            onCloseEntry = viewModel::closeEntry,
+            onCopyAccount = viewModel::copyEntryAccount,
+            onCopyPassword = viewModel::copyEntryPassword,
+            onCopyWebsite = viewModel::copyEntryWebsite,
+            onAdd = viewModel::addEntry,
+            onEdit = viewModel::editEntry,
+            onCloseEditor = viewModel::closeEditor,
+            onLabelChange = viewModel::updateLabel,
+            onAccountChange = viewModel::updateAccount,
+            onPasswordChange = viewModel::updatePassword,
+            onPasswordVisibleChange = viewModel::setPasswordVisible,
+            onWebsiteChange = viewModel::updateWebsite,
+            onNotesChange = viewModel::updateNotes,
+            onSave = viewModel::saveEditor,
+            onDelete = viewModel::deleteEntry,
+            onInteraction = viewModel::touch,
         )
     }
 
-    if (showResetConfirmation) {
-        HingeSafeAlertDialog(
-            onDismissRequest = {
-                if (!uiState.mutationInProgress) {
-                    viewModel.touch()
-                    showResetConfirmation = false
-                }
-            },
-            title = { Text(localizedText("Reset vault?")) },
-            text = {
-                Text(
-                    localizedText(
-                        "Android will ask you to confirm your identity, then permanently delete " +
-                            "every vault entry and encryption key. This cannot be undone.",
-                    ),
-                )
-            },
-            dismissButton = {
-                TextButton(
-                    enabled = !uiState.mutationInProgress,
-                    onClick = {
-                        viewModel.touch()
-                        showResetConfirmation = false
-                    },
-                ) { Text(localizedText("Cancel")) }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = !uiState.mutationInProgress,
-                    onClick = {
-                        showResetConfirmation = false
-                        viewModel.resetVault()
-                    },
-                ) { Text(localizedText("Reset vault")) }
-            },
-        )
-    }
+    VaultContent(
+        uiState = uiState,
+        deviceSecure = deviceSecure,
+        isWide = isWide,
+        actions = actions,
+        modifier = modifier,
+        snackbarHostState = snackbarHostState,
+    )
 }
 
-@Composable
-internal fun VaultAuthenticationCoordinator(
-    viewModel: VaultViewModel,
-    request: VaultAuthenticationRequest?,
-    hasVault: Boolean,
-    deviceSecure: Boolean,
-) {
-    val context = LocalContext.current
-    val uiLanguage = LocalUiLanguage.current
-    val activity = remember(context) { context.findFragmentActivity() }
-    val legacyCredentialFragment = remember(activity) {
-        activity?.getOrCreateVaultLegacyCredentialFragment()
-    }
-    var savedBiometricRequestId by rememberSaveable { mutableStateOf<Long?>(null) }
-    var savedBiometricGeneration by rememberSaveable { mutableLongStateOf(0L) }
-    val biometricAttempts = remember {
-        VaultBiometricAttemptRegistry(
-            initialGeneration = savedBiometricGeneration,
-            initialActive = savedBiometricRequestId?.let {
-                VaultBiometricAttempt(it, savedBiometricGeneration)
-            },
-        )
-    }
-    var attachedBiometricAttempt by remember { mutableStateOf<VaultBiometricAttempt?>(null) }
-    var activeBiometricPrompt by remember { mutableStateOf<BiometricPrompt?>(null) }
-
-    val clearBiometricAttempt: (VaultBiometricAttempt) -> Unit = { attempt ->
-        if (biometricAttempts.finish(attempt)) {
-            activeBiometricPrompt = null
-            attachedBiometricAttempt = null
-            savedBiometricRequestId = null
-            savedBiometricGeneration = biometricAttempts.generation
-        }
-    }
-    val cancelActiveBiometric: () -> Unit = {
-        val prompt = activeBiometricPrompt
-        biometricAttempts.invalidate()
-        activeBiometricPrompt = null
-        attachedBiometricAttempt = null
-        savedBiometricRequestId = null
-        savedBiometricGeneration = biometricAttempts.generation
-        prompt?.cancelAuthentication()
-    }
-
-    DisposableEffect(legacyCredentialFragment, viewModel) {
-        legacyCredentialFragment?.setResultCallback { result ->
-            if (result.authenticated) {
-                viewModel.completeDeviceCredentialAuthentication(result.requestId)
-            } else {
-                viewModel.authenticationCancelled(result.requestId)
-            }
-        }
-        onDispose { legacyCredentialFragment?.clearResultCallback() }
-    }
-
-    DisposableEffect(activity) {
-        onDispose {
-            if (activity?.isChangingConfigurations != true) cancelActiveBiometric()
-        }
-    }
-
-    LaunchedEffect(request?.id, activity, deviceSecure, uiLanguage) {
-        val pending = request
-        val previousAttempt = biometricAttempts.active
-        if (previousAttempt != null && previousAttempt.requestId != pending?.id) {
-            cancelActiveBiometric()
-        }
-        if (pending == null) return@LaunchedEffect
-
-        if (!deviceSecure) {
-            viewModel.authenticationUnavailable(
-                pending.id,
-                "Set a secure screen lock before using the vault.",
-            )
-            return@LaunchedEffect
-        }
-
-        when (pending) {
-            is VaultAuthenticationRequest.Modern -> {
-                val host = activity
-                if (host == null) {
-                    viewModel.authenticationUnavailable(pending.id, "Authentication host unavailable.")
-                    return@LaunchedEffect
-                }
-                val restoredAttempt = biometricAttempts.active?.takeIf {
-                    it.requestId == pending.id
-                }
-                if (restoredAttempt != null && attachedBiometricAttempt == restoredAttempt) {
-                    return@LaunchedEffect
-                }
-                val attempt = restoredAttempt ?: biometricAttempts.start(pending.id).also {
-                    savedBiometricRequestId = it.requestId
-                    savedBiometricGeneration = it.generation
-                }
-                val prompt = createVaultBiometricPrompt(
-                    host = host,
-                    viewModel = viewModel,
-                    request = pending,
-                    attempt = attempt,
-                    onTerminal = clearBiometricAttempt,
-                )
-                activeBiometricPrompt = prompt
-                attachedBiometricAttempt = attempt
-                if (restoredAttempt != null) return@LaunchedEffect
-                val promptInfo = BiometricPrompt.PromptInfo.Builder()
-                    .setTitle(translateUiText(pending.promptTitle(hasVault), uiLanguage))
-                    .setSubtitle(translateUiText("Confirm your identity", uiLanguage))
-                    .setAllowedAuthenticators(pending.allowedAuthenticators)
-                    .build()
-                runCatching { prompt.authenticate(promptInfo) }
-                    .onFailure {
-                        clearBiometricAttempt(attempt)
-                        viewModel.authenticationUnavailable(
-                            pending.id,
-                            it.message ?: "Secure authentication is unavailable.",
-                        )
-                    }
-            }
-
-            is VaultAuthenticationRequest.LegacyBiometric -> {
-                val host = activity
-                if (host == null) {
-                    viewModel.authenticationUnavailable(pending.id, "Authentication host unavailable.")
-                    return@LaunchedEffect
-                }
-                val restoredAttempt = biometricAttempts.active?.takeIf {
-                    it.requestId == pending.id
-                }
-                if (restoredAttempt != null && attachedBiometricAttempt == restoredAttempt) {
-                    return@LaunchedEffect
-                }
-                val attempt = restoredAttempt ?: biometricAttempts.start(pending.id).also {
-                    savedBiometricRequestId = it.requestId
-                    savedBiometricGeneration = it.generation
-                }
-                val prompt = createVaultBiometricPrompt(
-                    host = host,
-                    viewModel = viewModel,
-                    request = pending,
-                    attempt = attempt,
-                    onTerminal = clearBiometricAttempt,
-                )
-                activeBiometricPrompt = prompt
-                attachedBiometricAttempt = attempt
-                if (restoredAttempt != null) return@LaunchedEffect
-                val negativeText = if (pending.purpose.isAccessAuthentication) {
-                    "Use screen lock"
-                } else {
-                    "Cancel"
-                }
-                val promptInfo = BiometricPrompt.PromptInfo.Builder()
-                    .setTitle(translateUiText(pending.promptTitle(hasVault), uiLanguage))
-                    .setSubtitle(translateUiText("Confirm your fingerprint", uiLanguage))
-                    .setAllowedAuthenticators(pending.allowedAuthenticators)
-                    .setNegativeButtonText(translateUiText(negativeText, uiLanguage))
-                    .build()
-                runCatching {
-                    prompt.authenticate(promptInfo, BiometricPrompt.CryptoObject(pending.cipher))
-                }.onFailure {
-                    clearBiometricAttempt(attempt)
-                    viewModel.authenticationUnavailable(
-                        pending.id,
-                        it.message ?: "Fingerprint authentication is unavailable.",
-                    )
-                }
-            }
-
-            is VaultAuthenticationRequest.LegacyCredential -> {
-                if (biometricAttempts.active != null) cancelActiveBiometric()
-                val manager = context.getSystemService(KeyguardManager::class.java)
-                val intent = manager?.createConfirmDeviceCredentialIntent(
-                    translateUiText(pending.promptTitle(hasVault), uiLanguage),
-                    translateUiText("Confirm your screen lock to continue.", uiLanguage),
-                )
-                if (intent == null) {
-                    viewModel.authenticationUnavailable(
-                        pending.id,
-                        "A secure screen lock is required to use the vault.",
-                    )
-                } else {
-                    val launcher = legacyCredentialFragment
-                    if (launcher == null) {
-                        viewModel.authenticationUnavailable(
-                            pending.id,
-                            "Authentication host unavailable.",
-                        )
-                    } else {
-                        runCatching { launcher.launch(pending.id, intent) }
-                            .onFailure {
-                                viewModel.authenticationUnavailable(
-                                    pending.id,
-                                    it.message ?: "Secure authentication is unavailable.",
-                                )
-                            }
-                    }
-                }
-            }
-
-            is VaultAuthenticationRequest.SystemAuthentication -> {
-                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-                    if (biometricAttempts.active != null) cancelActiveBiometric()
-                    val manager = context.getSystemService(KeyguardManager::class.java)
-                    val intent = manager?.createConfirmDeviceCredentialIntent(
-                        translateUiText(pending.promptTitle(hasVault), uiLanguage),
-                        translateUiText(
-                            "Confirm your screen lock to permanently reset the vault.",
-                            uiLanguage,
-                        ),
-                    )
-                    val launcher = legacyCredentialFragment
-                    when {
-                        intent == null -> viewModel.authenticationUnavailable(
-                            pending.id,
-                            "A secure screen lock is required to reset the vault.",
-                        )
-                        launcher == null -> viewModel.authenticationUnavailable(
-                            pending.id,
-                            "Authentication host unavailable.",
-                        )
-                        else -> runCatching { launcher.launch(pending.id, intent) }
-                            .onFailure {
-                                viewModel.authenticationUnavailable(
-                                    pending.id,
-                                    it.message ?: "Secure authentication is unavailable.",
-                                )
-                            }
-                    }
-                    return@LaunchedEffect
-                }
-
-                val host = activity
-                if (host == null) {
-                    viewModel.authenticationUnavailable(pending.id, "Authentication host unavailable.")
-                    return@LaunchedEffect
-                }
-                val restoredAttempt = biometricAttempts.active?.takeIf {
-                    it.requestId == pending.id
-                }
-                if (restoredAttempt != null && attachedBiometricAttempt == restoredAttempt) {
-                    return@LaunchedEffect
-                }
-                val attempt = restoredAttempt ?: biometricAttempts.start(pending.id).also {
-                    savedBiometricRequestId = it.requestId
-                    savedBiometricGeneration = it.generation
-                }
-                val prompt = createVaultBiometricPrompt(
-                    host = host,
-                    viewModel = viewModel,
-                    request = pending,
-                    attempt = attempt,
-                    onTerminal = clearBiometricAttempt,
-                )
-                activeBiometricPrompt = prompt
-                attachedBiometricAttempt = attempt
-                if (restoredAttempt != null) return@LaunchedEffect
-                val promptInfo = BiometricPrompt.PromptInfo.Builder()
-                    .setTitle(translateUiText(pending.promptTitle(hasVault), uiLanguage))
-                    .setSubtitle(translateUiText("Confirm to permanently reset the vault", uiLanguage))
-                    .setAllowedAuthenticators(pending.allowedAuthenticators)
-                    .build()
-                runCatching { prompt.authenticate(promptInfo) }
-                    .onFailure {
-                        clearBiometricAttempt(attempt)
-                        viewModel.authenticationUnavailable(
-                            pending.id,
-                            it.message ?: "Secure authentication is unavailable.",
-                        )
-                    }
-            }
-        }
-    }
-}
-
-private fun createVaultBiometricPrompt(
-    host: FragmentActivity,
-    viewModel: VaultViewModel,
-    request: VaultAuthenticationRequest,
-    attempt: VaultBiometricAttempt,
-    onTerminal: (VaultBiometricAttempt) -> Unit,
-): BiometricPrompt = BiometricPrompt(
-    host,
-    ContextCompat.getMainExecutor(host),
-    object : BiometricPrompt.AuthenticationCallback() {
-        override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-            onTerminal(attempt)
-            when (request) {
-                is VaultAuthenticationRequest.Modern ->
-                    viewModel.completeModernAuthentication(attempt.requestId)
-
-                is VaultAuthenticationRequest.LegacyBiometric -> {
-                    val cipher = result.cryptoObject?.cipher
-                    if (cipher == null) {
-                        viewModel.authenticationError(
-                            attempt.requestId,
-                            "Authentication did not return the required secure cipher.",
-                        )
-                    } else {
-                        viewModel.completeLegacyBiometricAuthentication(attempt.requestId, cipher)
-                    }
-                }
-
-                is VaultAuthenticationRequest.LegacyCredential -> Unit
-                is VaultAuthenticationRequest.SystemAuthentication ->
-                    viewModel.completeSystemAuthentication(attempt.requestId)
-            }
-        }
-
-        override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-            onTerminal(attempt)
-            when {
-                errorCode == BiometricPrompt.ERROR_NEGATIVE_BUTTON &&
-                    request is VaultAuthenticationRequest.LegacyBiometric &&
-                    request.purpose.isAccessAuthentication ->
-                    viewModel.useScreenLock(attempt.requestId)
-
-                errorCode == BiometricPrompt.ERROR_NEGATIVE_BUTTON ||
-                    errorCode == BiometricPrompt.ERROR_CANCELED ||
-                    errorCode == BiometricPrompt.ERROR_USER_CANCELED ->
-                    viewModel.authenticationCancelled(attempt.requestId)
-
-                isVaultAuthenticationUnavailableError(errorCode) ->
-                    viewModel.authenticationUnavailable(attempt.requestId, errString.toString())
-
-                else -> viewModel.authenticationError(attempt.requestId, errString.toString())
-            }
-        }
-    },
+/** Everything the Vault screen can ask for; the screen wires these to the view model. */
+internal class VaultActions(
+    val onUnlock: () -> Unit = {},
+    val onOpenSecuritySettings: () -> Unit = {},
+    /** Called after the owner confirmed; the system then asks for authentication. */
+    val onReset: () -> Unit = {},
+    val onLock: () -> Unit = {},
+    val onQueryChange: (String) -> Unit = {},
+    val onEnableFingerprint: () -> Unit = {},
+    val onUpgradeSecurity: () -> Unit = {},
+    val onOpenEntry: (String) -> Unit = {},
+    val onCloseEntry: () -> Unit = {},
+    val onCopyAccount: (String) -> Unit = {},
+    val onCopyPassword: (String) -> Unit = {},
+    val onCopyWebsite: (String) -> Unit = {},
+    val onAdd: () -> Unit = {},
+    val onEdit: (String) -> Unit = {},
+    val onCloseEditor: () -> Unit = {},
+    val onLabelChange: (String) -> Unit = {},
+    val onAccountChange: (String) -> Unit = {},
+    val onPasswordChange: (String) -> Unit = {},
+    val onPasswordVisibleChange: (Boolean) -> Unit = {},
+    val onWebsiteChange: (String) -> Unit = {},
+    val onNotesChange: (String) -> Unit = {},
+    val onSave: () -> Unit = {},
+    /** Called after the owner confirmed. */
+    val onDelete: (String) -> Unit = {},
+    /** Any touch or key press; it restarts the minute after which the Vault locks. */
+    val onInteraction: () -> Unit = {},
 )
 
-@Composable
-private fun VaultActions(
-    access: VaultAccessState,
-    mutationInProgress: Boolean,
-    onLock: () -> Unit,
-    onAdd: () -> Unit,
-) {
-    val unlocked = access == VaultAccessState.Unlocked
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.End,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconButton(onClick = onLock, enabled = unlocked && !mutationInProgress) {
-            Icon(Icons.Default.Lock, contentDescription = localizedText("Lock vault"))
-        }
-        IconButton(onClick = onAdd, enabled = unlocked && !mutationInProgress) {
-            Icon(Icons.Default.Add, contentDescription = localizedText("Add vault entry"))
-        }
-    }
+/** A question the screen asks before doing something that cannot be undone. */
+internal sealed interface VaultConfirmation {
+    data object Reset : VaultConfirmation
+    data class Delete(val entryId: String) : VaultConfirmation
+    data object DiscardEdits : VaultConfirmation
 }
 
 @Composable
-private fun LockedVaultContent(
-    hasVault: Boolean,
+internal fun VaultContent(
+    uiState: VaultUiState,
     deviceSecure: Boolean,
-    onUnlock: () -> Unit,
-    onOpenSecuritySettings: () -> Unit,
-    onReset: () -> Unit,
+    isWide: Boolean,
+    actions: VaultActions,
+    modifier: Modifier = Modifier,
+    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
+    initialConfirmation: VaultConfirmation? = null,
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(24.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            modifier = Modifier.widthIn(max = 480.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Default.Lock,
-                contentDescription = null,
-                modifier = Modifier.size(52.dp),
-                tint = MaterialTheme.colorScheme.primary,
+    var confirmation by remember { mutableStateOf(initialConfirmation) }
+    val busy = uiState.mutationInProgress
+    val unlocked = uiState.access == VaultAccessState.Unlocked
+    val editor = uiState.editor.takeIf { unlocked }
+    val viewing = uiState.entries.firstOrNull { it.id == uiState.viewingEntryId }.takeIf { unlocked }
+    val askReset = { if (!busy) confirmation = VaultConfirmation.Reset }
+    val askDelete = { id: String -> if (!busy) confirmation = VaultConfirmation.Delete(id) }
+
+    // A question about an entry or about typed text makes no sense once that is gone.
+    LaunchedEffect(unlocked, editor == null) {
+        val open = confirmation
+        if ((!unlocked && open is VaultConfirmation.Delete) || (editor == null && open == VaultConfirmation.DiscardEdits)) {
+            confirmation = null
+        }
+    }
+
+    Box(modifier.fillMaxSize().reportsInteraction(actions.onInteraction)) {
+        when (val access = uiState.access) {
+            VaultAccessState.Locked -> VaultGate(
+                title = localizedText(if (uiState.hasVault) "Vault locked" else "Create your vault"),
+                message = localizedText(
+                    when {
+                        !deviceSecure -> "Set a secure screen lock in Android Settings before using the vault."
+                        uiState.hasVault -> "Your accounts and passwords are encrypted on this device."
+                        else -> "Keep accounts and passwords encrypted on this device, opened with your fingerprint, face or screen lock."
+                    },
+                ),
+                actionLabel = localizedText(
+                    when {
+                        !deviceSecure -> "Open Android security settings"
+                        uiState.hasVault -> "Unlock"
+                        else -> "Create vault"
+                    },
+                ),
+                onAction = if (deviceSecure) actions.onUnlock else actions.onOpenSecuritySettings,
+                onReset = askReset.takeIf { uiState.hasVault },
             )
-            Text(
-                text = localizedText(if (hasVault) "Vault locked" else "Create your vault"),
-                style = MaterialTheme.typography.headlineSmall,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+
+            VaultAccessState.Unlocking -> VaultGate(
+                title = localizedText("Confirm your identity"),
+                message = localizedText("Waiting for secure device authentication."),
+                progress = true,
             )
-            Text(
-                text = localizedText(if (deviceSecure) {
-                    "Your accounts and passwords are encrypted on this device. Unlocking requires your fingerprint, face, PIN, pattern, or password."
-                } else {
-                    "Set a secure screen lock in Android Settings before using the vault."
-                }),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+
+            is VaultAccessState.Error -> VaultGate(
+                title = localizedText("Vault unavailable"),
+                message = localizedText(access.message),
+                tint = LifeTheme.colors.danger,
+                actionLabel = localizedText(if (deviceSecure) "Try again" else "Open Android security settings"),
+                onAction = if (deviceSecure) actions.onUnlock else actions.onOpenSecuritySettings,
+                onReset = askReset.takeIf { uiState.hasVault },
             )
-            Button(onClick = onUnlock, enabled = deviceSecure) {
-                Text(localizedText(if (hasVault) "Unlock" else "Create vault"))
-            }
-            if (!deviceSecure) {
-                OutlinedButton(onClick = onOpenSecuritySettings) {
-                    Text(localizedText("Open Android security settings"))
+
+            VaultAccessState.Unlocked -> VaultUnlocked(
+                uiState = uiState,
+                viewing = viewing,
+                isWide = isWide,
+                actions = actions,
+                onAskReset = askReset,
+                onAskDelete = askDelete,
+            )
+        }
+        SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter))
+    }
+
+    // The editor lies on top of the reading view; closing it returns there.
+    if (editor != null) {
+        VaultEditorSheet(
+            editor = editor,
+            busy = busy,
+            actions = actions,
+            snackbarHostState = snackbarHostState,
+            onClose = {
+                val original = uiState.entries.firstOrNull { it.id == editor.id }
+                when {
+                    busy -> Unit
+                    editor.differsFrom(original) -> confirmation = VaultConfirmation.DiscardEdits
+                    else -> actions.onCloseEditor()
                 }
-            }
-            if (hasVault) {
-                TextButton(onClick = onReset) {
-                    Text(localizedText("Reset vault"), color = MaterialTheme.colorScheme.error)
-                }
+            },
+            onAskDelete = askDelete,
+        )
+    } else if (viewing != null && !isWide) {
+        VaultEntrySheet(
+            entry = viewing,
+            busy = busy,
+            actions = actions,
+            snackbarHostState = snackbarHostState,
+            onAskDelete = askDelete,
+        )
+    }
+
+    when (val open = confirmation) {
+        VaultConfirmation.Reset -> ConfirmDialog(
+            title = localizedText("Reset vault?"),
+            text = localizedText("Android will ask you to confirm your identity, then permanently delete every vault entry and encryption key. This cannot be undone."),
+            confirmLabel = localizedText("Reset vault"),
+            destructive = true,
+            onConfirm = {
+                confirmation = null
+                if (!busy) actions.onReset()
+            },
+            onDismiss = {
+                actions.onInteraction()
+                confirmation = null
+            },
+        )
+
+        is VaultConfirmation.Delete -> {
+            val entry = uiState.entries.firstOrNull { it.id == open.entryId }
+            if (unlocked && entry != null) {
+                ConfirmDialog(
+                    title = localizedText("Delete this Vault entry?"),
+                    text = shownLabel(entry),
+                    confirmLabel = localizedText("Delete"),
+                    destructive = true,
+                    onConfirm = {
+                        confirmation = null
+                        if (!busy) actions.onDelete(entry.id)
+                    },
+                    onDismiss = {
+                        actions.onInteraction()
+                        confirmation = null
+                    },
+                )
             }
         }
+
+        VaultConfirmation.DiscardEdits -> if (editor != null) {
+            ConfirmDialog(
+                title = localizedText("Discard changes?"),
+                text = localizedText("What you typed here has not been saved."),
+                confirmLabel = localizedText("Discard"),
+                dismissLabel = localizedText("Keep editing"),
+                destructive = true,
+                onConfirm = {
+                    confirmation = null
+                    actions.onCloseEditor()
+                },
+                onDismiss = {
+                    actions.onInteraction()
+                    confirmation = null
+                },
+            )
+        }
+
+        null -> Unit
     }
 }
 
+/** The closed Vault: one calm card saying what is going on, with the one thing to do next. */
 @Composable
-private fun VaultStatusContent(
+private fun VaultGate(
     title: String,
     message: String,
+    tint: Color = MaterialTheme.colorScheme.primary,
     progress: Boolean = false,
     actionLabel: String? = null,
     onAction: () -> Unit = {},
-    secondaryActionLabel: String? = null,
-    onSecondaryAction: () -> Unit = {},
+    onReset: (() -> Unit)? = null,
 ) {
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(24.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Space.xl),
         contentAlignment = Alignment.Center,
     ) {
         Column(
-            modifier = Modifier.widthIn(max = 480.dp),
+            Modifier.widthIn(max = 420.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(Space.sm),
         ) {
-            if (progress) CircularProgressIndicator()
-            Text(localizedText(title), style = MaterialTheme.typography.headlineSmall)
-            Text(
-                localizedText(message),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            )
-            if (actionLabel != null) Button(onClick = onAction) { Text(localizedText(actionLabel)) }
-            if (secondaryActionLabel != null) {
-                TextButton(onClick = onSecondaryAction) {
-                    Text(localizedText(secondaryActionLabel), color = MaterialTheme.colorScheme.error)
+            Panel(Modifier.fillMaxWidth(), padding = PaddingValues(Space.xxl)) {
+                Column(
+                    Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(Space.md),
+                ) {
+                    if (progress) {
+                        Box(Modifier.size(56.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(Modifier.size(36.dp), strokeWidth = 3.dp)
+                        }
+                    } else {
+                        IconTile(Icons.Rounded.Lock, tint = tint, size = 56.dp)
+                    }
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleLarge,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.semantics { heading() },
+                    )
+                    Text(
+                        message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                    )
+                    if (actionLabel != null) {
+                        Button(onClick = onAction, modifier = Modifier.fillMaxWidth().padding(top = Space.sm).heightIn(min = 48.dp)) {
+                            Text(actionLabel, textAlign = TextAlign.Center)
+                        }
+                    }
                 }
             }
+            if (onReset != null) QuietResetButton(onReset, enabled = true)
         }
     }
 }
 
+/** Starting over is possible but rarely wanted, so it stays quiet; it always asks first. */
 @Composable
-private fun VaultUnlockedContent(
+private fun QuietResetButton(onClick: () -> Unit, enabled: Boolean) {
+    TextButton(onClick = onClick, enabled = enabled) {
+        Text(localizedText("Reset vault"), color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun VaultUnlocked(
     uiState: VaultUiState,
+    viewing: VaultEntry?,
     isWide: Boolean,
-    viewModel: VaultViewModel,
-    onDelete: (String) -> Unit,
-    onReset: () -> Unit,
+    actions: VaultActions,
+    onAskReset: () -> Unit,
+    onAskDelete: (String) -> Unit,
 ) {
-    if (isWide) {
-        Row(Modifier.fillMaxSize()) {
-            VaultEntryList(
-                uiState = uiState,
-                viewModel = viewModel,
-                onReset = onReset,
-                modifier = Modifier
-                    .weight(0.42f)
-                    .fillMaxHeight(),
-            )
-            VerticalDivider()
-            Box(
-                modifier = Modifier
-                    .weight(0.58f)
-                    .fillMaxHeight(),
-            ) {
-                val editor = uiState.editor
-                if (editor == null) {
-                    EmptyEditorPlaceholder()
-                } else {
-                    VaultEditor(
-                        editor = editor,
-                        mutationInProgress = uiState.mutationInProgress,
-                        viewModel = viewModel,
-                        onDelete = onDelete,
-                        showBack = false,
-                    )
-                }
-            }
+    if (!isWide) {
+        ReadableWidth(Modifier.fillMaxSize()) {
+            VaultEntryList(uiState, selectedId = null, isWide = false, actions = actions, onAskReset = onAskReset)
         }
-    } else {
-        val editor = uiState.editor
-        if (editor == null) {
-            VaultEntryList(
-                uiState = uiState,
-                viewModel = viewModel,
-                onReset = onReset,
-                modifier = Modifier.fillMaxSize(),
-            )
-        } else {
-            VaultEditor(
-                editor = editor,
-                mutationInProgress = uiState.mutationInProgress,
-                viewModel = viewModel,
-                onDelete = onDelete,
-                showBack = true,
-            )
+        return
+    }
+    // Wide screens: the list on the left, the chosen entry on the right.
+    Row(Modifier.fillMaxSize()) {
+        Box(Modifier.width(400.dp).fillMaxHeight()) {
+            VaultEntryList(uiState, selectedId = viewing?.id, isWide = true, actions = actions, onAskReset = onAskReset)
+        }
+        Box(Modifier.fillMaxHeight().width(1.dp).background(LifeTheme.colors.divider))
+        Box(Modifier.weight(1f).fillMaxHeight()) {
+            if (viewing == null) {
+                Text(
+                    localizedText("Choose an entry, or tap + for a new one."),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.align(Alignment.Center).padding(Space.xxl),
+                )
+            } else {
+                VaultEntryPane(viewing, busy = uiState.mutationInProgress, actions = actions, onAskDelete = onAskDelete)
+            }
         }
     }
 }
@@ -828,282 +493,354 @@ private fun VaultUnlockedContent(
 @Composable
 private fun VaultEntryList(
     uiState: VaultUiState,
-    viewModel: VaultViewModel,
-    onReset: () -> Unit,
-    modifier: Modifier = Modifier,
+    selectedId: String?,
+    isWide: Boolean,
+    actions: VaultActions,
+    onAskReset: () -> Unit,
 ) {
     val entries = uiState.filteredEntries
-    val actionsEnabled = !uiState.mutationInProgress
-    val listState = rememberLazyListState()
-
-    LazyColumn(
-        modifier = modifier,
-        state = listState,
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        item {
-            OutlinedTextField(
-                value = uiState.query,
-                onValueChange = viewModel::setQuery,
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text(localizedText("Search")) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                singleLine = true,
-                enabled = actionsEnabled,
-            )
-        }
-
-        if (uiState.offerFingerprintEnrollment) {
-            item {
-                VaultOfferCard(
-                    title = "Enable fingerprint unlock",
-                    message = "Use your enrolled fingerprint next time, with screen lock as a fallback.",
-                    actionLabel = "Enable",
-                    onClick = viewModel::requestFingerprintEnrollment,
-                    enabled = actionsEnabled,
-                )
-            }
-        }
-        if (uiState.offerModernUpgrade) {
-            item {
-                VaultOfferCard(
-                    title = "Upgrade vault security",
-                    message = "Add support for the current Android authentication system on this device.",
-                    actionLabel = "Upgrade",
-                    onClick = viewModel::requestModernUpgrade,
-                    enabled = actionsEnabled,
-                )
-            }
-        }
-
-        if (entries.isEmpty()) {
-            item {
-                Text(
-                    text = localizedText(if (uiState.query.isBlank()) {
-                        "No vault entries yet. Use Add to store an account."
-                    } else {
-                        "No entries match your search."
-                    }),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 32.dp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                )
-            }
-        } else {
-            items(entries, key = VaultEntry::id) { entry ->
-                VaultEntryRow(
-                    entry = entry,
-                    enabled = actionsEnabled,
-                    onClick = { viewModel.editEntry(entry.id) },
-                )
-            }
-        }
-
-        item {
-            Spacer(Modifier.height(12.dp))
-            TextButton(
-                onClick = onReset,
-                enabled = actionsEnabled,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(localizedText("Reset vault"), color = MaterialTheme.colorScheme.error)
-            }
-        }
-    }
-}
-
-@Composable
-private fun VaultEntryRow(entry: VaultEntry, enabled: Boolean, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(enabled = enabled, onClick = onClick),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        ),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
+    val busy = uiState.mutationInProgress
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = Space.lg, end = Space.lg, top = Space.xs, bottom = 96.dp),
+            verticalArrangement = Arrangement.spacedBy(Space.xs),
         ) {
-            Text(
-                text = entry.displayLabel(),
-                modifier = Modifier.weight(1f),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.titleMedium,
-            )
-            IconButton(onClick = onClick, enabled = enabled) {
-                Icon(
-                    Icons.Default.Edit,
-                    contentDescription = localizedText("Edit ${entry.displayLabel()}"),
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun VaultOfferCard(
-    title: String,
-    message: String,
-    actionLabel: String,
-    onClick: () -> Unit,
-    enabled: Boolean,
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-        ),
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(localizedText(title), style = MaterialTheme.typography.titleMedium)
-            Text(localizedText(message), style = MaterialTheme.typography.bodyMedium)
-            TextButton(
-                onClick = onClick,
-                enabled = enabled,
-                modifier = Modifier.align(Alignment.End),
-            ) {
-                Text(localizedText(actionLabel))
-            }
-        }
-    }
-}
-
-@Composable
-private fun VaultEditor(
-    editor: VaultEditorState,
-    mutationInProgress: Boolean,
-    viewModel: VaultViewModel,
-    onDelete: (String) -> Unit,
-    showBack: Boolean,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (showBack) {
-                IconButton(
-                    onClick = viewModel::closeEditor,
-                    enabled = !mutationInProgress,
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = localizedText("Back to entries"))
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    SearchField(uiState.query, actions.onQueryChange, Modifier.weight(1f))
+                    TextButton(onClick = actions.onLock, enabled = !busy, modifier = Modifier.padding(start = Space.xs)) {
+                        Icon(Icons.Rounded.Lock, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(localizedText("Lock"))
+                    }
                 }
             }
-            Text(
-                text = localizedText(if (editor.id == null) "New entry" else "Edit entry"),
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-            )
-            if (editor.id != null) {
-                IconButton(
-                    onClick = { onDelete(editor.id) },
-                    enabled = !mutationInProgress,
-                ) {
-                    Icon(Icons.Default.Delete, contentDescription = localizedText("Delete entry"))
+            if (uiState.offerFingerprintEnrollment) {
+                item {
+                    VaultOffer(
+                        icon = Icons.Rounded.Fingerprint,
+                        title = localizedText("Enable fingerprint unlock"),
+                        message = localizedText("Use your enrolled fingerprint next time, with screen lock as a fallback."),
+                        actionLabel = localizedText("Enable"),
+                        enabled = !busy,
+                        onClick = actions.onEnableFingerprint,
+                    )
+                }
+            }
+            if (uiState.offerModernUpgrade) {
+                item {
+                    VaultOffer(
+                        icon = Icons.Rounded.Shield,
+                        title = localizedText("Upgrade vault security"),
+                        message = localizedText("Add support for the current Android authentication system on this device."),
+                        actionLabel = localizedText("Upgrade"),
+                        enabled = !busy,
+                        onClick = actions.onUpgradeSecurity,
+                    )
+                }
+            }
+            if (entries.isEmpty()) {
+                item {
+                    val searching = uiState.query.isNotBlank()
+                    EmptyState(
+                        title = localizedText(if (searching) "No entries match" else "No Vault entries yet"),
+                        icon = Icons.Rounded.Key,
+                        body = localizedText(if (searching) "Try other words." else "Tap + to store an account and its password."),
+                    )
+                }
+            } else {
+                item { Spacer(Modifier.size(Space.xs)) }
+                items(entries, key = VaultEntry::id) { entry ->
+                    val title = shownLabel(entry)
+                    ListRow(
+                        title = title,
+                        supporting = listOf(entry.account, entry.website).map(String::trim).firstOrNull { it.isNotEmpty() && it != title },
+                        leading = { EntryTile(title) },
+                        selected = isWide && entry.id == selectedId,
+                        maxTitleLines = 1,
+                        onClick = { if (!busy) actions.onOpenEntry(entry.id) },
+                    )
+                }
+            }
+            item {
+                Box(Modifier.fillMaxWidth().padding(top = Space.lg), contentAlignment = Alignment.Center) {
+                    QuietResetButton(onAskReset, enabled = !busy)
                 }
             }
         }
+        FloatingActionButton(
+            onClick = { if (!busy) actions.onAdd() },
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(Space.lg),
+        ) {
+            Icon(Icons.Rounded.Add, localizedText("Add vault entry"))
+        }
+    }
+}
 
-        OutlinedTextField(
-            value = editor.label,
-            onValueChange = viewModel::updateLabel,
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text(localizedText("Label")) },
-            singleLine = true,
-            enabled = !mutationInProgress,
+/** A slim suggestion above the list, such as switching on fingerprint unlock. */
+@Composable
+private fun VaultOffer(icon: ImageVector, title: String, message: String, actionLabel: String, enabled: Boolean, onClick: () -> Unit) {
+    Panel(Modifier.fillMaxWidth().padding(top = Space.xs), padding = PaddingValues(start = Space.md, top = Space.sm, bottom = Space.sm, end = Space.xs)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconTile(icon)
+            Column(Modifier.weight(1f).padding(start = Space.md), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(title, style = MaterialTheme.typography.titleSmall)
+                Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            TextButton(onClick = onClick, enabled = enabled) { Text(actionLabel) }
+        }
+    }
+}
+
+/** The entry's first letter in a soft tile, or a key when the name starts with something else. */
+@Composable
+private fun EntryTile(label: String) {
+    val first = label.trim().takeIf(String::isNotEmpty)?.let { it.substring(0, it.offsetByCodePoints(0, 1)) }
+    if (first == null || !Character.isLetterOrDigit(first.codePointAt(0))) {
+        IconTile(Icons.Rounded.Key)
+        return
+    }
+    val tint = MaterialTheme.colorScheme.primary
+    Box(Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(tint.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+        // The letter is decoration; the row's title is what a screen reader reads.
+        Text(
+            first.uppercase(),
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+            color = tint,
+            maxLines = 1,
+            modifier = Modifier.clearAndSetSemantics { },
         )
-        OutlinedTextField(
-            value = editor.account,
-            onValueChange = viewModel::updateAccount,
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text(localizedText("Account or username")) },
-            singleLine = true,
-            enabled = !mutationInProgress,
-            trailingIcon = {
-                IconButton(
-                    onClick = viewModel::copyEditorAccount,
-                    enabled = editor.account.isNotBlank() && !mutationInProgress,
-                ) {
-                    Icon(Icons.Default.ContentCopy, contentDescription = localizedText("Copy account"))
+    }
+}
+
+/** The reading view on phones: a full-height sheet with Edit at the top and Delete at the bottom. */
+@Composable
+private fun VaultEntrySheet(
+    entry: VaultEntry,
+    busy: Boolean,
+    actions: VaultActions,
+    snackbarHostState: SnackbarHostState,
+    onAskDelete: (String) -> Unit,
+) {
+    EditorSheet(
+        title = shownLabel(entry),
+        onClose = actions.onCloseEntry,
+        actionLabel = localizedText("Edit"),
+        onAction = { actions.onEdit(entry.id) },
+        modifier = Modifier.reportsInteraction(actions.onInteraction),
+        working = busy,
+        footer = {
+            SheetFooter(snackbarHostState) {
+                TextButton(onClick = { onAskDelete(entry.id) }, enabled = !busy) {
+                    Text(localizedText("Delete"), color = LifeTheme.colors.danger)
+                }
+            }
+        },
+    ) {
+        VaultEntryDetails(entry, actions)
+    }
+}
+
+/** The reading view on wide screens, in the right pane. */
+@Composable
+private fun VaultEntryPane(entry: VaultEntry, busy: Boolean, actions: VaultActions, onAskDelete: (String) -> Unit) {
+    Column(Modifier.fillMaxSize()) {
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(start = Space.xl, end = Space.xs),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                shownLabel(entry),
+                style = MaterialTheme.typography.titleLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).semantics { heading() },
+            )
+            Button(onClick = { actions.onEdit(entry.id) }, enabled = !busy, modifier = Modifier.padding(horizontal = Space.xs)) {
+                Text(localizedText("Edit"))
+            }
+            IconButton(onClick = actions.onCloseEntry) { Icon(Icons.Rounded.Close, localizedText("Close")) }
+        }
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = Space.xl, vertical = Space.sm)) {
+            Column(Modifier.widthIn(max = 640.dp), verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+                VaultEntryDetails(entry, actions)
+            }
+        }
+        Box(Modifier.fillMaxWidth().heightIn(min = 1.dp).background(LifeTheme.colors.divider))
+        Row(Modifier.fillMaxWidth().padding(horizontal = Space.md, vertical = Space.sm)) {
+            TextButton(onClick = { onAskDelete(entry.id) }, enabled = !busy) {
+                Text(localizedText("Delete"), color = LifeTheme.colors.danger)
+            }
+        }
+    }
+}
+
+/** What an entry holds: each value with its Copy button, the password as dots until shown. */
+@Composable
+private fun VaultEntryDetails(entry: VaultEntry, actions: VaultActions) {
+    var passwordShown by remember(entry.id) { mutableStateOf(false) }
+    val hasValues = listOf(entry.account, entry.password, entry.website, entry.notes).any(String::isNotBlank)
+    if (!hasValues) {
+        Text(
+            localizedText("Only the label is stored for this entry."),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = Space.sm),
+        )
+        return
+    }
+    if (entry.account.isNotBlank()) {
+        VaultValue(localizedText("Account"), entry.account, copyLabel = localizedText("Copy account"), onCopy = { actions.onCopyAccount(entry.id) })
+    }
+    if (entry.password.isNotBlank()) {
+        // Screen readers are told the state only; the password itself is never read out.
+        val spoken = localizedText(if (passwordShown) "Password shown on screen" else "Password hidden")
+        VaultValue(
+            label = localizedText("Password"),
+            value = if (passwordShown) entry.password else "•".repeat(entry.password.length.coerceIn(1, 16)),
+            copyLabel = localizedText("Copy password"),
+            onCopy = { actions.onCopyPassword(entry.id) },
+            monospace = true,
+            valueModifier = Modifier.clearAndSetSemantics {
+                password()
+                contentDescription = spoken
+            },
+            extra = {
+                IconButton(onClick = {
+                    actions.onInteraction()
+                    passwordShown = !passwordShown
+                }) {
+                    Icon(
+                        if (passwordShown) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                        localizedText(if (passwordShown) "Hide password" else "Show password"),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             },
         )
+    }
+    if (entry.website.isNotBlank()) {
+        VaultValue(localizedText("Website"), entry.website, copyLabel = localizedText("Copy website"), onCopy = { actions.onCopyWebsite(entry.id) })
+    }
+    if (entry.notes.isNotBlank()) {
+        FieldLabel(localizedText("Notes"))
+        Text(entry.notes, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = Space.xs, bottom = Space.lg))
+    }
+}
+
+/** One value of an entry in a soft box, with Copy (and for the password, Show) at its end. */
+@Composable
+private fun VaultValue(
+    label: String,
+    value: String,
+    copyLabel: String,
+    onCopy: () -> Unit,
+    monospace: Boolean = false,
+    valueModifier: Modifier = Modifier,
+    extra: @Composable () -> Unit = {},
+) {
+    Column {
+        FieldLabel(label)
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(top = Space.xs)
+                .clip(MaterialTheme.shapes.medium)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .heightIn(min = 52.dp)
+                .padding(start = Space.lg, end = Space.xs),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                value,
+                style = MaterialTheme.typography.bodyLarge,
+                fontFamily = if (monospace) FontFamily.Monospace else null,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).padding(vertical = Space.md).then(valueModifier),
+            )
+            extra()
+            IconButton(onClick = onCopy) {
+                Icon(Icons.Rounded.ContentCopy, copyLabel, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+@Composable
+private fun VaultEditorSheet(
+    editor: VaultEditorState,
+    busy: Boolean,
+    actions: VaultActions,
+    snackbarHostState: SnackbarHostState,
+    onClose: () -> Unit,
+    onAskDelete: (String) -> Unit,
+) {
+    val entryId = editor.id
+    // Messages must show on top of the sheet, so the footer carries them; a new entry has no
+    // Delete, so its footer only appears while there is something to say.
+    val footer: (@Composable RowScope.() -> Unit)? = if (entryId != null || snackbarHostState.currentSnackbarData != null) {
+        {
+            SheetFooter(snackbarHostState) {
+                if (entryId != null) {
+                    TextButton(onClick = { onAskDelete(entryId) }, enabled = !busy) {
+                        Text(localizedText("Delete"), color = LifeTheme.colors.danger)
+                    }
+                }
+            }
+        }
+    } else {
+        null
+    }
+    EditorSheet(
+        title = localizedText(if (entryId == null) "New Vault entry" else "Edit Vault entry"),
+        onClose = onClose,
+        actionLabel = localizedText("Save"),
+        onAction = actions.onSave,
+        modifier = Modifier.reportsInteraction(actions.onInteraction),
+        actionEnabled = editor.isValid,
+        working = busy,
+        footer = footer,
+    ) {
+        FieldLabel(localizedText("Label"))
+        LifeTextField(editor.label, actions.onLabelChange, Modifier.fillMaxWidth(), placeholder = localizedText("e.g. Bank, Email"), enabled = !busy)
+        FieldLabel(localizedText("Account"))
+        LifeTextField(editor.account, actions.onAccountChange, Modifier.fillMaxWidth(), placeholder = localizedText("User name or email"), enabled = !busy)
+        FieldLabel(localizedText("Password"))
         VaultPasswordField(
             password = editor.password,
             passwordVisible = editor.passwordVisible,
-            enabled = !mutationInProgress,
-            onPasswordChange = viewModel::updatePassword,
-            onPasswordVisibilityChange = viewModel::setPasswordVisible,
-            onCopyPassword = viewModel::copyEditorPassword,
+            enabled = !busy,
+            onPasswordChange = actions.onPasswordChange,
+            onPasswordVisibilityChange = actions.onPasswordVisibleChange,
         )
-        OutlinedTextField(
-            value = editor.website,
-            onValueChange = viewModel::updateWebsite,
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text(localizedText("Website")) },
-            singleLine = true,
+        FieldLabel(localizedText("Website"))
+        LifeTextField(
+            editor.website,
+            actions.onWebsiteChange,
+            Modifier.fillMaxWidth(),
+            placeholder = "https://",
+            enabled = !busy,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-            enabled = !mutationInProgress,
         )
-        OutlinedTextField(
-            value = editor.notes,
-            onValueChange = viewModel::updateNotes,
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text(localizedText("Notes")) },
-            minLines = 4,
-            enabled = !mutationInProgress,
-        )
+        FieldLabel(localizedText("Notes"))
+        LifeTextField(editor.notes, actions.onNotesChange, Modifier.fillMaxWidth(), placeholder = localizedText("Optional"), minLines = 4, enabled = !busy)
         Text(
-            text = localizedText("Enter at least one field. Passwords stay encrypted on this device."),
+            localizedText("Enter at least one field. Passwords stay encrypted on this device."),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = Space.xs, bottom = Space.lg),
         )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-        ) {
-            OutlinedButton(
-                onClick = viewModel::closeEditor,
-                enabled = !mutationInProgress,
-            ) { Text(localizedText("Close")) }
-            Spacer(Modifier.width(8.dp))
-            Button(
-                onClick = viewModel::saveEditor,
-                enabled = editor.isValid && !mutationInProgress,
-            ) {
-                if (mutationInProgress) {
-                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                    Spacer(Modifier.width(8.dp))
-                }
-                Text(localizedText(if (mutationInProgress) "Working…" else "Save"))
-            }
-        }
-        Spacer(Modifier.height(20.dp))
     }
 }
 
 /**
- * The visible value is deliberately read-only and its editable semantics subtree is replaced.
- * This keeps the plaintext on screen for a sighted user without sending it to accessibility
- * services. The separate Hide and Copy actions remain discoverable outside the cleared subtree.
+ * The password box of the editor. While the password is shown it cannot be edited and its
+ * semantics are replaced, so the plain text is on screen for a sighted user but never handed to
+ * accessibility services. Show/Hide stays outside the cleared part and remains discoverable.
  */
 @Composable
 internal fun VaultPasswordField(
@@ -1112,7 +849,6 @@ internal fun VaultPasswordField(
     enabled: Boolean,
     onPasswordChange: (String) -> Unit,
     onPasswordVisibilityChange: (Boolean) -> Unit,
-    onCopyPassword: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val protectedSemantics = if (passwordVisible) {
@@ -1123,52 +859,25 @@ internal fun VaultPasswordField(
     } else {
         Modifier.semantics { password() }
     }
-
-    Column(modifier = modifier.fillMaxWidth()) {
-        OutlinedTextField(
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        LifeTextField(
             value = password,
             onValueChange = { if (!passwordVisible) onPasswordChange(it) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .then(protectedSemantics),
-            label = { Text(localizedText("Password")) },
-            singleLine = true,
-            enabled = enabled,
-            readOnly = passwordVisible,
+            modifier = Modifier.weight(1f).then(protectedSemantics),
+            // Shown means locked: no typing, no selecting, no copying out of the field.
+            enabled = enabled && !passwordVisible,
+            textStyle = MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Monospace),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            visualTransformation = if (passwordVisible) {
-                VisualTransformation.None
-            } else {
-                PasswordVisualTransformation()
-            },
+            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
         )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
+        TextButton(
+            onClick = { onPasswordVisibilityChange(!passwordVisible) },
+            enabled = enabled,
+            modifier = Modifier.padding(start = Space.xs),
         ) {
-            TextButton(
-                onClick = { onPasswordVisibilityChange(!passwordVisible) },
-                enabled = enabled,
-            ) {
-                Icon(
-                    imageVector = if (passwordVisible) {
-                        Icons.Default.VisibilityOff
-                    } else {
-                        Icons.Default.Visibility
-                    },
-                    contentDescription = null,
-                )
-                Spacer(Modifier.width(4.dp))
-                Text(localizedText(if (passwordVisible) "Hide" else "Show"))
-            }
-            TextButton(
-                onClick = onCopyPassword,
-                enabled = password.isNotBlank() && enabled,
-            ) {
-                Icon(Icons.Default.ContentCopy, contentDescription = null)
-                Spacer(Modifier.width(4.dp))
-                Text(localizedText("Copy"))
-            }
+            Icon(if (passwordVisible) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, null, Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(localizedText(if (passwordVisible) "Hide" else "Show"))
         }
     }
 }
@@ -1176,88 +885,40 @@ internal fun VaultPasswordField(
 internal const val VAULT_PASSWORD_VISIBLE_ACCESSIBILITY_DESCRIPTION =
     "Password visible; hide to edit"
 
+/** The bottom of a sheet: messages (such as "copied") above the sheet's rare actions. */
 @Composable
-private fun EmptyEditorPlaceholder() {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            localizedText("Select an entry or use Add."),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-        )
+private fun RowScope.SheetFooter(snackbarHostState: SnackbarHostState, actions: @Composable RowScope.() -> Unit) {
+    Column(Modifier.weight(1f)) {
+        SnackbarHost(snackbarHostState)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, content = actions)
     }
 }
 
-internal fun Context.canUseStrongBiometric(): Boolean =
-    BiometricManager.from(this).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) ==
-        BiometricManager.BIOMETRIC_SUCCESS
-
-/** Lockout must use the separately wrapped device-credential envelope on Android 8-10. */
-internal fun isVaultAuthenticationUnavailableError(errorCode: Int): Boolean = when (errorCode) {
-    BiometricPrompt.ERROR_HW_NOT_PRESENT,
-    BiometricPrompt.ERROR_HW_UNAVAILABLE,
-    BiometricPrompt.ERROR_NO_BIOMETRICS,
-    BiometricPrompt.ERROR_NO_DEVICE_CREDENTIAL,
-    BiometricPrompt.ERROR_SECURITY_UPDATE_REQUIRED,
-    BiometricPrompt.ERROR_LOCKOUT,
-    BiometricPrompt.ERROR_LOCKOUT_PERMANENT,
-    -> true
-    else -> false
+/** The name an entry is listed under; an entry without any usable text is "Untitled". */
+@Composable
+private fun shownLabel(entry: VaultEntry): String {
+    val label = entry.displayLabel()
+    return if (entry.label.isBlank() && label == "Untitled") localizedText("Untitled") else label
 }
 
-private fun Context.findFragmentActivity(): FragmentActivity? {
-    var current: Context? = this
-    while (current is ContextWrapper) {
-        if (current is FragmentActivity) return current
-        current = current.baseContext
+/** True when closing the editor would lose something that was typed. */
+private fun VaultEditorState.differsFrom(entry: VaultEntry?): Boolean = if (entry == null) {
+    isValid
+} else {
+    label != entry.label || account != entry.account || password != entry.password || website != entry.website || notes != entry.notes
+}
+
+/** Tells the Vault about every touch and key press, so it only locks when left alone. */
+private fun Modifier.reportsInteraction(onInteraction: () -> Unit): Modifier = this
+    .pointerInput(onInteraction) {
+        awaitPointerEventScope {
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Final)
+                if (event.changes.any { it.pressed || it.previousPressed }) onInteraction()
+            }
+        }
     }
-    return current as? FragmentActivity
-}
-
-private fun Context.openSecuritySettings() {
-    startActivity(Intent(Settings.ACTION_SECURITY_SETTINGS))
-}
-
-private fun VaultAuthenticationRequest.promptTitle(hasVault: Boolean): String = when (purpose) {
-    VaultAuthenticationPurpose.ACCESS -> if (hasVault) "Unlock Vault" else "Create Vault"
-    VaultAuthenticationPurpose.BACKUP -> "Authenticate backup"
-    VaultAuthenticationPurpose.RESET -> "Reset Vault"
-    VaultAuthenticationPurpose.LEGACY_FINGERPRINT_ENROLLMENT -> "Enable fingerprint unlock"
-    VaultAuthenticationPurpose.MODERN_UPGRADE -> "Upgrade vault security"
-}
-
-internal data class VaultBiometricAttempt(
-    val requestId: Long,
-    val generation: Long,
-)
-
-/** Prevents a delayed callback from clearing a newer prompt, even if request ids are reused. */
-internal class VaultBiometricAttemptRegistry(
-    initialGeneration: Long = 0L,
-    initialActive: VaultBiometricAttempt? = null,
-) {
-    var generation: Long = maxOf(initialGeneration, initialActive?.generation ?: 0L)
-        private set
-    var active: VaultBiometricAttempt? = initialActive
-        private set
-
-    fun start(requestId: Long): VaultBiometricAttempt {
-        generation++
-        return VaultBiometricAttempt(requestId, generation).also { active = it }
+    .onPreviewKeyEvent { event ->
+        if (event.type == KeyEventType.KeyDown) onInteraction()
+        false
     }
-
-    fun finish(attempt: VaultBiometricAttempt): Boolean {
-        if (active != attempt) return false
-        active = null
-        return true
-    }
-
-    fun invalidate(): VaultBiometricAttempt? {
-        generation++
-        return active.also { active = null }
-    }
-}

@@ -97,26 +97,47 @@ fun cloudRevisionHeadIds(revisions: List<CloudRevision>): Set<String> {
 fun latestCloudRevision(revisions: List<CloudRevision>): CloudRevision? =
     cloudRevisionHeads(revisions).firstOrNull()
 
-/** Keep recent history and never prune when another device has created a competing tip. */
+/**
+ * Keep recent history and never prune when another device has created a competing tip.
+ *
+ * A revision is a head only while no listed revision names it as a parent, so deleting a child
+ * before its parent would turn the parent back into a head: an old snapshot that the next sync
+ * treats as another device's changes and merges, undoing everything made since. The result is
+ * therefore closed under ancestors (a revision is only pruned together with all its listed
+ * parents) and ordered parents first, so stopping after any deletion leaves no false head.
+ */
 fun prunableCloudRevisions(revisions: List<CloudRevision>, keepCount: Int = 30): List<CloudRevision> {
     require(keepCount >= 2)
     val heads = cloudRevisionHeads(revisions)
     if (heads.size != 1) return emptyList()
     val byId = revisions.associateBy { it.fileId }
+    fun parentsOf(row: CloudRevision) = (listOfNotNull(row.baseRevisionId) + row.mergedRevisionIds).filter { it in byId }
     val ancestors = mutableSetOf<String>()
     val pending = ArrayDeque<String>()
     pending.add(heads.single().fileId)
     while (pending.isNotEmpty()) {
         val id = pending.removeFirst()
         if (!ancestors.add(id)) continue
-        byId[id]?.let { row ->
-            row.baseRevisionId?.let(pending::addLast)
-            row.mergedRevisionIds.forEach(pending::addLast)
-        }
+        byId[id]?.let { row -> parentsOf(row).forEach(pending::addLast) }
     }
     val kept = revisions.take(keepCount).mapTo(mutableSetOf()) { it.fileId }
     kept += heads.single().fileId
-    return revisions.filter { it.fileId in ancestors && it.fileId !in kept }
+    val prunable = revisions.filter { it.fileId in ancestors && it.fileId !in kept }.mapTo(mutableSetOf()) { it.fileId }
+    // A kept parent would lose its child and become a head: keep the child too, and so on.
+    do {
+        val blocked = prunable.filter { id -> parentsOf(byId.getValue(id)).any { it !in prunable } }
+        prunable -= blocked.toSet()
+    } while (blocked.isNotEmpty())
+    val ordered = ArrayList<CloudRevision>()
+    val placed = mutableSetOf<String>()
+    fun place(id: String) {
+        if (!placed.add(id)) return
+        val row = byId.getValue(id)
+        parentsOf(row).forEach(::place)
+        ordered += row
+    }
+    revisions.asReversed().filter { it.fileId in prunable }.forEach { place(it.fileId) }
+    return ordered
 }
 
 fun decideSyncAction(
@@ -171,3 +192,14 @@ open class CloudAuthorizationException(message: String, cause: Throwable? = null
 
 class CloudTransportException(message: String, cause: Throwable? = null) :
     Exception(message, cause)
+
+/**
+ * GitHub no longer accepts the saved sign-in (HTTP 401): it was revoked, or GitHub retired it
+ * because the same account signed in too many times. Only signing in again helps; the sync
+ * settings and password stay as they are.
+ */
+class GitHubSignInExpiredException : CloudAuthorizationException(MESSAGE) {
+    companion object {
+        const val MESSAGE = "GitHub sign-in expired or was revoked. Reconnect GitHub."
+    }
+}

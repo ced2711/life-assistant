@@ -24,12 +24,14 @@ class DiaryBackupCompatibilityTest {
     private fun notesVersionSnapshot() = fullBackupSnapshot().copy(
         formatVersion = BackupLimits.NOTES_SNAPSHOT_VERSION,
         diaryEntries = emptyList(),
+        checklistItems = emptyList(),
+        checklistChecks = emptyList(),
     )
 
     @Test
     fun diaryEntriesRoundTripInTheCurrentFormat() {
         val expected = fullBackupSnapshot()
-        assertEquals(BackupLimits.DIARY_SNAPSHOT_VERSION, expected.formatVersion)
+        assertEquals(BackupLimits.SNAPSHOT_VERSION, expected.formatVersion)
         assertEquals(1, expected.diaryEntries.size)
         assertEquals(expected, roundTrip(expected))
     }

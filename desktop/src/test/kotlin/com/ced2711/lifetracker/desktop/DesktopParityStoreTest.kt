@@ -25,8 +25,8 @@ import org.junit.Test
 class DesktopParityStoreTest {
     @Test
     fun rebrandKeepsLegacyStorageDirectoryAndReadsExistingDataAndConfig() = runBlocking {
-        // Windows keeps the folder of earlier versions; Linux has its own XDG folder.
-        assertEquals(DesktopPlatform.text("Life Tracker", "life-assistant"), DesktopDataStore.defaultAppDirectory().name)
+        // Windows moves the folder of earlier versions to the app's name (see DesktopRenameTest);
+        // Linux has its own XDG folder. Data and settings written there stay readable.
         val root = Files.createTempDirectory("life-assistant-rebrand-compatibility").toFile()
         val legacyDirectory = root.resolve("Life Tracker")
         try {
@@ -53,6 +53,23 @@ class DesktopParityStoreTest {
     }
 
     @Test
+    fun mergeRemovalLimitDefaultsToFiveAndCanBeChangedOrTurnedOff() {
+        val root = Files.createTempDirectory("life-assistant-merge-limit-test").toFile()
+        try {
+            val config = DesktopConfigStore(root.resolve("desktop.properties"))
+            assertEquals(5, config.read().mergeRemovalLimit)
+            config.setMergeRemovalLimit(20)
+            assertEquals(20, DesktopConfigStore(root.resolve("desktop.properties")).read().mergeRemovalLimit)
+            config.setMergeRemovalLimit(0)
+            assertEquals(0, config.read().mergeRemovalLimit)
+            config.setMergeRemovalLimit(null)
+            assertNull(config.read().mergeRemovalLimit)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun configDefaultsOfflineAndDeviceLocalSettingsSurviveDisconnect() {
         val root = Files.createTempDirectory("life-tracker-desktop-config-test").toFile()
         try {
@@ -60,7 +77,7 @@ class DesktopParityStoreTest {
             val defaults = config.read()
             assertFalse(defaults.automaticSync)
             assertEquals(UiLanguage.ENGLISH, defaults.uiLanguage)
-            assertEquals(TopLevelDestination.TODO, defaults.lastDestination)
+            assertEquals(TopLevelDestination.TODAY, defaults.lastDestination)
 
             config.setClientId("desktop-client")
             config.setAutomaticSync(true)

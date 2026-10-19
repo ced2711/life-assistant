@@ -28,6 +28,7 @@ sourceSets {
             include("com/ced2711/lifetracker/desktop/**")
             include("com/ced2711/lifetracker/domain/model/AppModels.kt")
             include("com/ced2711/lifetracker/domain/model/AppIdentity.kt")
+            include("com/ced2711/lifetracker/domain/model/TodayOverview.kt")
             include("com/ced2711/lifetracker/domain/model/TodoOrganization.kt")
             include("com/ced2711/lifetracker/domain/model/VaultModels.kt")
             include("com/ced2711/lifetracker/domain/model/ConfessionModels.kt")
@@ -35,7 +36,8 @@ sourceSets {
             include("com/ced2711/lifetracker/domain/recurrence/RecurrenceEngine.kt")
             include("com/ced2711/lifetracker/domain/format/UserFormatting.kt")
             include("com/ced2711/lifetracker/ui/theme/TaskLedgerTheme.kt")
-            include("com/ced2711/lifetracker/ui/localization/UiLocalization.kt")
+            include("com/ced2711/lifetracker/ui/design/**")
+            include("com/ced2711/lifetracker/ui/localization/**")
             include("com/ced2711/lifetracker/data/MonotonicTimestamps.kt")
             include("com/ced2711/lifetracker/data/local/Entities.kt")
             include("com/ced2711/lifetracker/data/backup/BackupModels.kt")
@@ -61,6 +63,9 @@ dependencies {
     implementation(libs.jna.platform)
 
     testImplementation(libs.junit)
+    // Click-through tests of the whole window without showing it.
+    @OptIn(org.jetbrains.compose.ExperimentalComposeLibrary::class)
+    testImplementation(compose.uiTest)
 }
 
 val prepareLegalResources = tasks.register<Sync>("prepareLegalResources") {
@@ -164,7 +169,7 @@ compose.desktop {
             // Each format is built on its own operating system: Windows locally, Linux in GitHub Actions.
             targetFormats(TargetFormat.Exe, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "Life Assistant"
-            packageVersion = "1.9.0"
+            packageVersion = "2.0.6"
             description = "Private life planning, ledger, calendar, notes, and vault"
             vendor = "ced2711"
             copyright = "Copyright 2026 ced2711"
@@ -174,11 +179,14 @@ compose.desktop {
             windows {
                 iconFile.set(windowsIconFile)
                 menu = true
+                // Without a group the installer files the shortcut under "Unknown".
+                menuGroup = "Life Assistant"
                 shortcut = true
                 dirChooser = true
                 perUserInstall = true
-                // Preserve the default install location and upgrade family of Life Tracker.
-                installationPath = "Life Tracker"
+                // Versions before 2.0.4 installed into "Life Tracker", the app's old name; the
+                // upgrade family stays, so installing replaces them.
+                installationPath = "Life Assistant"
                 upgradeUuid = "4f5dcd57-85a1-4cb5-9e14-a0d5c8b8940b"
             }
             linux {
@@ -237,4 +245,9 @@ tasks.register<JavaExec>("renderScreens") {
             providers.gradleProperty("screenTheme").orNull ?: "dark",
         )
     }
+}
+
+// -Dflow.shots=<folder> makes DesktopFlowTest save a picture of every step.
+tasks.withType<Test>().configureEach {
+    System.getProperty("flow.shots")?.let { systemProperty("flow.shots", it) }
 }

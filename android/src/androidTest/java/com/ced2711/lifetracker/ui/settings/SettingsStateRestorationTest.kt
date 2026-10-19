@@ -19,42 +19,43 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
+/**
+ * Default reminders are pills that apply at once since the redesign, so only two things are
+ * left to lose on rotation: which dialog is open, and a half-typed all-day reminder time.
+ */
 @RunWith(AndroidJUnit4::class)
 class SettingsStateRestorationTest {
     @get:Rule
     val composeRule = createComposeRule()
 
     @Test
-    fun reminderDialogAndDraftSurviveRestorationButCancelDiscardsTheDraft() {
+    fun openDialogSurvivesRestorationAndClosingForgetsIt() {
         val restorationTester = StateRestorationTester(composeRule)
         restorationTester.setContent {
             MaterialTheme { SettingsStateHarness() }
         }
 
-        composeRule.onNodeWithTag(OPEN_REMINDERS).performClick()
-        composeRule.onNodeWithTag(ADD_REMINDER).performClick()
-        composeRule.onNodeWithTag(REMINDER_DRAFT).assertTextEquals("60")
+        composeRule.onNodeWithTag(OPEN_LICENSE).performClick()
+        composeRule.onNodeWithTag(OPEN_DIALOG).assertTextEquals(SettingsDialog.License.name)
 
         restorationTester.emulateSavedInstanceStateRestore()
 
-        composeRule.onNodeWithTag(OPEN_DIALOG).assertTextEquals(SettingsDialog.DefaultReminders.name)
-        composeRule.onNodeWithTag(REMINDER_DRAFT).assertTextEquals("60")
+        composeRule.onNodeWithTag(OPEN_DIALOG).assertTextEquals(SettingsDialog.License.name)
 
-        composeRule.onNodeWithTag(CANCEL_REMINDERS).performClick()
-        composeRule.onNodeWithTag(OPEN_REMINDERS).performClick()
-        composeRule.onNodeWithTag(REMINDER_DRAFT).assertTextEquals("None")
+        composeRule.onNodeWithTag(CLOSE_DIALOG).performClick()
+        restorationTester.emulateSavedInstanceStateRestore()
+        composeRule.onNodeWithTag(OPEN_DIALOG).assertTextEquals("None")
     }
 
     @Test
-    fun allDayInputSurvivesRestorationWithoutReusingTheReminderDraft() {
+    fun allDayInputSurvivesRestorationButCancelDiscardsIt() {
         val restorationTester = StateRestorationTester(composeRule)
         restorationTester.setContent {
             MaterialTheme { SettingsStateHarness() }
         }
 
-        composeRule.onNodeWithTag(OPEN_REMINDERS).performClick()
-        composeRule.onNodeWithTag(ADD_REMINDER).performClick()
-        composeRule.onNodeWithTag(CANCEL_REMINDERS).performClick()
+        composeRule.onNodeWithTag(OPEN_LICENSE).performClick()
+        composeRule.onNodeWithTag(CLOSE_DIALOG).performClick()
         composeRule.onNodeWithTag(OPEN_ALL_DAY_TIME).performClick()
         composeRule.onNodeWithTag(EDIT_ALL_DAY_TIME).performClick()
         composeRule.onNodeWithTag(ALL_DAY_INPUT).assertTextEquals("9:45 PM")
@@ -64,7 +65,7 @@ class SettingsStateRestorationTest {
         composeRule.onNodeWithTag(OPEN_DIALOG).assertTextEquals(SettingsDialog.AllDayReminderTime.name)
         composeRule.onNodeWithTag(ALL_DAY_INPUT).assertTextEquals("9:45 PM")
 
-        composeRule.onNodeWithTag(CANCEL_ALL_DAY_TIME).performClick()
+        composeRule.onNodeWithTag(CLOSE_DIALOG).performClick()
         composeRule.onNodeWithTag(OPEN_ALL_DAY_TIME).performClick()
         composeRule.onNodeWithTag(ALL_DAY_INPUT).assertTextEquals("12:00 AM")
     }
@@ -77,46 +78,24 @@ private fun SettingsStateHarness() {
     Column {
         Text(dialog?.name ?: "None", Modifier.testTag(OPEN_DIALOG))
         Button(
-            onClick = { dialog = SettingsDialog.DefaultReminders },
-            modifier = Modifier.testTag(OPEN_REMINDERS),
-        ) { Text("Open reminders") }
+            onClick = { dialog = SettingsDialog.License },
+            modifier = Modifier.testTag(OPEN_LICENSE),
+        ) { Text("Open license") }
         Button(
             onClick = { dialog = SettingsDialog.AllDayReminderTime },
             modifier = Modifier.testTag(OPEN_ALL_DAY_TIME),
         ) { Text("Open all-day time") }
+        Button(
+            onClick = { dialog = null },
+            modifier = Modifier.testTag(CLOSE_DIALOG),
+        ) { Text("Close") }
 
-        when (dialog) {
-            SettingsDialog.DefaultReminders -> ReminderDraftHarness(
-                onCancel = { dialog = null },
-            )
-            SettingsDialog.AllDayReminderTime -> AllDayTimeDraftHarness(
-                onCancel = { dialog = null },
-            )
-            else -> Unit
-        }
+        if (dialog == SettingsDialog.AllDayReminderTime) AllDayTimeDraftHarness()
     }
 }
 
 @Composable
-private fun ReminderDraftHarness(onCancel: () -> Unit) {
-    var draft by rememberReminderOffsetsDraft(emptySet())
-
-    Text(
-        draft.sorted().joinToString(",").ifEmpty { "None" },
-        Modifier.testTag(REMINDER_DRAFT),
-    )
-    Button(
-        onClick = { draft = draft + 60L },
-        modifier = Modifier.testTag(ADD_REMINDER),
-    ) { Text("Add reminder") }
-    Button(
-        onClick = onCancel,
-        modifier = Modifier.testTag(CANCEL_REMINDERS),
-    ) { Text("Cancel") }
-}
-
-@Composable
-private fun AllDayTimeDraftHarness(onCancel: () -> Unit) {
+private fun AllDayTimeDraftHarness() {
     var input by rememberAllDayReminderInput(initialMinute = 0, uses24Hour = false)
 
     Text(input, Modifier.testTag(ALL_DAY_INPUT))
@@ -124,18 +103,11 @@ private fun AllDayTimeDraftHarness(onCancel: () -> Unit) {
         onClick = { input = "9:45 PM" },
         modifier = Modifier.testTag(EDIT_ALL_DAY_TIME),
     ) { Text("Edit all-day time") }
-    Button(
-        onClick = onCancel,
-        modifier = Modifier.testTag(CANCEL_ALL_DAY_TIME),
-    ) { Text("Cancel") }
 }
 
 private const val OPEN_DIALOG = "open_dialog"
-private const val OPEN_REMINDERS = "open_reminders"
-private const val REMINDER_DRAFT = "reminder_draft"
-private const val ADD_REMINDER = "add_reminder"
-private const val CANCEL_REMINDERS = "cancel_reminders"
+private const val OPEN_LICENSE = "open_license"
+private const val CLOSE_DIALOG = "close_dialog"
 private const val OPEN_ALL_DAY_TIME = "open_all_day_time"
 private const val ALL_DAY_INPUT = "all_day_input"
 private const val EDIT_ALL_DAY_TIME = "edit_all_day_time"
-private const val CANCEL_ALL_DAY_TIME = "cancel_all_day_time"

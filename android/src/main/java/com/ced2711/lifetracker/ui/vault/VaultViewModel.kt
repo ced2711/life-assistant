@@ -118,6 +118,8 @@ data class VaultUiState(
     val filteredEntries: List<VaultEntry> = emptyList(),
     val query: String = "",
     val editor: VaultEditorState? = null,
+    /** The entry open in the reading view; kept here so it closes whenever the Vault locks. */
+    val viewingEntryId: String? = null,
     val mutationInProgress: Boolean = false,
     val authenticationRequest: VaultAuthenticationRequest? = null,
     val offerFingerprintEnrollment: Boolean = false,
@@ -423,6 +425,21 @@ class VaultViewModel(
         touch()
     }
 
+    /** Opens the reading view of an entry. */
+    fun openEntry(id: String) {
+        requireUnlocked()
+        if (_uiState.value.mutationInProgress) return
+        if (_uiState.value.entries.none { it.id == id }) return
+        _uiState.update { it.copy(viewingEntryId = id) }
+        touch()
+    }
+
+    fun closeEntry() {
+        if (_uiState.value.mutationInProgress) return
+        _uiState.update { it.copy(viewingEntryId = null) }
+        touch()
+    }
+
     fun closeEditor() {
         if (_uiState.value.mutationInProgress) return
         _uiState.update { it.copy(editor = null) }
@@ -461,14 +478,9 @@ class VaultViewModel(
                 result.onSuccess { saved ->
                     _uiState.update {
                         it.copy(
-                            editor = VaultEditorState(
-                                id = saved.id,
-                                label = saved.label,
-                                account = saved.account,
-                                password = saved.password,
-                                website = saved.website,
-                                notes = saved.notes,
-                            ),
+                            // The editor closes and the saved entry is shown in the reading view.
+                            editor = null,
+                            viewingEntryId = saved.id,
                             snackbarMessage = "Saved.",
                         )
                     }
@@ -506,6 +518,7 @@ class VaultViewModel(
                             _uiState.update {
                                 it.copy(
                                     editor = it.editor?.takeUnless { editor -> editor.id == id },
+                                    viewingEntryId = it.viewingEntryId.takeUnless { viewing -> viewing == id },
                                     snackbarMessage = "Deleted.",
                                 )
                             }
@@ -537,21 +550,27 @@ class VaultViewModel(
         }
     }
 
-    fun copyEditorAccount() {
-        if (_uiState.value.mutationInProgress) return
-        val account = _uiState.value.editor?.account.orEmpty()
-        if (account.isBlank()) return
-        clipboard.copyAccount(account)
-        showMessage("Account copied. Clears after 30 seconds, or on return if backgrounded.")
-        touch()
+    fun copyEntryAccount(id: String) = copyEntryValue(id, VaultEntry::account) {
+        clipboard.copyAccount(it)
+        "Account copied. Clears after 30 seconds, or on return if backgrounded."
     }
 
-    fun copyEditorPassword() {
-        if (_uiState.value.mutationInProgress) return
-        val password = _uiState.value.editor?.password.orEmpty()
-        if (password.isBlank()) return
-        clipboard.copyPassword(password)
-        showMessage("Password copied. Clears after 30 seconds, or on return if backgrounded.")
+    fun copyEntryPassword(id: String) = copyEntryValue(id, VaultEntry::password) {
+        clipboard.copyPassword(it)
+        "Password copied. Clears after 30 seconds, or on return if backgrounded."
+    }
+
+    fun copyEntryWebsite(id: String) = copyEntryValue(id, VaultEntry::website) {
+        clipboard.copyAccount(it)
+        "Website copied. Clears after 30 seconds, or on return if backgrounded."
+    }
+
+    /** Copies one value of a saved entry from the reading view and tells when it is cleared. */
+    private fun copyEntryValue(id: String, value: (VaultEntry) -> String, copy: (String) -> String) {
+        if (session == null || _uiState.value.mutationInProgress) return
+        val text = _uiState.value.entries.firstOrNull { it.id == id }?.let(value).orEmpty()
+        if (text.isBlank()) return
+        showMessage(copy(text))
         touch()
     }
 
@@ -831,6 +850,7 @@ class VaultViewModel(
         offerModernUpgrade: Boolean,
     ) {
         val previousEditor = _uiState.value.editor.takeIf { preserveEditor }
+        val previousViewing = _uiState.value.viewingEntryId.takeIf { preserveEditor }
         clearSession(clearSnackbar = false)
         session = unlockedSession
         val supervisor = SupervisorJob(viewModelScope.coroutineContext[Job])
@@ -843,6 +863,7 @@ class VaultViewModel(
                 entries = emptyList(),
                 filteredEntries = emptyList(),
                 editor = previousEditor,
+                viewingEntryId = previousViewing,
                 mutationInProgress = false,
                 authenticationRequest = null,
                 offerFingerprintEnrollment = offerFingerprintEnrollment,
@@ -953,6 +974,7 @@ class VaultViewModel(
                 filteredEntries = emptyList(),
                 query = "",
                 editor = null,
+                viewingEntryId = null,
                 mutationInProgress = false,
                 offerFingerprintEnrollment = false,
                 offerModernUpgrade = false,

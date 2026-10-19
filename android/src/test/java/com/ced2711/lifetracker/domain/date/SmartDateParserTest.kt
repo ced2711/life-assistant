@@ -59,7 +59,7 @@ class SmartDateParserTest {
     fun `full date strictly rejects invalid or unsupported input`() {
         assertNull(SmartDateParser.parse("2/29/2026", today))
         assertNull(SmartDateParser.parse("4/31/2026", today))
-        assertNull(SmartDateParser.parse("8-20-2026", today))
+        assertEquals(LocalDate.of(2026, 8, 20), SmartDateParser.parse("8-20-2026", today))
         assertNull(SmartDateParser.parse("8/20/26", today))
         assertNull(SmartDateParser.parse("8 / 20 / 2026", today))
         assertNull(SmartDateParser.parse("", today))
@@ -84,5 +84,29 @@ class SmartDateParserTest {
 
         assertNull(SmartDateParser.parse("1", finalSupportedDay))
         assertNull(SmartDateParser.parse("1/1", finalSupportedDay))
+    }
+
+    @Test
+    fun `numbers follow the chosen date order and read back what the app shows`() {
+        val day = com.ced2711.lifetracker.domain.model.DateFormatOption.DAY_MONTH_YEAR
+        val year = com.ced2711.lifetracker.domain.model.DateFormatOption.YEAR_MONTH_DAY
+        assertEquals(LocalDate.of(2026, 10, 2), SmartDateParser.parse("02/10/2026", today, day))
+        assertEquals(LocalDate.of(2026, 10, 2), SmartDateParser.parse("2026-10-02", today, day))
+        assertEquals(LocalDate.of(2026, 10, 2), SmartDateParser.parse("2026-10-02", today, year))
+        assertEquals(LocalDate.of(2026, 10, 2), SmartDateParser.parse("10/02/2026", today))
+        assertEquals(LocalDate.of(2026, 12, 1), SmartDateParser.parse("1.12", today, day))
+    }
+
+    @Test
+    fun `words name days relative to today`() {
+        val friday = LocalDate.of(2026, 10, 2)
+        assertEquals(friday, SmartDateParser.parse("today", friday, com.ced2711.lifetracker.domain.model.DateFormatOption.SYSTEM))
+        assertEquals(friday.plusDays(1), SmartDateParser.parse("Tomorrow", friday))
+        assertEquals(friday, SmartDateParser.parse("fri", friday))
+        assertEquals(friday.plusDays(3), SmartDateParser.parse("monday", friday))
+        assertEquals(friday.plusDays(1), SmartDateParser.parse("周六", friday))
+        assertEquals(friday.plusDays(2), SmartDateParser.parse("星期天", friday))
+        assertEquals(friday.plusDays(2), SmartDateParser.parse("后天", friday))
+        assertEquals(LocalDate.of(2026, 12, 25), SmartDateParser.parse("12月25日", friday))
     }
 }
