@@ -16,6 +16,9 @@ internal val zhSettings: Map<String, String> = mapOf(
     "Custom reminder" to "自定义提醒",
     "1 minute" to "1 分钟",
     "5 minutes" to "5 分钟",
+    "Let Pocket AI read your data" to "允许 Pocket AI 读取你的数据",
+    "Todos, ledger, notes and diary, read-only. Never the Vault or the Confessional." to
+        "只读取待办、流水、笔记和日记，绝不包括密码库和告解室。",
 
     // Backup & sync
     "At least 8 characters." to "至少 8 个字符。",

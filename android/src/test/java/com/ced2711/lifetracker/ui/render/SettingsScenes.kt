@@ -103,6 +103,7 @@ private fun Settings(isWide: Boolean, sync: CloudSyncIndicator?, settings: AppSe
         onAppLock = {},
         onAppLockTimeout = {},
         onOpenLicense = {},
+        onOpenSource = {},
     )
 }
 

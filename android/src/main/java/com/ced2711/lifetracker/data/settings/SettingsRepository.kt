@@ -43,6 +43,8 @@ data class AppSettings(
     val visibleDestinations: Set<TopLevelDestination> = DefaultVisibleDestinations,
     val appLockEnabled: Boolean = false,
     val appLockTimeout: AppLockTimeout = AppLockTimeout.ONE_MINUTE,
+    /** Lets Pocket AI read todos, ledger, notes and diary through ReadOnlyDataProvider. */
+    val pocketAiReadAccess: Boolean = false,
 )
 
 class SettingsRepository internal constructor(
@@ -67,6 +69,7 @@ class SettingsRepository internal constructor(
         val optedInDestinations = stringSetPreferencesKey("opted_in_destinations")
         val appLockEnabled = booleanPreferencesKey("app_lock_enabled")
         val appLockTimeout = stringPreferencesKey("app_lock_timeout")
+        val pocketAiReadAccess = booleanPreferencesKey("pocket_ai_read_access")
     }
 
     val settings: Flow<AppSettings> = dataStore.data.map { preferences -> preferences.toAppSettings() }
@@ -96,6 +99,7 @@ class SettingsRepository internal constructor(
             visibleDestinations = resolveVisibleDestinations(this[Keys.hiddenDestinations], this[Keys.optedInDestinations]),
             appLockEnabled = this[Keys.appLockEnabled] ?: false,
             appLockTimeout = this[Keys.appLockTimeout].enumOrDefault(AppLockTimeout.ONE_MINUTE),
+            pocketAiReadAccess = this[Keys.pocketAiReadAccess] ?: false,
         )
 
     suspend fun setTheme(value: ThemeMode) = edit(Keys.theme, value.name)
@@ -128,6 +132,7 @@ class SettingsRepository internal constructor(
     }
     suspend fun setAppLockEnabled(value: Boolean) = edit(Keys.appLockEnabled, value)
     suspend fun setAppLockTimeout(value: AppLockTimeout) = edit(Keys.appLockTimeout, value.name)
+    suspend fun setPocketAiReadAccess(value: Boolean) = edit(Keys.pocketAiReadAccess, value)
 
     /** Returns one normalized, complete settings value suitable for an encrypted backup. */
     suspend fun snapshot(): AppSettings = settings.first()
@@ -183,6 +188,7 @@ private fun AppSettings.sameRestorableSettings(other: AppSettings): Boolean = co
     visibleDestinations = other.visibleDestinations,
     appLockEnabled = other.appLockEnabled,
     appLockTimeout = other.appLockTimeout,
+    pocketAiReadAccess = other.pocketAiReadAccess,
 ) == other
 
 private inline fun <reified T : Enum<T>> String?.enumOrDefault(default: T): T =

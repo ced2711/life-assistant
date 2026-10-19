@@ -69,7 +69,7 @@ dependencies {
 }
 
 val prepareLegalResources = tasks.register<Sync>("prepareLegalResources") {
-    from(rootProject.file("LICENSE"), rootProject.file("NOTICE"))
+    from(rootProject.file("LICENSE"), rootProject.file("ADDITIONAL_PERMISSIONS.md"), rootProject.file("NOTICE"))
     into(layout.buildDirectory.dir("generated/legal-resources/legal"))
 }
 // Built-in cloud sign-in clients, so people only press "Connect". The values come from the

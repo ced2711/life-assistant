@@ -6,7 +6,10 @@ object AppIdentity {
     const val VERSION = "2.0.6"
     const val AUTHOR = "ced2711"
     const val COPYRIGHT = "Copyright 2026 ced2711"
-    const val LICENSE_LABEL = "Proprietary · All rights reserved"
+    const val REPOSITORY_URL = "https://github.com/ced2711/life-assistant"
+    const val SOURCE_URL = "$REPOSITORY_URL/tree/v$VERSION"
+    const val LICENSE_LABEL = "AGPL-3.0-only with Google Play services linking permission"
     const val LICENSE_RESOURCE = "legal/LICENSE"
+    const val PERMISSION_RESOURCE = "legal/ADDITIONAL_PERMISSIONS.md"
     const val NOTICE_RESOURCE = "legal/NOTICE"
 }

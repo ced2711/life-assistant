@@ -42,11 +42,14 @@ class BrandingCompatibilityInstrumentedTest {
     }
 
     @Test
-    fun bundledLegalAssetsContainLicenseAndNotice() {
+    fun bundledLegalAssetsContainLicensePermissionAndNotice() {
         val license = readAsset("legal/LICENSE")
+        val permission = readAsset("legal/ADDITIONAL_PERMISSIONS.md")
         val notice = readAsset("legal/NOTICE")
 
-        assertTrue(license.contains("is proprietary"))
+        assertTrue(license.contains("13. Remote Network Interaction"))
+        assertTrue(permission.contains("Additional permission under GNU AGPL version 3, section 7"))
+        assertTrue(permission.contains("Google Play"))
         assertTrue(notice.contains("Life Assistant"))
         assertTrue(notice.contains("WITHOUT ANY WARRANTY"))
     }

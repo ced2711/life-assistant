@@ -109,7 +109,7 @@ android {
     }
 }
 
-// Copies the root LICENSE and NOTICE into each variant's assets under legal/, where the in-app license
+// Copies the root legal files into each variant's assets under legal/, where the in-app license
 // viewer reads them.
 abstract class PrepareLegalAssets : DefaultTask() {
     @get:InputFiles
@@ -133,7 +133,11 @@ androidComponents {
         val prepareLegalAssets = tasks.register<PrepareLegalAssets>(
             "prepare${variant.name.replaceFirstChar(Char::uppercase)}LegalAssets",
         ) {
-            legalFiles.from(rootProject.file("LICENSE"), rootProject.file("NOTICE"))
+            legalFiles.from(
+                rootProject.file("LICENSE"),
+                rootProject.file("ADDITIONAL_PERMISSIONS.md"),
+                rootProject.file("NOTICE"),
+            )
         }
         variant.sources.assets?.addGeneratedSourceDirectory(prepareLegalAssets, PrepareLegalAssets::outputDirectory)
     }

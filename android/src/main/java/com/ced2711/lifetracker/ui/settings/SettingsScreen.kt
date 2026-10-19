@@ -3,7 +3,9 @@ package com.ced2711.lifetracker.ui.settings
 import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.text.format.DateFormat
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -26,6 +28,7 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CloudDone
 import androidx.compose.material.icons.rounded.CloudOff
@@ -156,6 +159,16 @@ fun SettingsScreen(
         }
     }
 
+    fun openSource() {
+        try {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(AppIdentity.SOURCE_URL)))
+        } catch (_: ActivityNotFoundException) {
+            showMessage("No browser is available to open the source link.")
+        } catch (_: SecurityException) {
+            showMessage("The source link could not be opened.")
+        }
+    }
+
     LaunchedEffect(viewModel, uiLanguage) {
         viewModel.errors.collect { message ->
             snackbarHostState.showSnackbar(translateUiText(message, uiLanguage))
@@ -202,6 +215,7 @@ fun SettingsScreen(
             onAppLock = ::changeAppLock,
             onAppLockTimeout = viewModel::setAppLockTimeout,
             onOpenLicense = { dialog = SettingsDialog.License },
+            onOpenSource = ::openSource,
         )
         SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter))
     }
@@ -216,8 +230,10 @@ fun SettingsScreen(
 
         SettingsDialog.License -> LicenseDialog(
             licenseText = remember(context) { readBundledLegalText(context, AppIdentity.LICENSE_RESOURCE) },
+            permissionText = remember(context) { readBundledLegalText(context, AppIdentity.PERMISSION_RESOURCE) },
             noticeText = remember(context) { readBundledLegalText(context, AppIdentity.NOTICE_RESOURCE) },
             onDismiss = { dialog = null },
+            onOpenSource = ::openSource,
         )
 
         null -> Unit
@@ -252,6 +268,7 @@ internal fun SettingsContent(
     onAppLock: (Boolean) -> Unit,
     onAppLockTimeout: (AppLockTimeout) -> Unit,
     onOpenLicense: () -> Unit,
+    onOpenSource: () -> Unit,
 ) {
     val language = LocalUiLanguage.current
     val locale = uiLocale(language)
@@ -493,6 +510,14 @@ internal fun SettingsContent(
                 supporting = AppIdentity.LICENSE_LABEL,
                 onClick = onOpenLicense,
             ) { RowChevron() }
+            SettingDivider()
+            SettingRow(
+                title = localizedText("View source"),
+                supporting = AppIdentity.SOURCE_URL.removePrefix("https://"),
+                onClick = onOpenSource,
+            ) {
+                Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
 
@@ -601,12 +626,14 @@ internal fun AllDayReminderTimeDialog(
     )
 }
 
-/** The license and the notices of the third-party parts. */
+/** The licence, the additional permissions and the notices, with the link to the source. */
 @Composable
 internal fun LicenseDialog(
     licenseText: String,
+    permissionText: String,
     noticeText: String,
     onDismiss: () -> Unit,
+    onOpenSource: () -> Unit,
 ) {
     HingeSafeAlertDialog(
         onDismissRequest = onDismiss,
@@ -620,9 +647,11 @@ internal fun LicenseDialog(
                 )
                 Text(localizedText("This software is provided as-is, without warranty of any kind. Use it at your own risk."))
                 LegalText(localizedText("License"), licenseText)
+                LegalText(localizedText("Additional permissions"), permissionText)
                 LegalText(localizedText("Notices"), noticeText)
             }
         },
+        dismissButton = { TextButton(onClick = onOpenSource) { Text(localizedText("View source")) } },
         confirmButton = { TextButton(onClick = onDismiss) { Text(localizedText("Close"), fontWeight = FontWeight.SemiBold) } },
     )
 }

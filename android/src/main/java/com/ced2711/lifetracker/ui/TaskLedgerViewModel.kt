@@ -399,6 +399,8 @@ class TaskLedgerViewModel(private val container: AppContainer) : ViewModel() {
         launchAction { settingsRepository.setVisibleDestinations(value) }
     fun setAppLockEnabled(value: Boolean) =
         launchAction { settingsRepository.setAppLockEnabled(value) }
+    fun setPocketAiReadAccess(value: Boolean) =
+        launchAction { settingsRepository.setPocketAiReadAccess(value) }
     fun setAppLockTimeout(value: AppLockTimeout) =
         launchAction { settingsRepository.setAppLockTimeout(value) }
 

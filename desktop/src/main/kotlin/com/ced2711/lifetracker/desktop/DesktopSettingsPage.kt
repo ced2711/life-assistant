@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.Info
@@ -94,6 +95,7 @@ import java.awt.Desktop
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
 import java.io.File
+import java.net.URI
 import javax.swing.JFileChooser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
@@ -939,12 +941,21 @@ private fun AboutSection() {
         SettingRow(desktopText("License") + ": " + AppIdentity.LICENSE_LABEL, desktopText("This software is provided without warranty."), translate = false) {
             Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
                 OutlinedButton(onClick = { showLicense = true }) { Text(desktopText("View license")) }
+                OutlinedButton(
+                    enabled = Desktop.isDesktopSupported(),
+                    onClick = { runCatching { Desktop.getDesktop().browse(URI(AppIdentity.SOURCE_URL)) } },
+                ) {
+                    Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(desktopText("Source code"))
+                }
             }
         }
     }
     Text(desktopAppVersion(language), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = Space.xs))
     if (showLicense) {
         val legalText = remember { loadLegalResource(AppIdentity.LICENSE_RESOURCE) }
+        val permissionText = remember { loadLegalResource(AppIdentity.PERMISSION_RESOURCE) }
         val noticeText = remember { loadLegalResource(AppIdentity.NOTICE_RESOURCE) }
         AlertDialog(
             onDismissRequest = { showLicense = false },
@@ -953,6 +964,7 @@ private fun AboutSection() {
                 Column(Modifier.widthIn(max = 760.dp).heightIn(max = 540.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Text(AppIdentity.LICENSE_LABEL, style = MaterialTheme.typography.titleMedium)
                     Text(legalText, style = MaterialTheme.typography.bodySmall)
+                    Text(permissionText, style = MaterialTheme.typography.bodySmall)
                     Text(noticeText, style = MaterialTheme.typography.bodySmall)
                 }
             },

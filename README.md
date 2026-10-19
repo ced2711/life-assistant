@@ -1,20 +1,20 @@
 # Life Assistant
 
-Life Assistant is an offline-first personal organizer for Android, Windows and Linux. It combines a Today page, Todo, Ledger, Calendar, and Notes, with encrypted backup and optional one-click GitHub synchronization. The Android interface uses device-independent sizing for phones, tablets and foldables, including narrow clamshell layouts such as the Samsung Galaxy Z Flip series. The Windows and Linux apps are native desktop applications with their own bundled Java runtime; no browser or separate Java installation is required.
+Life Assistant is an open-source, offline-first personal organizer for Android, Windows and Linux. It combines a Today page, Todo, Ledger, Calendar, and Notes, with encrypted backup and optional one-click GitHub synchronization. The Android interface uses device-independent sizing for phones, tablets and foldables, including narrow clamshell layouts such as the Samsung Galaxy Z Flip series. The Windows and Linux apps are native desktop applications with their own bundled Java runtime; no browser or separate Java installation is required.
 
-By **ced2711** · 中文名：**生活助手** · [Source](https://github.com/ced2711/life-assistant-dev) (private)
+By **ced2711** · 中文名：**生活助手** · [Source](https://github.com/ced2711/life-assistant)
 
 ## Download · 下载
 
 | Platform · 平台 | Download · 下载 | Notes · 说明 |
 | --- | --- | --- |
-| **Android** 8.0+ | [LifeAssistant-android.apk](https://github.com/ced2711/life-assistant-dev/releases/latest/download/LifeAssistant-android.apk) | Open the file on your phone and allow installing from this source. · 在手机上打开，允许安装即可。 |
-| **Windows** 10/11 | [LifeAssistant-windows-setup.exe](https://github.com/ced2711/life-assistant-dev/releases/latest/download/LifeAssistant-windows-setup.exe) | Run the installer; no admin rights needed. · 双击安装，不需要管理员权限。 |
-| **Linux** (Debian/Ubuntu) | [LifeAssistant-linux-amd64.deb](https://github.com/ced2711/life-assistant-dev/releases/latest/download/LifeAssistant-linux-amd64.deb) | `sudo apt install ./LifeAssistant-linux-amd64.deb` |
-| **Linux** (other) | [LifeAssistant-linux-x64.tar.gz](https://github.com/ced2711/life-assistant-dev/releases/latest/download/LifeAssistant-linux-x64.tar.gz) | Unpack and run `bin/life-assistant`. · 解压后运行 `bin/life-assistant`。 |
+| **Android** 8.0+ | [LifeAssistant-android.apk](https://github.com/ced2711/life-assistant/releases/latest/download/LifeAssistant-android.apk) | Open the file on your phone and allow installing from this source. · 在手机上打开，允许安装即可。 |
+| **Windows** 10/11 | [LifeAssistant-windows-setup.exe](https://github.com/ced2711/life-assistant/releases/latest/download/LifeAssistant-windows-setup.exe) | Run the installer; no admin rights needed. · 双击安装，不需要管理员权限。 |
+| **Linux** (Debian/Ubuntu) | [LifeAssistant-linux-amd64.deb](https://github.com/ced2711/life-assistant/releases/latest/download/LifeAssistant-linux-amd64.deb) | `sudo apt install ./LifeAssistant-linux-amd64.deb` |
+| **Linux** (other) | [LifeAssistant-linux-x64.tar.gz](https://github.com/ced2711/life-assistant/releases/latest/download/LifeAssistant-linux-x64.tar.gz) | Unpack and run `bin/life-assistant`. · 解压后运行 `bin/life-assistant`。 |
 
-All versions and release notes: [Releases](https://github.com/ced2711/life-assistant-dev/releases). Install the same version on every device before syncing.
-所有版本和更新说明见 [Releases](https://github.com/ced2711/life-assistant-dev/releases)。同步前请把每台设备都更新到同一个版本。
+All versions and release notes: [Releases](https://github.com/ced2711/life-assistant/releases). Install the same version on every device before syncing.
+所有版本和更新说明见 [Releases](https://github.com/ced2711/life-assistant/releases)。同步前请把每台设备都更新到同一个版本。
 
 ## Highlights
 
@@ -68,7 +68,7 @@ desktop/            Desktop app shared by Windows and Linux (Compose Desktop)
   windows/          Windows-only code and packaging notes
   linux/            Linux-only code and packaging notes
 shared/cloudsync/   Encrypted cloud sync used by every app
-docs/               Setup guides, release notes (docs/releases/)
+docs/               Setup guides, licensing notes, release notes (docs/releases/)
 .github/workflows/  Linux build (packages can only be built on Linux)
 ```
 
@@ -104,6 +104,12 @@ Application data stays on the device unless the user exports it or enables Googl
 
 ## License
 
-Copyright 2026 ced2711. All rights reserved.
+Copyright 2026 ced2711.
 
-Life Assistant is proprietary software under the [Life Assistant License](LICENSE): this repository is private, and no right to use, copy, modify or distribute its source is granted. Versions published earlier under Apache License 2.0 or AGPL-3.0 keep those licenses; those grants are not revoked. Third-party components keep their own terms, listed in [NOTICE](NOTICE). This software comes without warranty.
+Starting with 1.7.0, first-party Life Assistant code is licensed under **GNU Affero General Public License, version 3 only (AGPL-3.0-only)**, with a narrow [Google Play services linking permission](ADDITIONAL_PERMISSIONS.md). Read the full [LICENSE](LICENSE) and [licensing notes](docs/LICENSING.md).
+
+You may use the app, including commercially. Distributing covered binaries requires making their Corresponding Source available under the applicable license terms. If you modify a covered program and let people interact with it remotely over a network, AGPL section 13 requires offering those users its Corresponding Source. Ordinary use does not require publishing personal notes, financial records, files, credentials, or unrelated software. Purely private local modifications do not by themselves require publication.
+
+Earlier Apache-2.0 releases retain their original licensing; those grants are not retroactively revoked. Third-party components retain their own terms and notices. This software comes without warranty.
+
+Source for each binary release is identified by its matching version tag, for example [`v1.7.1`](https://github.com/ced2711/life-assistant/tree/v1.7.1). Both apps provide an offline license viewer and a source-code link in Settings. Build instructions above apply to the corresponding source; supply your own signing key for a fork rather than requesting the author's private release key.

@@ -8,9 +8,12 @@
   arrows, Today and the keyboard slide the next page over from its side. The PC's calendar header
   keeps one arrangement for every month, so a month with a longer name no longer pushes the view
   switcher to another line.
-- **License.** Life Assistant is no longer open source: from 2.0.6 on, all rights are reserved.
-  Settings → About shows the copyright and the notices of the third-party parts; the license
-  text and the source link are gone. Versions published earlier keep their licenses.
+- **License.** 2.0.6 is open source under the GNU AGPL version 3 only, with the Google Play
+  services linking permission, like the versions before it. The 2.0.6 installers were built
+  while the project was briefly private: their source is the `v2.0.6` tag, a snapshot without the
+  license files, and their Settings → About says "All rights reserved" with no source link.
+  Neither limits the grant: LICENSE and ADDITIONAL_PERMISSIONS.md on the main branch apply to
+  2.0.6 as well, and the next version shows the license and the source link in the app again.
 
 ## Fixed
 
